@@ -1,0 +1,235 @@
+{
+  "_comment": "Canonical cross-runtime crash:v1 test vectors. Reproducible by any runtime (native Rust, wasm, TS) from the pinned algorithm documented in libs/games/src/crash/v1/math.rs. All values are integer/ppm; no floating point.",
+  "algorithm": {
+    "game_type": "crash:v1",
+    "seed_derivation": "raw_u64 = little-endian u64 of bytes[0..8] of derive_seed(game_type='crash:v1', server_seed, client_seed, action_index=0); derive_seed = blake2b-256 of b'game-seed|'+game_type+'|'+server_seed+'|'+client_seed+'|'+action_index.to_le_bytes(i32)",
+    "house_edge_ppm": 995000,
+    "scale_ppm": 1000000,
+    "max_multiplier_cap_ppm": 1000000000,
+    "max_round_tick_cap": 996,
+    "doubling_ticks": 100,
+    "tick_quantum_ms": 50,
+    "crash_point_ppm": "clamp( half_up( HOUSE_EDGE_PPM * 2^64 / (2^64 - raw_u64) ), SCALE_PPM, MAX_MULTIPLIER_CAP_PPM ); i128 intermediate",
+    "multiplier_ppm": "m(N) = (1 << (N/100)) * FRACTIONAL_POW2_PPM[N%100], with N first clamped to max_round_tick_cap",
+    "crash_tick": "smallest N>=0 with m(N) >= crash_point_ppm, clamped to max_round_tick_cap",
+    "rounding": "half-up (midpoint away from zero), mirroring game-engine-core/src/fixed_point.rs"
+  },
+  "fractional_pow2_ppm": [
+    1000000,
+    1006956,
+    1013959,
+    1021012,
+    1028114,
+    1035265,
+    1042466,
+    1049717,
+    1057018,
+    1064370,
+    1071773,
+    1079228,
+    1086735,
+    1094294,
+    1101905,
+    1109569,
+    1117287,
+    1125058,
+    1132884,
+    1140764,
+    1148698,
+    1156688,
+    1164734,
+    1172835,
+    1180993,
+    1189207,
+    1197479,
+    1205808,
+    1214195,
+    1222640,
+    1231144,
+    1239708,
+    1248331,
+    1257013,
+    1265757,
+    1274561,
+    1283426,
+    1292353,
+    1301342,
+    1310393,
+    1319508,
+    1328686,
+    1337928,
+    1347234,
+    1356604,
+    1366040,
+    1375542,
+    1385109,
+    1394744,
+    1404445,
+    1414214,
+    1424050,
+    1433955,
+    1443929,
+    1453973,
+    1464086,
+    1474269,
+    1484524,
+    1494849,
+    1505247,
+    1515717,
+    1526259,
+    1536875,
+    1547565,
+    1558329,
+    1569168,
+    1580083,
+    1591073,
+    1602140,
+    1613284,
+    1624505,
+    1635804,
+    1647182,
+    1658639,
+    1670176,
+    1681793,
+    1693491,
+    1705270,
+    1717131,
+    1729074,
+    1741101,
+    1753211,
+    1765406,
+    1777685,
+    1790050,
+    1802501,
+    1815038,
+    1827663,
+    1840375,
+    1853176,
+    1866066,
+    1879045,
+    1892115,
+    1905276,
+    1918528,
+    1931873,
+    1945310,
+    1958841,
+    1972465,
+    1986185
+  ],
+  "multiplier_vectors": [
+    {
+      "n": 0,
+      "m_ppm": 1000000
+    },
+    {
+      "n": 1,
+      "m_ppm": 1006956
+    },
+    {
+      "n": 2,
+      "m_ppm": 1013959
+    },
+    {
+      "n": 5,
+      "m_ppm": 1035265
+    },
+    {
+      "n": 10,
+      "m_ppm": 1071773
+    },
+    {
+      "n": 41,
+      "m_ppm": 1328686
+    },
+    {
+      "n": 50,
+      "m_ppm": 1414214
+    },
+    {
+      "n": 100,
+      "m_ppm": 2000000
+    },
+    {
+      "n": 200,
+      "m_ppm": 4000000
+    },
+    {
+      "n": 351,
+      "m_ppm": 11392400
+    },
+    {
+      "n": 500,
+      "m_ppm": 32000000
+    },
+    {
+      "n": 750,
+      "m_ppm": 181019392
+    },
+    {
+      "n": 995,
+      "m_ppm": 989118976
+    },
+    {
+      "n": 996,
+      "m_ppm": 995998720
+    },
+    {
+      "n": 997,
+      "m_ppm": 995998720
+    },
+    {
+      "n": 2000,
+      "m_ppm": 995998720
+    }
+  ],
+  "round_vectors": [
+    {
+      "server_seed": "server-215",
+      "client_seed": "client-seed",
+      "raw_u64": "61899335680881366",
+      "crash_point_ppm": 1000000,
+      "crash_tick": 0,
+      "max_win_multiplier_ppm": 0
+    },
+    {
+      "server_seed": "server-518",
+      "client_seed": "client-seed",
+      "raw_u64": "18440647853355130418",
+      "crash_point_ppm": 1000000000,
+      "crash_tick": 996,
+      "max_win_multiplier_ppm": 989118976
+    },
+    {
+      "server_seed": "server-19",
+      "client_seed": "client-seed",
+      "raw_u64": "16830449698019999545",
+      "crash_point_ppm": 11355920,
+      "crash_tick": 351,
+      "max_win_multiplier_ppm": 11313712
+    },
+    {
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "raw_u64": "4620528030510754385",
+      "crash_point_ppm": 1327515,
+      "crash_tick": 41,
+      "max_win_multiplier_ppm": 1319508
+    },
+    {
+      "server_seed": "server-seed",
+      "client_seed": "client-seed",
+      "raw_u64": "2382046942429810858",
+      "crash_point_ppm": 1142537,
+      "crash_tick": 20,
+      "max_win_multiplier_ppm": 1140764
+    },
+    {
+      "server_seed": "alpha",
+      "client_seed": "beta",
+      "raw_u64": "13192600769110761654",
+      "crash_point_ppm": 3493340,
+      "crash_tick": 181,
+      "max_win_multiplier_ppm": 3482202
+    }
+  ]
+}

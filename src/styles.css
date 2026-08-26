@@ -1,0 +1,261 @@
+/* round-verifier — deliberately plain, self-contained styling. No shared
+ * game chrome: this page is a reading instrument, and its source is part of
+ * the published verifiable set, so it carries no dependencies it doesn't
+ * strictly need. */
+
+:root {
+    --bg: #101418;
+    --panel: #171d24;
+    --text: #e6e9ec;
+    --muted: #9aa4ad;
+    --accent: #4ade80;
+    --fail: #f87171;
+    --line: #2a323b;
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0 auto;
+    max-width: 60rem;
+    padding: 1.5rem 1rem 4rem;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.6rem;
+}
+
+h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.15rem;
+}
+
+h3 {
+    margin: 1.25rem 0 0.5rem;
+    font-size: 1rem;
+}
+
+.tagline {
+    color: var(--accent);
+    margin: 0 0 1rem;
+    font-weight: 600;
+}
+
+.intro {
+    color: var(--muted);
+    margin: 0.5rem 0;
+}
+
+ol.intro {
+    padding-left: 1.25rem;
+}
+
+code {
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    font-size: 0.85em;
+    background: #0b0e12;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.05em 0.3em;
+    word-break: break-all;
+}
+
+a {
+    color: var(--accent);
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 0.75rem 1rem;
+}
+
+label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+input,
+select,
+textarea {
+    background: #0b0e12;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.45rem 0.6rem;
+    font: 0.9rem ui-monospace, 'SF Mono', Menlo, monospace;
+    width: 100%;
+}
+
+input[readonly] {
+    opacity: 0.6;
+}
+
+textarea {
+    margin-top: 0.5rem;
+}
+
+.note {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+    flex-wrap: wrap;
+}
+
+button {
+    background: #232c36;
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #06130a;
+    font-weight: 600;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+#progress {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.verdict {
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+}
+
+.verdict.verified {
+    background: rgba(74, 222, 128, 0.12);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+}
+
+.verdict.failed {
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid var(--fail);
+    color: var(--fail);
+}
+
+.verdict.incomplete {
+    background: rgba(154, 164, 173, 0.12);
+    border: 1px solid var(--muted);
+    color: var(--muted);
+}
+
+#checks,
+#references {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.check {
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.check .badge {
+    flex: 0 0 1.4rem;
+    text-align: center;
+    font-weight: 700;
+}
+
+.check.pass .badge {
+    color: var(--accent);
+}
+
+.check.fail .badge {
+    color: var(--fail);
+}
+
+.check.unavailable {
+    opacity: 0.7;
+}
+
+.check p {
+    margin: 0.15rem 0 0;
+    color: var(--muted);
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;
+}
+
+#working details {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    margin: 0.4rem 0;
+    padding: 0.4rem 0.75rem;
+}
+
+#working summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+#working dl {
+    display: grid;
+    grid-template-columns: minmax(12rem, auto) 1fr;
+    gap: 0.2rem 1rem;
+    margin: 0.5rem 0 0.25rem;
+    font-size: 0.82rem;
+}
+
+#working dt {
+    color: var(--muted);
+}
+
+#working dd {
+    margin: 0;
+    font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+    overflow-wrap: anywhere;
+}
+
+#references li {
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.85rem;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+}
+
+footer {
+    margin-top: 2rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+}

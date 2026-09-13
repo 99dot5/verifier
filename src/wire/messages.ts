@@ -8,21 +8,56 @@
  * payload: SequencerMessage })`. The borsh blob's leading byte is the schema
  * version (0x00 = V1) and the signature covers the WHOLE blob including that
  * byte. `SequencerMessage` variant tags follow Borsh declaration order:
- * SeedBatch=0x00, RoundCreated=0x01, PlayerAction=0x02, RoundSettled=0x03,
- * EndSession=0x04.
+ * SeedBatch=0x00, RoundTranscript=0x01, EndSession=0x02.
  *
- * NOTE: `EndSession` was 0x05 until the never-implemented `SeedBatchReveal`
- * was removed from the schema pre-mainnet, freeing 0x04. This decoder must
- * track `libs/smart-rollup-messages/src/v1.rs`, where the tags are pinned by
+ * NOTE ON THE TAGS. This is the schema's SECOND and FINAL pre-mainnet
+ * renumber. `RoundCreated` (0x01), `PlayerAction` (0x02) and `RoundSettled`
+ * (0x03) were deleted and replaced by one `RoundTranscript` carrying a whole
+ * round under a single signature, which renumbered `EndSession` from 0x04 to
+ * 0x02. That break was taken only because nothing was deployed on mainnet and
+ * shadownet was re-originated in the same change. After origination the only
+ * moves are appending a variant or adding a v2 schema, so this decoder tracks
+ * `libs/smart-rollup-messages/src/v1.rs`, where the tags are pinned by
  * `sequencer_message_discriminants_are_frozen`.
  */
 import { BorshError, BorshReader } from './borsh';
+import { actionTypeOf } from './action-tags';
 import { bytesToHex } from '../verify/seed';
 
-export interface StoredMoney {
-    /** Base units (mutez for TEZ: scale 6). */
-    units: bigint;
-    scale: number;
+/**
+ * One entry in a round transcript. `tag` is the raw wire byte; `actionType` is
+ * its kebab-case name, or null when this decoder does not know the tag — the
+ * kernel behaves the same way, decoding the transcript in full and rejecting
+ * the round rather than dropping an undecodable message.
+ */
+export interface TranscriptActionWire {
+    tag: number;
+    actionType: string | null;
+    /** Raw Borsh action payload — empty for payload-free actions. */
+    payload: Uint8Array;
+}
+
+export interface RoundTranscriptMessage {
+    kind: 'round-transcript';
+    roundId: string;
+    sessionId: string;
+    gameType: string;
+    /** Atomic units of the session's asset — mutez, at 6 dp, for TEZ. The asset is not on the wire; the kernel reads it off the session record. */
+    stake: bigint;
+    /** blake2b-256 of the player's client-seed text; the engine consumes its lowercase hex. */
+    clientSeed: Uint8Array;
+    /** The revealed seed, raw. The commitment is over its 64 ASCII hex characters. */
+    serverSeed: Uint8Array;
+    serverSeedIndex: bigint;
+    /** The sequencer's claim, in the same atomic units as `stake`. The kernel credits its own recomputed payout, never this. */
+    claimedPayout: bigint;
+    /**
+     * blake2b-256 over the round's archived signed player commands (ADR
+     * 0022 D1). Decoded and displayed here; verifying it against the
+     * signed-command archive is a later verifier PR, not this one.
+     */
+    playerCommitment: Uint8Array;
+    actions: TranscriptActionWire[];
 }
 
 export type SequencerMessage =
@@ -33,35 +68,7 @@ export type SequencerMessage =
           drandRound: bigint;
           drandChainHash: string;
       }
-    | {
-          kind: 'round-created';
-          roundId: string;
-          sessionId: string;
-          playerAddress: string;
-          gameType: string;
-          asset: string;
-          stake: StoredMoney;
-          clientSeed: string;
-          serverSeedIndex: bigint;
-          serverSeedHash: Uint8Array;
-      }
-    | {
-          kind: 'player-action';
-          roundId: string;
-          sessionId: string;
-          actionIndex: bigint;
-          actionType: string;
-          actionPayload: Uint8Array;
-      }
-    | {
-          kind: 'round-settled';
-          roundId: string;
-          sessionId: string;
-          serverSeed: string;
-          asset: string;
-          claimedPayout: StoredMoney;
-          claimedOutcome: string;
-      }
+    | RoundTranscriptMessage
     | {
           kind: 'end-session';
           sessionId: string;
@@ -89,8 +96,10 @@ export function uuidFromBytes(bytes: Uint8Array): string {
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-function readStoredMoney(reader: BorshReader): StoredMoney {
-    return { units: reader.u128(), scale: reader.u32() };
+function readTranscriptAction(reader: BorshReader): TranscriptActionWire {
+    const tag = reader.u8();
+
+    return { tag, actionType: actionTypeOf(tag), payload: reader.byteVec() };
 }
 
 /**
@@ -120,8 +129,7 @@ export function decodeExternalMessage(bytes: Uint8Array): DecodedEnvelope | null
     switch (tag) {
         case 0x00: {
             const startIndex = reader.u64();
-            const hashCount = reader.u32();
-            const hashes = Array.from({ length: hashCount }, () => reader.fixedBytes(32));
+            const hashes = reader.vec(() => reader.fixedBytes(32));
 
             message = {
                 kind: 'seed-batch',
@@ -133,41 +141,25 @@ export function decodeExternalMessage(bytes: Uint8Array): DecodedEnvelope | null
             break;
         }
         case 0x01:
+            // Field order is header-first: every fixed-width field precedes
+            // the variable-length actions vector, so the round id, game type
+            // and seed index resolve before anything is allocated for the
+            // body.
             message = {
-                kind: 'round-created',
+                kind: 'round-transcript',
                 roundId: uuidFromBytes(reader.fixedBytes(16)),
                 sessionId: uuidFromBytes(reader.fixedBytes(16)),
-                playerAddress: reader.string(),
                 gameType: reader.string(),
-                asset: reader.string(),
-                stake: readStoredMoney(reader),
-                clientSeed: reader.string(),
+                stake: reader.u128(),
+                clientSeed: reader.fixedBytes(32),
+                serverSeed: reader.fixedBytes(32),
                 serverSeedIndex: reader.u64(),
-                serverSeedHash: reader.fixedBytes(32),
+                claimedPayout: reader.u128(),
+                playerCommitment: reader.fixedBytes(32),
+                actions: reader.vec(() => readTranscriptAction(reader)),
             };
             break;
-        case 0x02:
-            message = {
-                kind: 'player-action',
-                roundId: uuidFromBytes(reader.fixedBytes(16)),
-                sessionId: uuidFromBytes(reader.fixedBytes(16)),
-                actionIndex: reader.u64(),
-                actionType: reader.string(),
-                actionPayload: reader.byteVec(),
-            };
-            break;
-        case 0x03:
-            message = {
-                kind: 'round-settled',
-                roundId: uuidFromBytes(reader.fixedBytes(16)),
-                sessionId: uuidFromBytes(reader.fixedBytes(16)),
-                serverSeed: reader.string(),
-                asset: reader.string(),
-                claimedPayout: readStoredMoney(reader),
-                claimedOutcome: reader.string(),
-            };
-            break;
-        case 0x04: {
+        case 0x02: {
             const sessionId = uuidFromBytes(reader.fixedBytes(16));
             const reasonTag = reader.u8();
             const reason = END_REASONS[reasonTag];

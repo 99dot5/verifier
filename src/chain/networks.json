@@ -1,0 +1,37 @@
+{
+    "networks": [
+        {
+            "id": "mainnet",
+            "label": "Mainnet",
+            "tzktApiUrl": "https://api.tzkt.io",
+            "rpcUrl": "https://rpc.tzkt.io/mainnet",
+            "deployments": []
+        },
+        {
+            "id": "shadownet",
+            "label": "Shadownet",
+            "tzktApiUrl": "https://api.shadownet.tzkt.io",
+            "rpcUrl": "https://rpc.shadownet.teztnets.com",
+            "deployments": [
+                {
+                    "status": "active",
+                    "tenantId": "stg-99dot5-com-shadownet",
+                    "rollupAddress": "sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL",
+                    "originationAdministrator": {
+                        "address": "KT1JrXpRDfHFUBCNT944VYJTTYUmqiq2YuF6",
+                        "level": 5050472
+                    },
+                    "evidence": [
+                        "sr_originate, verified 2026-09-13 via TzKT: GET https://api.shadownet.tzkt.io/v1/operations/sr_originate?rollup=sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL returns level 5050472, operation oosw5ayZefbVzapecx91EPiQcFiSKkcUKCEMojKMS93wNdNhbLX, sender tz1dBStuxore6uR3E2s5NAhjSGc3EtpkwCp7.",
+                        "Administrator KT1JrXpRDfHFUBCNT944VYJTTYUmqiq2YuF6 was originated at level 5049664 (ooQ7CZsb2mMrxWhAT9nfmvNWPg8Su21ANVTfYvB5p2A5LLvXt1Y); its owner multisig KT1HMabacEdvoNgPCkg9KSX4wTyAYxcsbWNo set its rollup to sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL at level 5050564 (ooYHs8CGJezt4HCpa41HgLvuSJ6vqE3HPdFMgDuNj4hz7P6zbDg).",
+                        "RegisterTenant (0x0100) at level 5050944 (ooHvKNGsjYf8o8J1sYhqgq4GPhbHsgsiZ8wZbcfoxWprRCpkrrq), sent to the rollup by the administrator, names stg-99dot5-com-shadownet with sequencer key edpkvQGVagSNSUihcXErJFQEdeGo7NSBpuiqqmy7pSuQMvhFWZuLVE; SetTenantStatus active at level 5051037 (opMSk6jKzbNzm4VMs8DQKawdradYxftPVfRNAqFEAbRgT8Ydrjw).",
+                        "RegisterPool (0x010c): preview at level 5050970 (oo7xBpqrytQpLyfsQBJMZtKj83uafk44fyWw4NMspw2oNS5QUXS), standard at level 5050995 (ooy9ZAKGayN6xXKhAyopGDNotk83vU7MQchjqLnWzWqzXdje9ft), both TEZ and active.",
+                        "RegisterPoolVault (0x0101): preview vault KT1DszFyyMfTFe6fqVLe7aPPzKejJuYsHcGM at level 5051014 (ooqHDDcKYT3mMvHHJU4ZkHxxRudnnfHS9KBvZgYNMo4TyGr1YsZ) — a staging preview vault (scale 1000, play money); standard vault KT1Dva8iPU2WUzux4M5DrYgPC9YoUzNCgUV5 at level 5051023 (oonqthxDefgd16Vhh8Ak1yNun3Nv8BVETKPgeM1oXcyvcpeEfzc).",
+                        "Endpoints probed live 2026-08-22 (chain NetXsqzbfFenSTS).",
+                        "NOT YET CONFIRMED against the origination ceremony's own records — indexer evidence only."
+                    ]
+                }
+            ]
+        }
+    ]
+}

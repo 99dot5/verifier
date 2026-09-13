@@ -80,6 +80,22 @@ export class BorshReader {
         return this.take(length);
     }
 
+    /**
+     * Borsh `Vec<T>`: a u32-LE element count followed by that many encoded
+     * elements. `read` is invoked exactly `count` times, in order, so it may
+     * advance the reader freely.
+     */
+    vec<T>(read: () => T): T[] {
+        const count = this.u32();
+        const items: T[] = [];
+
+        for (let i = 0; i < count; i++) {
+            items.push(read());
+        }
+
+        return items;
+    }
+
     /** Asserts the reader consumed every byte — mirrors the kernel's strict decode. */
     expectEnd(): void {
         if (this.remaining !== 0) {

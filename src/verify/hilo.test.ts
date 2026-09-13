@@ -6,8 +6,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { vectorsUrl } from './vectors-path';
 import { describe, expect, it } from 'vitest';
-import { decimalStringToUnits, payoutUnits, unitsToDecimalString } from './ints';
-import { bytesToHex, deriveSeed, rawU64 } from './seed';
+import { decimalStringToUnits, divHalfUp, unitsToDecimalString } from './ints';
+import { bytesToHex, deriveSeed, hexToBytes, rawU64 } from './seed';
 import { GAME_TYPE, hiloStep, replay } from './hilo';
 import type { TranscriptAction } from './types';
 
@@ -36,6 +36,8 @@ interface RoundVector {
         win?: boolean;
         step_multiplier_ppm?: number;
         cumulative_multiplier_ppm: number;
+        payload_borsh_hex?: string;
+        banked_micro?: number;
     }[];
     final: { outcome: string; cumulative_multiplier_ppm: number; payout: string };
 }
@@ -75,7 +77,7 @@ describe('hilo:v1 vectors', () => {
             const actions: TranscriptAction[] = rv.steps.map((s) => ({
                 actionIndex: s.action_index,
                 actionType: s.action,
-                payload: new Uint8Array(),
+                payload: s.payload_borsh_hex ? hexToBytes(s.payload_borsh_hex) : new Uint8Array(),
             }));
             const result = replay(rv.server_seed, rv.client_seed, actions);
 
@@ -87,11 +89,27 @@ describe('hilo:v1 vectors', () => {
                 expect(result.steps[i].cumulativePpm).toBe(BigInt(s.cumulative_multiplier_ppm));
             }
 
-            // Payout in micro-units: stake × cum / 1e6 (exact for these stakes).
-            const stakeUnits = decimalStringToUnits(rv.stake, 6);
-            const payout = payoutUnits(stakeUnits, result.cumulativePpm);
+            // Payout via the banked/live fold, in integer micro-units: each
+            // winning guess folds live' = half_up(live × step / 1e6); a bank
+            // moves value from live to banked; a loss zeroes live. The final
+            // payout is banked + live (the vectors' documented value model).
+            let liveUnits = decimalStringToUnits(rv.stake, 6);
+            let bankedUnits = 0n;
 
-            expect(unitsToDecimalString(payout, 6)).toBe(rv.final.payout);
+            for (const s of rv.steps) {
+                if (s.action === 'partial-cashout') {
+                    const amount = BigInt(s.banked_micro ?? 0);
+
+                    bankedUnits += amount;
+                    liveUnits -= amount;
+                } else if (s.win === true) {
+                    liveUnits = divHalfUp(liveUnits * BigInt(s.step_multiplier_ppm ?? 0), 1_000_000n);
+                } else if (s.win === false) {
+                    liveUnits = 0n;
+                }
+            }
+
+            expect(unitsToDecimalString(bankedUnits + liveUnits, 6)).toBe(rv.final.payout);
         }
     });
 });

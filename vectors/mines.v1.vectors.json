@@ -5,9 +5,9 @@
     "grid": "5x5 = 25 tiles, indices 0..24; mine_count in 1..=24",
     "seed_derivation": "base stream = blake2b-256 of b'game-seed|'+game_type+'|'+server_seed+'|'+client_seed+'|'+(0).to_le_bytes(i32). When a draw needs bytes past the end, extend the stream with the same derivation at action_index = current_stream_length / 32 (so extensions use indices 1, 2, ...). The layout is fixed at bet time; gameplay actions derive nothing",
     "layout": "partial Fisher-Yates over tiles [0..25): draw i consumes 4 stream bytes as a little-endian u32 raw; swap_index = i + ((raw * (25 - i)) >> 32) (Lemire wide-reduction, unbiased); swap tiles[i] <-> tiles[swap_index]. After mine_count draws, mines = sorted(tiles[0..mine_count])",
-    "step_multiplier": "revealing the k-th safe tile (k 0-indexed): fair_step_ppm = half_up((25 - k) * 1e6 / (safe - k)) with safe = 25 - mine_count. The house edge is charged once per round, on the first reveal: offered_step_ppm = half_up(fair_step_ppm * 995000 / 1e6) for k = 0, and offered_step_ppm = fair_step_ppm for k >= 1",
-    "cumulative": "starts at 1e6; each safe reveal multiplies: cum = half_up(cum * offered_step_ppm / 1e6), so cum(k) = 0.995 * fair(k) and RTP is 99.5% at every stopping depth. Revealing a mine sets 0 and settles as a loss. Revealing the last safe tile auto-settles as a win",
-    "payout": "cashout (allowed after >= 1 reveal) pays stake * cumulative_multiplier_ppm / 1e6 rounded half-up (exact for integer stakes: at most 6 decimal places); a mine hit pays 0. The system 'abandon' action settles as lose / 0",
+    "step_multiplier": "revealing the k-th safe tile (k 0-indexed): fair_step_ppm = half_up((25 - k) * 1e6 / (safe - k)) with safe = 25 - mine_count. Every reveal carries the house edge: offered_step_ppm = half_up(fair_step_ppm * 995000 / 1e6) for every k, so round RTP is 0.995^k rather than a flat 0.995",
+    "cumulative": "starts at 1e6; each safe reveal multiplies: cum = half_up(cum * offered_step_ppm / 1e6), so cum(k) = 0.995^k * fair(k) and RTP is 99.5% per reveal, compounding to 0.995^k over the round. Revealing a mine sets 0 and settles as a loss. Revealing the last safe tile auto-settles as a win",
+    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each safe reveal folds live' = half_up(live * offered_step_ppm / 1e6). The system 'partial-cashout' action (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain. Cashout (allowed after >= 1 reveal) and a full clear pay banked + live; a mine hit and the system 'abandon' action pay banked (never less: the banked part is already the player's)",
     "action_borsh": "place-bet payload = borsh(Config { mine_count: u32 LE }); reveal payload = borsh(tile_index: u32 LE); cashout payload is empty",
     "house_edge_ppm": 995000,
     "scale_ppm": 1000000,
@@ -548,414 +548,414 @@
       "mine_count": 1,
       "cumulative_multiplier_ppm": [
         1036459,
-        1081522,
-        1130683,
-        1184525,
-        1243751,
-        1309212,
-        1381947,
-        1463239,
-        1554691,
-        1658338,
-        1776791,
-        1913467,
-        2072922,
-        2261369,
-        2487506,
-        2763895,
-        3109382,
-        3553579,
-        4145843,
-        4975012,
-        6218765,
-        8291685,
-        12437528,
-        24875056
+        1076115,
+        1119405,
+        1166847,
+        1219063,
+        1276809,
+        1341004,
+        1412788,
+        1493583,
+        1585190,
+        1689927,
+        1810821,
+        1951913,
+        2118712,
+        2318930,
+        2563705,
+        2869747,
+        3263313,
+        3788165,
+        4523069,
+        5625567,
+        7463248,
+        11138898,
+        22166407
       ]
     },
     {
       "mine_count": 2,
       "cumulative_multiplier_ppm": [
         1081522,
-        1179842,
-        1292208,
-        1421429,
-        1571053,
-        1745614,
-        1950980,
-        2194853,
-        2487499,
-        2842856,
-        3280218,
-        3826922,
-        4522725,
-        5427270,
-        6633329,
-        8291661,
-        10660705,
-        14214270,
-        19899978,
-        29849967,
-        49749955,
-        99499910,
-        298499730
+        1173942,
+        1279317,
+        1400212,
+        1539865,
+        1702405,
+        1893175,
+        2119173,
+        2389719,
+        2717452,
+        3119844,
+        3621621,
+        4258697,
+        5084884,
+        6183783,
+        7691080,
+        9839083,
+        13053177,
+        18183076,
+        27138241,
+        45004268,
+        89558493,
+        267332102
       ]
     },
     {
       "mine_count": 3,
       "cumulative_multiplier_ppm": [
         1130682,
-        1292208,
-        1486039,
-        1720677,
-        2007457,
-        2361715,
-        2804537,
-        3365444,
-        4086612,
-        5029675,
-        6287094,
-        8001754,
-        10402280,
-        13869703,
-        19070842,
-        27244052,
-        40866078,
-        65385725,
-        114425019,
-        228850038,
-        572125095,
-        2288500380
+        1285747,
+        1471216,
+        1694997,
+        1967610,
+        2303263,
+        2721450,
+        3249411,
+        3925987,
+        4807823,
+        5979730,
+        7572509,
+        9795040,
+        12994747,
+        17778438,
+        25270770,
+        37716624,
+        60044865,
+        104553121,
+        208060711,
+        517551019,
+        2059853056
       ]
     },
     {
       "mine_count": 4,
       "cumulative_multiplier_ppm": [
         1184524,
-        1421429,
-        1720677,
-        2103049,
-        2597884,
-        3247355,
-        4113317,
-        5288549,
-        6915793,
-        9221055,
-        12574163,
-        17603828,
-        25427744,
-        38141616,
-        59936841,
-        99894755,
-        179810559,
-        359621118,
-        839115822,
-        2517347466,
-        12586737330
+        1414322,
+        1703513,
+        2071661,
+        2546316,
+        3166981,
+        3991454,
+        5106207,
+        6643962,
+        8814318,
+        11959425,
+        16659479,
+        23943370,
+        35735480,
+        55874996,
+        92659406,
+        165952996,
+        330246462,
+        766721982,
+        2288665116,
+        11386108952
       ]
     },
     {
       "mine_count": 5,
       "cumulative_multiplier_ppm": [
         1243750,
-        1571053,
-        2007457,
-        2597886,
-        3409725,
-        4546299,
-        6169978,
-        8543044,
-        12102649,
-        17603848,
-        26405772,
-        41075657,
-        66747943,
-        114425064,
-        209779246,
-        419558492,
-        944006607,
-        2517351267,
-        8810729435,
-        52864376610
+        1563197,
+        1987431,
+        2559110,
+        3342039,
+        4433770,
+        5987172,
+        8248479,
+        11626924,
+        16827322,
+        25114778,
+        38872101,
+        62851328,
+        107206453,
+        195562367,
+        389169110,
+        871252345,
+        2311723470,
+        8050576984,
+        48061944594
       ]
     },
     {
       "mine_count": 6,
       "cumulative_multiplier_ppm": [
         1309210,
-        1745613,
-        2361711,
-        3247353,
-        4546294,
-        6494704,
-        9492257,
-        14238386,
-        22004785,
-        35207656,
-        58679438,
-        102689017,
-        190708189,
-        381416378,
-        839116032,
-        2097790080,
-        6293370240,
-        25173480960,
-        176214366720
+        1736884,
+        2338152,
+        3198884,
+        4456045,
+        6333947,
+        9211016,
+        13747441,
+        21139825,
+        33654601,
+        55810569,
+        97180153,
+        179575026,
+        357354302,
+        782248567,
+        1945843310,
+        5808342280,
+        23117202274,
+        161011313838
       ]
     },
     {
       "mine_count": 7,
       "cumulative_multiplier_ppm": [
         1381945,
-        1950982,
-        2804537,
-        4113322,
-        6169983,
-        9492284,
-        15029447,
-        24593646,
-        41809198,
-        74327472,
-        139364010,
-        278728020,
-        603910803,
-        1449385927,
-        3985811299,
-        13286036335,
-        59787163508,
-        478297308064
+        1941226,
+        2776561,
+        4051930,
+        6047506,
+        9257341,
+        14584163,
+        23745672,
+        40165804,
+        71048849,
+        132550509,
+        263775513,
+        568656219,
+        1357951051,
+        3715693563,
+        12323714507,
+        55179431705,
+        439228276372
       ]
     },
     {
       "mine_count": 8,
       "cumulative_multiplier_ppm": [
         1463235,
-        2194853,
-        3365441,
-        5288552,
-        8543048,
-        14238416,
-        24593632,
-        44268538,
-        83618354,
-        167236708,
-        358364350,
-        836183364,
-        2174076746,
-        6522230238,
-        23914846380,
-        119574231900,
-        1076168087100
+        2183878,
+        3331868,
+        5209616,
+        8373457,
+        13885988,
+        23864973,
+        42742167,
+        80331552,
+        159859788,
+        340843928,
+        791325759,
+        2047159739,
+        6110771821,
+        22294136601,
+        110913329590,
+        993228866478
       ]
     },
     {
       "mine_count": 9,
       "cumulative_multiplier_ppm": [
         1554688,
-        2487501,
-        4086608,
-        6915799,
-        12102648,
-        22004817,
-        41809152,
-        83618304,
-        177688896,
-        406145997,
-        1015364993,
-        2843021980,
-        9239821435,
-        36959285740,
-        203276071570,
-        2032760715700
+        2475063,
+        4045844,
+        6812578,
+        11862401,
+        21460163,
+        40570438,
+        80735172,
+        170704429,
+        388230522,
+        965723423,
+        2690505456,
+        8700422018,
+        34627679632,
+        189499976786,
+        1885524769021
       ]
     },
     {
       "mine_count": 10,
       "cumulative_multiplier_ppm": [
         1658334,
-        2842859,
-        5029674,
-        9221067,
-        17603856,
-        35207712,
-        74327388,
-        167236623,
-        406146013,
-        1083056170,
-        3249168510,
-        11372089785,
-        49279051944,
-        295674311664,
-        3252417428304
+        2828645,
+        4979504,
+        9083442,
+        17254416,
+        34336288,
+        72125261,
+        161470428,
+        390181663,
+        1035282273,
+        3090317585,
+        10762030990,
+        46402283111,
+        277021630173,
+        3032001742243
       ]
     },
     {
       "mine_count": 11,
       "cumulative_multiplier_ppm": [
         1776785,
-        3280219,
-        6287088,
-        12574176,
-        26405770,
-        58679483,
-        139363772,
-        358364045,
-        1015364675,
-        3249166960,
-        12184376100,
-        56860425861,
-        369592768097,
-        4435113217164
+        3263817,
+        6224373,
+        12386502,
+        25881596,
+        57227082,
+        135234748,
+        346007840,
+        975453538,
+        3105844065,
+        11588680668,
+        53810114961,
+        348016918510,
+        4155322007009
       ]
     },
     {
       "mine_count": 12,
       "cumulative_multiplier_ppm": [
         1913462,
-        3826924,
-        8001750,
-        17603850,
-        41075644,
-        102689110,
-        278727614,
-        836182842,
-        2843021663,
-        11372086652,
-        56860433260,
-        398023032820,
-        5174299426660
+        3807789,
+        7921930,
+        17341105,
+        40260254,
+        100147382,
+        270469537,
+        807351568,
+        2731270355,
+        10870456013,
+        54080518665,
+        376670812502,
+        4872236959713
       ]
     },
     {
       "mine_count": 13,
       "cumulative_multiplier_ppm": [
         2072916,
-        4522725,
-        10402268,
-        25427762,
-        66747875,
-        190708224,
-        603909440,
-        2174073984,
-        9239814432,
-        49279007224,
-        369592554180,
-        5174295758520
+        4500112,
+        10298506,
+        25048253,
+        65422906,
+        185987966,
+        586017207,
+        2099113635,
+        8876626784,
+        47105293549,
+        351523253109,
+        4896718915808
       ]
     },
     {
       "mine_count": 14,
       "cumulative_multiplier_ppm": [
         2261363,
-        5427271,
-        13869695,
-        38141661,
-        114424983,
-        381416572,
-        1449382974,
-        6522223383,
-        36959268011,
-        295674144088,
-        4435112161320
+        5400135,
+        13731344,
+        37572390,
+        112153584,
+        371975979,
+        1406441177,
+        6297340370,
+        35506508318,
+        282631806211,
+        4218279707699
       ]
     },
     {
       "mine_count": 15,
       "cumulative_multiplier_ppm": [
         2487500,
-        6633334,
-        19070835,
-        59936907,
-        209779175,
-        839116700,
-        3985804325,
-        23914825950,
-        203276020575,
-        3252416329200
+        6600168,
+        18880606,
+        59042355,
+        205615001,
+        818347704,
+        3867715836,
+        23090263541,
+        195285903898,
+        3108951590056
       ]
     },
     {
       "mine_count": 16,
       "cumulative_multiplier_ppm": [
         2763889,
-        8291667,
-        27244046,
-        99894844,
-        419558345,
-        2097791725,
-        13286013559,
-        119574122031,
-        2032760074527
+        8250209,
+        26972285,
+        98403904,
+        411229915,
+        2045868827,
+        12892382028,
+        115451281061,
+        1952858419147
       ]
     },
     {
       "mine_count": 17,
       "cumulative_multiplier_ppm": [
         3109375,
-        10660713,
-        40866063,
-        179810677,
-        944006054,
-        6293374008,
-        59787053076,
-        1076166955368
+        10607409,
+        40458419,
+        177126958,
+        925266947,
+        6137604699,
+        58015708417,
+        1039061337748
       ]
     },
     {
       "mine_count": 18,
       "cumulative_multiplier_ppm": [
         3553572,
-        14214288,
-        65385725,
-        359621488,
-        2517350416,
-        25173504160,
-        478296579040
+        14143217,
+        64733504,
+        354254101,
+        2467379813,
+        24550429139,
+        464125862873
       ]
     },
     {
       "mine_count": 19,
       "cumulative_multiplier_ppm": [
         4145834,
-        19900003,
-        114425017,
-        839116753,
-        8810725907,
-        176214518140
+        19800503,
+        113283628,
+        826592797,
+        8635828247,
+        171852982115
       ]
     },
     {
       "mine_count": 20,
       "cumulative_multiplier_ppm": [
         4975000,
-        29850000,
-        228850010,
-        2517350110,
-        52864352310
+        29700750,
+        226567241,
+        2479778453,
+        51814970775
       ]
     },
     {
       "mine_count": 21,
       "cumulative_multiplier_ppm": [
         6218750,
-        49750000,
-        572125000,
-        12586750000
+        49501250,
+        566418053,
+        12398891180
       ]
     },
     {
       "mine_count": 22,
       "cumulative_multiplier_ppm": [
         8291666,
-        99499992,
-        2288499816
+        99002492,
+        2265672029
       ]
     },
     {
       "mine_count": 23,
       "cumulative_multiplier_ppm": [
         12437500,
-        298500000
+        297007500
       ]
     },
     {
@@ -1027,8 +1027,8 @@
           "payload_borsh_hex": "01000000",
           "tile_index": 1,
           "is_mine": false,
-          "step_multiplier_ppm": 1263158,
-          "cumulative_multiplier_ppm": 1571053
+          "step_multiplier_ppm": 1256842,
+          "cumulative_multiplier_ppm": 1563197
         },
         {
           "action_index": 3,
@@ -1036,19 +1036,19 @@
           "payload_borsh_hex": "02000000",
           "tile_index": 2,
           "is_mine": false,
-          "step_multiplier_ppm": 1277778,
-          "cumulative_multiplier_ppm": 2007457
+          "step_multiplier_ppm": 1271389,
+          "cumulative_multiplier_ppm": 1987431
         },
         {
           "action_index": 4,
           "action": "cashout",
-          "cumulative_multiplier_ppm": 2007457
+          "cumulative_multiplier_ppm": 1987431
         }
       ],
       "final": {
         "outcome": "cashed-out",
-        "cumulative_multiplier_ppm": 2007457,
-        "payout": "200.7457"
+        "cumulative_multiplier_ppm": 1987431,
+        "payout": "198.743178"
       }
     },
     {
@@ -1112,8 +1112,8 @@
           "payload_borsh_hex": "01000000",
           "tile_index": 1,
           "is_mine": false,
-          "step_multiplier_ppm": 1263158,
-          "cumulative_multiplier_ppm": 1571053
+          "step_multiplier_ppm": 1256842,
+          "cumulative_multiplier_ppm": 1563197
         },
         {
           "action_index": 3,
@@ -1355,8 +1355,8 @@
           "payload_borsh_hex": "01000000",
           "tile_index": 1,
           "is_mine": false,
-          "step_multiplier_ppm": 1142857,
-          "cumulative_multiplier_ppm": 1292208
+          "step_multiplier_ppm": 1137143,
+          "cumulative_multiplier_ppm": 1285747
         },
         {
           "action_index": 3,
@@ -1364,8 +1364,8 @@
           "payload_borsh_hex": "02000000",
           "tile_index": 2,
           "is_mine": false,
-          "step_multiplier_ppm": 1150000,
-          "cumulative_multiplier_ppm": 1486039
+          "step_multiplier_ppm": 1144250,
+          "cumulative_multiplier_ppm": 1471216
         },
         {
           "action_index": 4,
@@ -1373,8 +1373,8 @@
           "payload_borsh_hex": "03000000",
           "tile_index": 3,
           "is_mine": false,
-          "step_multiplier_ppm": 1157895,
-          "cumulative_multiplier_ppm": 1720677
+          "step_multiplier_ppm": 1152106,
+          "cumulative_multiplier_ppm": 1694997
         },
         {
           "action_index": 5,
@@ -1382,19 +1382,19 @@
           "payload_borsh_hex": "04000000",
           "tile_index": 4,
           "is_mine": false,
-          "step_multiplier_ppm": 1166667,
-          "cumulative_multiplier_ppm": 2007457
+          "step_multiplier_ppm": 1160834,
+          "cumulative_multiplier_ppm": 1967610
         },
         {
           "action_index": 6,
           "action": "cashout",
-          "cumulative_multiplier_ppm": 2007457
+          "cumulative_multiplier_ppm": 1967610
         }
       ],
       "final": {
         "outcome": "cashed-out",
-        "cumulative_multiplier_ppm": 2007457,
-        "payout": "2.007457"
+        "cumulative_multiplier_ppm": 1967610,
+        "payout": "1.96761"
       }
     },
     {
@@ -1546,6 +1546,157 @@
         "outcome": "lost",
         "cumulative_multiplier_ppm": 0,
         "payout": "0"
+      }
+    },
+    {
+      "server_seed": "server-seed",
+      "client_seed": "client-seed",
+      "mine_count": 5,
+      "stake": "100",
+      "mine_positions": [
+        3,
+        15,
+        16,
+        18,
+        24
+      ],
+      "layout_draws": [
+        {
+          "draw": 0,
+          "raw_u32": 631593099,
+          "swap_index": 3
+        },
+        {
+          "draw": 1,
+          "raw_u32": 3054863014,
+          "swap_index": 18
+        },
+        {
+          "draw": 2,
+          "raw_u32": 2614295082,
+          "swap_index": 15
+        },
+        {
+          "draw": 3,
+          "raw_u32": 4109551094,
+          "swap_index": 24
+        },
+        {
+          "draw": 4,
+          "raw_u32": 2593898681,
+          "swap_index": 16
+        }
+      ],
+      "steps": [
+        {
+          "action_index": 0,
+          "action": "place-bet",
+          "place_bet_payload_borsh_hex": "05000000",
+          "cumulative_multiplier_ppm": 1000000
+        },
+        {
+          "action_index": 1,
+          "action": "reveal",
+          "payload_borsh_hex": "00000000",
+          "tile_index": 0,
+          "is_mine": false,
+          "step_multiplier_ppm": 1243750,
+          "cumulative_multiplier_ppm": 1243750
+        },
+        {
+          "action_index": 2,
+          "action": "partial-cashout",
+          "payload_borsh_hex": "801d2c04000000000000000000000000",
+          "banked_micro": 70000000,
+          "cumulative_multiplier_ppm": 1243750
+        },
+        {
+          "action_index": 3,
+          "action": "reveal",
+          "payload_borsh_hex": "01000000",
+          "tile_index": 1,
+          "is_mine": false,
+          "step_multiplier_ppm": 1256842,
+          "cumulative_multiplier_ppm": 1563197
+        },
+        {
+          "action_index": 4,
+          "action": "cashout",
+          "cumulative_multiplier_ppm": 1563197
+        }
+      ],
+      "final": {
+        "outcome": "cashed-out",
+        "cumulative_multiplier_ppm": 1563197,
+        "payout": "138.340784"
+      }
+    },
+    {
+      "server_seed": "server-seed",
+      "client_seed": "client-seed",
+      "mine_count": 5,
+      "stake": "100",
+      "mine_positions": [
+        3,
+        15,
+        16,
+        18,
+        24
+      ],
+      "layout_draws": [
+        {
+          "draw": 0,
+          "raw_u32": 631593099,
+          "swap_index": 3
+        },
+        {
+          "draw": 1,
+          "raw_u32": 3054863014,
+          "swap_index": 18
+        },
+        {
+          "draw": 2,
+          "raw_u32": 2614295082,
+          "swap_index": 15
+        },
+        {
+          "draw": 3,
+          "raw_u32": 4109551094,
+          "swap_index": 24
+        },
+        {
+          "draw": 4,
+          "raw_u32": 2593898681,
+          "swap_index": 16
+        }
+      ],
+      "steps": [
+        {
+          "action_index": 0,
+          "action": "place-bet",
+          "place_bet_payload_borsh_hex": "05000000",
+          "cumulative_multiplier_ppm": 1000000
+        },
+        {
+          "action_index": 1,
+          "action": "partial-cashout",
+          "payload_borsh_hex": "005a6202000000000000000000000000",
+          "banked_micro": 40000000,
+          "cumulative_multiplier_ppm": 1000000
+        },
+        {
+          "action_index": 2,
+          "action": "reveal",
+          "payload_borsh_hex": "03000000",
+          "tile_index": 3,
+          "is_mine": true,
+          "cumulative_multiplier_ppm": 0
+        }
+      ],
+      "final": {
+        "outcome": "lost",
+        "cumulative_multiplier_ppm": 0,
+        "payout": "40"
       }
     }
   ]

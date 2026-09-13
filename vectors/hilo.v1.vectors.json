@@ -9,7 +9,7 @@
     "multipliers": "fair_ppm = half_up(1e6 * 1e6 / probability_ppm); offered_ppm = half_up(fair_ppm * 995000 / 1e6). Both directions computed each step from the CURRENT card; the guess pays the multiplier quoted on the card it was made against",
     "win_rule": "higher wins iff next_rank >= current_rank; lower wins iff next_rank <= current_rank (an equal rank wins BOTH directions)",
     "cumulative": "starts at 1e6 on place-bet; each winning guess multiplies: cum = half_up(cum * step_multiplier_ppm / 1e6); a losing guess sets 0 and settles the round",
-    "payout": "cashout pays stake * cumulative_multiplier_ppm / 1e6 rounded half-up (exact for integer stakes: at most 6 decimal places); a loss pays 0. The system 'abandon' action settles as lose / 0",
+    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each winning guess folds live' = half_up(live * step_multiplier_ppm / 1e6). The system 'partial-cashout' action (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain \u2014 note it consumes an action index, shifting every later card draw. Cashout pays banked + live; a lost guess and the system 'abandon' action pay banked (never less: the banked part is already the player's)",
     "house_edge_ppm": 995000,
     "scale_ppm": 1000000,
     "rounding": "half-up (midpoint away from zero), mirroring game-engine-core/src/fixed_point.rs"
@@ -207,7 +207,7 @@
       "final": {
         "outcome": "cashed-out",
         "cumulative_multiplier_ppm": 7214038,
-        "payout": "721.4038"
+        "payout": "721.403892"
       }
     },
     {
@@ -410,6 +410,140 @@
         "outcome": "lost",
         "cumulative_multiplier_ppm": 0,
         "payout": "0"
+      }
+    },
+    {
+      "server_seed": "server-seed",
+      "client_seed": "client-seed",
+      "stake": "100",
+      "steps": [
+        {
+          "action_index": 0,
+          "action": "place-bet",
+          "seed_hex": "fd33323f73f566cf8f4c2b54312fe4601b8d05adf84bde7017ce6733da60e1c0",
+          "raw_u64": "14944902288805868541",
+          "deck_index": 42,
+          "card": {
+            "rank": "four",
+            "suit": "spades"
+          },
+          "rank_numeric": 4,
+          "lower_probability_ppm": 307692,
+          "lower_multiplier_ppm": 3233753,
+          "higher_probability_ppm": 769231,
+          "higher_multiplier_ppm": 1293500,
+          "cumulative_multiplier_ppm": 1000000
+        },
+        {
+          "action_index": 1,
+          "action": "lower",
+          "seed_hex": "a393a23b37d2fcc733d3eb6daedf74de7f0b26ee3cadfbc3d8fa13a65745ab28",
+          "raw_u64": "14410624042344289187",
+          "deck_index": 40,
+          "card": {
+            "rank": "two",
+            "suit": "spades"
+          },
+          "rank_numeric": 2,
+          "lower_probability_ppm": 153846,
+          "lower_multiplier_ppm": 6467507,
+          "higher_probability_ppm": 923077,
+          "higher_multiplier_ppm": 1077916,
+          "win": true,
+          "step_multiplier_ppm": 3233753,
+          "cumulative_multiplier_ppm": 3233753
+        },
+        {
+          "action_index": 2,
+          "action": "partial-cashout",
+          "payload_borsh_hex": "00b4c404000000000000000000000000",
+          "banked_micro": 80000000,
+          "cumulative_multiplier_ppm": 3233753
+        },
+        {
+          "action_index": 3,
+          "action": "higher",
+          "seed_hex": "88ce9bc6e28f5d9fa29be3a29bf5a5322a29baa92d53ab923edcc6a402fba7bf",
+          "raw_u64": "11483492829022113416",
+          "deck_index": 32,
+          "card": {
+            "rank": "seven",
+            "suit": "hearts"
+          },
+          "rank_numeric": 7,
+          "lower_probability_ppm": 538462,
+          "lower_multiplier_ppm": 1847855,
+          "higher_probability_ppm": 538462,
+          "higher_multiplier_ppm": 1847855,
+          "win": true,
+          "step_multiplier_ppm": 1077916,
+          "cumulative_multiplier_ppm": 3485714
+        },
+        {
+          "action_index": 4,
+          "action": "cashout",
+          "cumulative_multiplier_ppm": 3485714
+        }
+      ],
+      "final": {
+        "outcome": "cashed-out",
+        "cumulative_multiplier_ppm": 3485714,
+        "payout": "342.33813"
+      }
+    },
+    {
+      "server_seed": "server-0",
+      "client_seed": "client-seed",
+      "stake": "100",
+      "steps": [
+        {
+          "action_index": 0,
+          "action": "place-bet",
+          "seed_hex": "e343843bbefce6c130cf367a4775d73cd55a13dbf72178d189cf345cb3de2490",
+          "raw_u64": "13972132787936052195",
+          "deck_index": 39,
+          "card": {
+            "rank": "ace",
+            "suit": "spades"
+          },
+          "rank_numeric": 1,
+          "lower_probability_ppm": 76923,
+          "lower_multiplier_ppm": 12935013,
+          "higher_probability_ppm": 1000000,
+          "higher_multiplier_ppm": 995000,
+          "cumulative_multiplier_ppm": 1000000
+        },
+        {
+          "action_index": 1,
+          "action": "partial-cashout",
+          "payload_borsh_hex": "005a6202000000000000000000000000",
+          "banked_micro": 40000000,
+          "cumulative_multiplier_ppm": 1000000
+        },
+        {
+          "action_index": 2,
+          "action": "lower",
+          "seed_hex": "5032de70364b6d9574565349efdfba880b74cfc239f497b89c078be69a85c75c",
+          "raw_u64": "10767344981306651216",
+          "deck_index": 30,
+          "card": {
+            "rank": "five",
+            "suit": "hearts"
+          },
+          "rank_numeric": 5,
+          "lower_probability_ppm": 384615,
+          "lower_multiplier_ppm": 2587003,
+          "higher_probability_ppm": 692308,
+          "higher_multiplier_ppm": 1437222,
+          "win": false,
+          "step_multiplier_ppm": 12935013,
+          "cumulative_multiplier_ppm": 0
+        }
+      ],
+      "final": {
+        "outcome": "lost",
+        "cumulative_multiplier_ppm": 0,
+        "payout": "40"
       }
     }
   ]

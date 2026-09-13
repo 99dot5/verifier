@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { vectorsUrl } from './vectors-path';
 import { describe, expect, it } from 'vitest';
-import { decimalStringToUnits, payoutUnits, unitsToDecimalString } from './ints';
+import { decimalStringToUnits, divHalfUp, unitsToDecimalString } from './ints';
 import { hexToBytes } from './seed';
 import { deriveLayout, replay, stepMultiplierPpm, TOTAL_TILES } from './mines';
 import { mulPpm, SCALE_PPM } from './ints';
@@ -31,6 +31,9 @@ interface RoundVector {
         action: string;
         payload_borsh_hex?: string;
         place_bet_payload_borsh_hex?: string;
+        is_mine?: boolean;
+        step_multiplier_ppm?: number;
+        banked_micro?: number;
         cumulative_multiplier_ppm: number;
     }[];
     final: { outcome: string; cumulative_multiplier_ppm: number; payout: string };
@@ -94,9 +97,28 @@ describe('mines:v1 vectors', () => {
                 expect(result.steps[i].cumulativePpm).toBe(BigInt(s.cumulative_multiplier_ppm));
             }
 
-            const stakeUnits = decimalStringToUnits(rv.stake, 6);
+            // Payout via the banked/live fold, in integer micro-units: each
+            // safe reveal folds live' = half_up(live × step / 1e6); a bank
+            // moves value from live to banked; a mine hit zeroes live. The
+            // final payout is banked + live (the vectors' documented value
+            // model).
+            let liveUnits = decimalStringToUnits(rv.stake, 6);
+            let bankedUnits = 0n;
 
-            expect(unitsToDecimalString(payoutUnits(stakeUnits, result.cumulativePpm), 6)).toBe(rv.final.payout);
+            for (const s of rv.steps) {
+                if (s.action === 'partial-cashout') {
+                    const amount = BigInt(s.banked_micro ?? 0);
+
+                    bankedUnits += amount;
+                    liveUnits -= amount;
+                } else if (s.is_mine === false) {
+                    liveUnits = divHalfUp(liveUnits * BigInt(s.step_multiplier_ppm ?? 0), 1_000_000n);
+                } else if (s.is_mine === true) {
+                    liveUnits = 0n;
+                }
+            }
+
+            expect(unitsToDecimalString(bankedUnits + liveUnits, 6)).toBe(rv.final.payout);
         }
     });
 });

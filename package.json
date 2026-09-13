@@ -1,6 +1,6 @@
 {
     "name": "99dot5-round-verifier",
-    "version": "0.0.2",
+    "version": "0.1.2",
     "private": true,
     "type": "module",
     "description": "Minimal verifiable set for 99dot5 rounds: golden vectors, verification source, and the L1 wire schema.",

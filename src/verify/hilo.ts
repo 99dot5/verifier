@@ -6,11 +6,28 @@
  * Both directional multipliers are quoted on the CURRENT card; a guess pays
  * the multiplier quoted on the card it was made against. An equal rank wins
  * BOTH directions.
+ *
+ * The house edge is charged on every guess, so RTP is
+ * 99.5% per guess, so round RTP is `0.995^n` — see
+ * `docs/specs/per-decision-house-edge.md`.
+ *
+ * Two SYSTEM-ONLY transcript steps back the max-win cap
+ * (docs/specs/max-win-cap.md): `partial-cashout` (banks part of the position
+ * to the session balance — chain untouched; note it consumes an action
+ * index, shifting every later card draw) and `abandon`, which forfeits the
+ * live position and pays the banked total.
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { mulPpm, ppmToMultiplierString, toPpmRatio } from './ints';
 import { bytesToHex, deriveSeed, rawU64 } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
+import {
+    ZERO_BANKED,
+    addBanked,
+    bankedAmountString,
+    decodePartialCashout,
+    partialCashoutStep,
+} from './partial-cashout';
 
 export const GAME_TYPE = 'hilo:v1';
 
@@ -38,6 +55,16 @@ export interface HiloStep {
     higherMultiplierPpm: bigint;
 }
 
+/**
+ * Price one direction: fair odds times the house edge. Every guess is its own
+ * bet and carries the edge, so the round's retention compounds as `0.995^n`.
+ * Mirrors `games::hilo::v1::math::step_multiplier_ppm` — the depth argument it
+ * used to need is gone, because the price no longer varies with depth.
+ */
+function quote(fairPpm: bigint): bigint {
+    return mulPpm(fairPpm, HOUSE_EDGE_PPM);
+}
+
 /** Derive the card and both directional quotes at one action index. */
 export function hiloStep(serverSeed: string, clientSeed: string, actionIndex: number): HiloStep {
     const seed = deriveSeed(GAME_TYPE, serverSeed, clientSeed, actionIndex);
@@ -59,9 +86,9 @@ export function hiloStep(serverSeed: string, clientSeed: string, actionIndex: nu
         suit: SUITS[Math.floor(deckIndex / 13)],
         rankNumeric,
         lowerProbabilityPpm,
-        lowerMultiplierPpm: mulPpm(toPpmRatio(SCALE_PPM, lowerProbabilityPpm), HOUSE_EDGE_PPM),
+        lowerMultiplierPpm: quote(toPpmRatio(SCALE_PPM, lowerProbabilityPpm)),
         higherProbabilityPpm,
-        higherMultiplierPpm: mulPpm(toPpmRatio(SCALE_PPM, higherProbabilityPpm), HOUSE_EDGE_PPM),
+        higherMultiplierPpm: quote(toPpmRatio(SCALE_PPM, higherProbabilityPpm)),
     };
 }
 
@@ -83,7 +110,11 @@ function stepDetails(step: HiloStep): [string, string][] {
 }
 
 /** Replay a full hilo transcript exactly the way the rollup kernel does. */
-export function replay(serverSeed: string, clientSeed: string, actions: TranscriptAction[]): ReplayResult {
+export function replay(
+    serverSeed: string,
+    clientSeed: string,
+    actions: TranscriptAction[],
+): ReplayResult {
     if (actions.length === 0 || actions[0].actionType !== 'place-bet') {
         throw new ReplayError('hilo transcript must start with place-bet');
     }
@@ -93,6 +124,7 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
     let cumulative = SCALE_PPM;
     let outcome: Outcome = 'lose';
     let settled = false;
+    let bankedTotal = ZERO_BANKED;
 
     steps.push({
         actionIndex: 0,
@@ -146,15 +178,32 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
                     actionIndex: action.actionIndex,
                     actionType: 'cashout',
                     title: `cashout at ${ppmToMultiplierString(cumulative)}`,
-                    details: [['cumulative', ppmToMultiplierString(cumulative)]],
+                    details: [
+                        ['cumulative', ppmToMultiplierString(cumulative)],
+                        ...(bankedTotal.amount > 0n
+                            ? ([
+                                  [
+                                      'payout',
+                                      `banked total ${bankedAmountString(bankedTotal)} + the live position`,
+                                  ],
+                              ] as [string, string][])
+                            : []),
+                    ],
                     cumulativePpm: cumulative,
                 });
                 outcome = 'cashout';
                 settled = true;
                 break;
+            case 'partial-cashout': {
+                const banked = decodePartialCashout(action.payload);
+
+                bankedTotal = addBanked(bankedTotal, banked);
+                steps.push(partialCashoutStep(action.actionIndex, banked, bankedTotal, cumulative));
+                break;
+            }
             case 'abandon':
                 cumulative = 0n;
-                steps.push(abandonStep(action.actionIndex));
+                steps.push(abandonStep(action.actionIndex, bankedAmountString(bankedTotal)));
                 outcome = 'lose';
                 settled = true;
                 break;
@@ -166,12 +215,14 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
     return { gameType: GAME_TYPE, steps, cumulativePpm: cumulative, outcome, settled };
 }
 
-export function abandonStep(actionIndex: number): StepWorking {
+/** Abandonment is a real engine action: the live position is forfeited but
+ *  the banked total (already the player's) is the round's payout. */
+export function abandonStep(actionIndex: number, bankedTotal: string): StepWorking {
     return {
         actionIndex,
         actionType: 'abandon',
-        title: 'abandon (system) — round forfeited, pays 0',
-        details: [['rule', 'the rollup overrides an abandoned round to lose / 0']],
+        title: `abandon (system) — live position forfeited, pays the banked total ${bankedTotal}`,
+        details: [['rule', 'abandonment settles as a loss paying the banked total']],
         cumulativePpm: 0n,
     };
 }

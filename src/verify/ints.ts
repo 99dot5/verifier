@@ -43,10 +43,12 @@ export function mulPpm(aPpm: bigint, bPpm: bigint): bigint {
  * The kernel replays the round, computes `amount_won = stake ×
  * cumulative_multiplier_ppm / 1e6` as a decimal (half-up, ≤18 dp — exact for
  * any stake with ≤6 dp, i.e. every mutez-denominated stake), then converts to
- * `StoredMoney` by truncating TOWARD ZERO at the asset scale
- * (`libs/smart-rollup/src/games.rs`: `decimal_to_stored(truncate_to_decimals(
- * amount_won, stake.scale))`). For a stake in integer base units (mutez,
- * scale 6) that collapses to a single floor division:
+ * `u128` atomic units by truncating TOWARD ZERO at the asset's scale
+ * (`libs/smart-rollup/src/games.rs`: `decimal_to_units(truncate_to_decimals(
+ * amount_won, decimals), decimals)`, where `decimals` comes from the session's
+ * bound asset via `money::decimals_for` — the table this app mirrors in
+ * `./assets`). For a stake in integer base units (mutez, scale 6) that
+ * collapses to a single floor division:
  *
  *     payout_units = floor(stake_units × cumulative_ppm / 1e6)
  */

@@ -171,10 +171,28 @@ button:disabled {
     color: var(--fail);
 }
 
-.verdict.incomplete {
+/*
+ * The four "not alleging anything" verdicts share the muted treatment, because
+ * none of them is a finding: `incomplete` (a proof had no inputs),
+ * `inconclusive` (the range was too narrow), `undetermined` (not on chain yet,
+ * and nothing says it never will be) and `attested` (checked, but only
+ * weakly). Giving any of them a warning colour would read as an accusation the
+ * verdict is specifically declining to make.
+ */
+.verdict.incomplete,
+.verdict.inconclusive,
+.verdict.undetermined,
+.verdict.attested {
     background: rgba(154, 164, 173, 0.12);
     border: 1px solid var(--muted);
     color: var(--muted);
+}
+
+/* The one accusatory verdict, styled like a failure because it is one. */
+.verdict.suppressed {
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid var(--fail);
+    color: var(--fail);
 }
 
 #checks,

@@ -4,16 +4,29 @@
  *
  * The mine layout is fixed at bet time by a partial Fisher–Yates shuffle
  * driven by the seed stream; gameplay actions derive nothing. Each safe
- * reveal multiplies the cumulative by a fair step — the house edge is
- * charged once per round, on the first reveal, so RTP is 99.5% at every
- * stopping depth. A mine hit settles at 0; revealing the last safe tile
- * auto-settles as a win.
+ * reveal multiplies the cumulative by a step priced at fair odds times the
+ * house edge — charged on every reveal, so RTP is 99.5% per reveal and
+ * `0.995^k` over the round. Revealing the last safe tile auto-settles as a win.
+ *
+ * Two SYSTEM-ONLY transcript steps back the max-win cap
+ * (docs/specs/max-win-cap.md): `partial-cashout` (banks part of the position
+ * to the session balance — chain untouched; the layout and step pricing are
+ * index-insensitive in mines) and `abandon`, which forfeits the live
+ * position and pays the banked total. A mine hit likewise pays the banked
+ * total (0 when nothing was banked).
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { divHalfUp, mulPpm, ppmToMultiplierString } from './ints';
 import { deriveSeed } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import { abandonStep } from './hilo';
+import {
+    ZERO_BANKED,
+    addBanked,
+    bankedAmountString,
+    decodePartialCashout,
+    partialCashoutStep,
+} from './partial-cashout';
 
 export const GAME_TYPE = 'mines:v1';
 export const TOTAL_TILES = 25;
@@ -73,9 +86,10 @@ export function deriveLayout(serverSeed: string, clientSeed: string, mineCount: 
 /**
  * Multiplier for revealing the k-th safe tile (k 0-indexed):
  * `fair = half_up((25 − k) × 1e6 / (safe − k))` with `safe = 25 − mine_count`.
- * The house edge is charged once per round, on the first reveal: k = 0 pays
- * `half_up(fair × 995000 / 1e6)`, every later reveal pays exact fair odds —
- * so the cumulative is `0.995 × fair(k)` at every stopping depth.
+ * The house edge is charged on every reveal: each k pays
+ * `half_up(fair × 995000 / 1e6)` — every reveal, not just the first — so the
+ * cumulative is `0.995^k × fair(k)` and round RTP compounds with depth. See
+ * `docs/specs/per-decision-house-edge.md`.
  */
 export function stepMultiplierPpm(mineCount: number, revealedCount: number): bigint {
     const safe = TOTAL_TILES - mineCount;
@@ -86,7 +100,7 @@ export function stepMultiplierPpm(mineCount: number, revealedCount: number): big
 
     const fairStepPpm = divHalfUp(BigInt(TOTAL_TILES - revealedCount) * SCALE_PPM, BigInt(safe - revealedCount));
 
-    return revealedCount === 0 ? mulPpm(fairStepPpm, HOUSE_EDGE_PPM) : fairStepPpm;
+    return mulPpm(fairStepPpm, HOUSE_EDGE_PPM);
 }
 
 /** Borsh-decode a place-bet `Config { mine_count: u32 LE }`. */
@@ -108,7 +122,11 @@ export function decodeReveal(payload: Uint8Array): number {
 }
 
 /** Replay a full mines transcript exactly the way the rollup kernel does. */
-export function replay(serverSeed: string, clientSeed: string, actions: TranscriptAction[]): ReplayResult {
+export function replay(
+    serverSeed: string,
+    clientSeed: string,
+    actions: TranscriptAction[],
+): ReplayResult {
     if (actions.length === 0 || actions[0].actionType !== 'place-bet') {
         throw new ReplayError('mines transcript must start with place-bet');
     }
@@ -135,6 +153,7 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
     let cumulative = SCALE_PPM;
     let outcome: Outcome = 'lose';
     let settled = false;
+    let bankedTotal = ZERO_BANKED;
 
     for (const action of actions.slice(1)) {
         if (settled) {
@@ -157,7 +176,17 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
                         actionIndex: action.actionIndex,
                         actionType: 'reveal',
                         title: `reveal tile ${tile} — MINE, round lost`,
-                        details: [['tile', `${tile} is in the derived mine set`]],
+                        details: [
+                            ['tile', `${tile} is in the derived mine set`],
+                            ...(bankedTotal.amount > 0n
+                                ? ([
+                                      [
+                                          'payout',
+                                          `the banked total ${bankedAmountString(bankedTotal)} (already the player's)`,
+                                      ],
+                                  ] as [string, string][])
+                                : []),
+                        ],
                         cumulativePpm: 0n,
                     });
                     revealed.add(tile);
@@ -200,16 +229,33 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
                     actionIndex: action.actionIndex,
                     actionType: 'cashout',
                     title: `cashout at ${ppmToMultiplierString(cumulative)}`,
-                    details: [['cumulative', ppmToMultiplierString(cumulative)]],
+                    details: [
+                        ['cumulative', ppmToMultiplierString(cumulative)],
+                        ...(bankedTotal.amount > 0n
+                            ? ([
+                                  [
+                                      'payout',
+                                      `banked total ${bankedAmountString(bankedTotal)} + the live position`,
+                                  ],
+                              ] as [string, string][])
+                            : []),
+                    ],
                     cumulativePpm: cumulative,
                 });
                 outcome = 'cashout';
                 settled = true;
                 break;
+            case 'partial-cashout': {
+                const banked = decodePartialCashout(action.payload);
+
+                bankedTotal = addBanked(bankedTotal, banked);
+                steps.push(partialCashoutStep(action.actionIndex, banked, bankedTotal, cumulative));
+                break;
+            }
             case 'abandon':
                 cumulative = 0n;
                 outcome = 'lose';
-                steps.push(abandonStep(action.actionIndex));
+                steps.push(abandonStep(action.actionIndex, bankedAmountString(bankedTotal)));
                 settled = true;
                 break;
             default:

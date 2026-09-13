@@ -1,62 +1,102 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { bytesToHex, hexToBytes, serverSeedCommitment } from '../verify/seed';
 import { decodeExternalMessage, uuidFromBytes } from './messages';
 import { decodeEdpk } from './signature';
+import { wireVectorsUrl } from './wire-vectors-path';
 
 /**
- * Golden vector from a REAL shadownet injection (a tzkt operation) — the same
- * bytes `tools/operator-cli/src/decode.rs` pins its Rust decoder against. Any
- * divergence between this decoder and the kernel's fails here.
+ * The golden frame, taken from the shared cross-language vector file so this
+ * decoder, the Rust wire crate and `tools/operator-cli/src/decode.rs` all pin
+ * the same bytes.
+ *
+ * It is currently `source: "synthetic"` — a fixture, deliberately labelled as
+ * one. A synthetic golden cannot catch a decoder drifting away from what the
+ * sequencer actually emits, because the fixture is written by the same
+ * understanding it is meant to check. Replacing it with a real shadownet
+ * capture (`tools/capture-inbox-vector.sh`, `source: "captured"`) is a release
+ * gate on the first round settled under the transcript kernel, not an
+ * optional follow-up.
  */
-const GOLDEN =
-    '099585ad17b7d4b08ee5737d6ed4eb7011373df5499ce0749610d408418aae14e82f03c3f10606593e' +
-    'bfb4fe925332d5aa6891815edc56c26aca571371bc8128db0800100000003939646f74352d73686164' +
-    '6f776e6574080000007374616e64617264029a256790c7c047b09a5b6ed2905d2df1e2b6419aec4b4e' +
-    'efbdfa802b6f338fc2000000000000000009000000706c6163652d6265740100000000';
+interface GoldenTranscript {
+    source: string;
+    tenant_id: string;
+    pool_id: string;
+    fields: {
+        round_id_hex: string;
+        game_type: string;
+        actions: { tag: number; action_type: string }[];
+    };
+    signed_frame_hex: string;
+}
+
+const golden: GoldenTranscript = JSON.parse(readFileSync(fileURLToPath(wireVectorsUrl()), 'utf8'))
+    .round_transcript[0];
+const GOLDEN = golden.signed_frame_hex;
 
 describe('external message decoder', () => {
-    it('decodes the real shadownet golden vector', () => {
+    it('decodes the shared golden transcript frame', () => {
+        expect(golden.source).toBe('synthetic'); // flip to "captured" at the P6 gate
+
         const decoded = decodeExternalMessage(hexToBytes(GOLDEN));
 
         expect(decoded).not.toBeNull();
-        expect(decoded!.tenantId).toBe('99dot5-shadownet');
-        expect(decoded!.poolId).toBe('standard');
+        expect(decoded!.tenantId).toBe(golden.tenant_id);
+        expect(decoded!.poolId).toBe(golden.pool_id);
         expect(decoded!.signature).toHaveLength(64);
 
         const message = decoded!.message;
 
-        expect(message.kind).toBe('player-action');
+        expect(message.kind).toBe('round-transcript');
 
-        if (message.kind !== 'player-action') {
+        if (message.kind !== 'round-transcript') {
             throw new Error('unreachable');
         }
 
-        expect(message.roundId).toBe('9a256790-c7c0-47b0-9a5b-6ed2905d2df1');
-        expect(message.sessionId).toBe('e2b6419a-ec4b-4eef-bdfa-802b6f338fc2');
-        expect(message.actionIndex).toBe(0n);
-        expect(message.actionType).toBe('place-bet');
-        expect(bytesToHex(message.actionPayload)).toBe('00');
+        expect(message.gameType).toBe(golden.fields.game_type);
+        expect(message.clientSeed).toHaveLength(32);
+        expect(message.serverSeed).toHaveLength(32);
+        expect(message.playerCommitment).toHaveLength(32);
+        expect(message.actions.map((a) => a.actionType)).toEqual(
+            golden.fields.actions.map((a) => a.action_type),
+        );
+        // Index 0 is always the place-bet: the action's index is its position,
+        // and nothing on the wire restates it.
+        expect(message.actions[0].tag).toBe(0x00);
     });
 
     /**
-     * Pins `EndSession` at tag 0x04.
+     * Pins `EndSession` at tag 0x02.
      *
-     * It was 0x05 until the never-implemented `SeedBatchReveal` was removed
-     * from the schema, freeing 0x04. Nothing else here exercises `EndSession`
-     * — the golden vector is a `PlayerAction` — so without this the decoder
-     * could silently disagree with the kernel about every session-end message
-     * on the public inbox and the suite would still pass.
+     * It was 0x04 until `RoundCreated` / `PlayerAction` / `RoundSettled` were
+     * deleted in favour of one `RoundTranscript` — the schema's second and
+     * final pre-mainnet renumber. Nothing else here exercises `EndSession`, so
+     * without this the decoder could silently disagree with the kernel about
+     * every session-end message on the public inbox and the suite would still
+     * pass.
      *
-     * Built from the golden vector's own envelope (same prefix, signature,
+     * Built from the golden frame's own envelope (same prefix, signature,
      * tenant and pool) with an `EndSession` payload substituted, so only the
-     * tag and payload differ.
+     * message tag and payload differ.
      */
-    it('decodes EndSession at tag 0x04', () => {
+    it('decodes EndSession at tag 0x02', () => {
+        const envelopePrefixHex = GOLDEN.slice(0, 2 * (2 + 64)); // 0x0995 + signature
+        const versionAndScopeHex = (() => {
+            const decoded = decodeExternalMessage(hexToBytes(GOLDEN))!;
+            // version byte + borsh(tenant_id) + borsh(pool_id), i.e. everything
+            // before the message tag.
+            const scopeLength = 1 + 4 + decoded.tenantId.length + 4 + decoded.poolId.length;
+
+            return bytesToHex(decoded.signedPayload.slice(0, scopeLength));
+        })();
         const END_SESSION =
-            '099585ad17b7d4b08ee5737d6ed4eb7011373df5499ce0749610d408418aae14e82f03c3f10606593e' +
-            'bfb4fe925332d5aa6891815edc56c26aca571371bc8128db0800100000003939646f74352d73686164' +
-            '6f776e6574080000007374616e6461726404e2b6419aec4b4eefbdfa802b6f338fc201';
+            envelopePrefixHex +
+            versionAndScopeHex +
+            '02' + // SequencerMessage::EndSession
+            'e2b6419aec4b4eefbdfa802b6f338fc2' + // session_id
+            '01'; // EndReason::Expired
 
         const decoded = decodeExternalMessage(hexToBytes(END_SESSION));
 
@@ -72,6 +112,17 @@ describe('external message decoder', () => {
 
         expect(message.sessionId).toBe('e2b6419a-ec4b-4eef-bdfa-802b6f338fc2');
         expect(message.reason).toBe('expired');
+    });
+
+    it('rejects a message tag outside the three the schema defines', () => {
+        const decoded = decodeExternalMessage(hexToBytes(GOLDEN))!;
+        const scopeLength = 1 + 4 + decoded.tenantId.length + 4 + decoded.poolId.length;
+        const head = GOLDEN.slice(0, 2 * (2 + 64 + scopeLength));
+
+        // 0x03 was RoundSettled before the renumber; it must now be rejected
+        // outright rather than decoded as something else.
+        expect(() => decodeExternalMessage(hexToBytes(`${head}03`))).toThrow(/unknown SequencerMessage tag/);
+        expect(() => decodeExternalMessage(hexToBytes(`${head}ff`))).toThrow(/unknown SequencerMessage tag/);
     });
 
     it('returns null for non-sequencer frames and rejects trailing bytes', () => {
@@ -105,7 +156,10 @@ describe('seed commitment hash', () => {
     it('hashes the ASCII hex string, not the raw bytes it spells', () => {
         // blake2b-256 of the 64 ASCII characters of the seed string. Distinct
         // from blake2b-256 of the 32 decoded bytes — the commitment is over
-        // the string, mirroring seed_provisioner/seeds.rs::hash_seed.
+        // the string, mirroring seed_provisioner/seeds.rs::hash_seed. The
+        // transcript wire carries the RAW bytes, which makes this the exact
+        // mistake the new format invites; wire-vectors.test.ts pins both
+        // digests against the shared vector.
         const seed = 'a'.repeat(64);
         const overString = bytesToHex(serverSeedCommitment(seed));
         const overBytes = bytesToHex(serverSeedCommitment(String.fromCharCode(0xaa).repeat(32)));

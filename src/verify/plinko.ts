@@ -12,7 +12,6 @@ import { SCALE_PPM } from './constants';
 import { ppmToMultiplierString } from './ints';
 import { bytesToHex, deriveSeed } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
-import { abandonStep } from './hilo';
 
 export const GAME_TYPE = 'plinko:v1';
 
@@ -186,7 +185,13 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
             case 'abandon':
                 cumulative = 0n;
                 outcome = 'lose';
-                steps.push(abandonStep(action.actionIndex));
+                steps.push({
+                    actionIndex: action.actionIndex,
+                    actionType: 'abandon',
+                    title: 'abandon (system) — round forfeited, pays 0',
+                    details: [['rule', 'the rollup overrides an abandoned plinko round to lose / 0']],
+                    cumulativePpm: 0n,
+                });
                 settled = true;
                 break;
             default:

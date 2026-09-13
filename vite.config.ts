@@ -1,3 +1,4 @@
+/// <reference types='vitest' />
 import { defineConfig } from 'vite';
 
 export default defineConfig({
@@ -11,5 +12,15 @@ export default defineConfig({
         // exists to remove. The app is small; there is no performance case.
         minify: false,
         outDir: 'dist',
+    },
+    test: {
+        // STATED, not inherited from vitest's default. Every suite here is
+        // pure maths and wire decoding with no DOM under test, and the vector
+        // tests resolve ../../vectors/*.json through import.meta.url — which
+        // jsdom breaks (its import.meta.url does not survive fileURLToPath).
+        // The monorepo's own config says the same thing; leaving it implicit
+        // here made the exported tree pass by accident.
+        environment: 'node',
+        include: ['src/**/*.{test,spec}.ts'],
     },
 });

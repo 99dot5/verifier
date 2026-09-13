@@ -3,10 +3,10 @@
  *
  * Every sequencer→rollup message reaches L1: the injector POSTs signed frames
  * to the rollup node's batcher, which injects `smart_rollup_add_messages`
- * operations. Those operations — and therefore every `RoundCreated`,
- * `PlayerAction`, `RoundSettled`, `SeedBatch` and `EndSession` — are
- * ordinary manager operations in ordinary blocks, readable from any archive
- * node and locatable through any indexer.
+ * operations. Those operations — and therefore every message the schema
+ * carries today: `SeedBatch` (0x00), `RoundTranscript` (0x01) and
+ * `EndSession` (0x02) — are ordinary manager operations in ordinary blocks,
+ * readable from any archive node and locatable through any indexer.
  *
  * Split of responsibilities:
  *   - TzKT (indexer) LOCATES candidate operations fast — raw block scanning

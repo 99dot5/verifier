@@ -45,6 +45,9 @@ const CLIENT_PAYLOAD_FIELDS = {
     timeSync: 16,
 } as const;
 
+// PlaceBetCommand
+const PLACE_BET_CLIENT_SEED = 2;
+
 /** `casino.v1.StepOrigin` values. */
 const ORIGIN_VALUES = { unspecified: 0, player: 1, system: 2 } as const;
 
@@ -139,18 +142,25 @@ export interface CommandFrameSpec {
     requestId: string;
     sessionId: string;
     payloadCase: keyof typeof CLIENT_PAYLOAD_FIELDS;
+    /** `PlaceBetCommand.client_seed` text; only meaningful for `placeBet`. */
+    clientSeed?: string;
 }
 
 /** Build and sign `[0x05 | signature | ClientEnvelope]` under a session seed. */
 export function commandFrame(seed: Uint8Array, spec: CommandFrameSpec): Uint8Array {
+    // The command's own fields are irrelevant to the commitment proofs: the
+    // commitment is over whole frames and the ordering comes from the server's
+    // index, so an empty payload submessage is a faithful stand-in for any
+    // command of that case. The one field a proof DOES read is the place-bet's
+    // client seed, so a fixture can carry it.
+    const payload =
+        spec.payloadCase === 'placeBet' && spec.clientSeed !== undefined
+            ? new ProtoWriter().bytes(PLACE_BET_CLIENT_SEED, new TextEncoder().encode(spec.clientSeed)).finish()
+            : new Uint8Array(0);
     const body = new ProtoWriter()
         .bytes(CLIENT_REQUEST_ID, encodeUuid(spec.requestId))
         .bytes(CLIENT_SESSION_ID, encodeUuid(spec.sessionId))
-        // The command's own fields are irrelevant to every receipt proof: the
-        // commitment is over whole frames and the ordering comes from the
-        // server's index, so an empty payload submessage is a faithful stand-in
-        // for any command of that case.
-        .bytes(CLIENT_PAYLOAD_FIELDS[spec.payloadCase], new Uint8Array(0))
+        .bytes(CLIENT_PAYLOAD_FIELDS[spec.payloadCase], payload)
         .finish();
 
     // No domain prefix: the session key signs this one channel only, so there

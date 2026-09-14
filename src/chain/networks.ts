@@ -228,4 +228,27 @@ export function parseNetworks(raw: unknown): NetworkConfig[] {
 
 export const NETWORKS: NetworkConfig[] = parseNetworks(rawNetworks);
 
+/** A deployment together with the network it lives on. */
+export interface DeploymentMatch {
+    network: NetworkConfig;
+    deployment: Deployment;
+}
+
+/**
+ * Every deployment, across every network, whose on-chain slug is `tenantId`.
+ *
+ * Used to preselect the form from a receipts document, which names its tenant
+ * but not its network or rollup. The caller acts only on a SINGLE match: a
+ * re-origination that kept the slug leaves the retired and the new rollup both
+ * matching, and guessing between them could verify an honest round against a
+ * lineage that never registered its key.
+ */
+export function deploymentsForTenant(networks: NetworkConfig[], tenantId: string): DeploymentMatch[] {
+    return networks.flatMap((network) =>
+        network.deployments
+            .filter((deployment) => deployment.tenantId === tenantId)
+            .map((deployment) => ({ network, deployment })),
+    );
+}
+
 export const DRAND_URLS = ['https://api.drand.sh', 'https://drand.cloudflare.com'];

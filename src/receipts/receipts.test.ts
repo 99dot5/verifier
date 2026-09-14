@@ -188,7 +188,31 @@ describe('proto-reader', () => {
             requestId: BET_REQUEST,
             sessionId: SESSION_ID,
             payloadCase: 'placeBet',
+            placeBetClientSeed: null,
         });
+    });
+
+    it("reads a PlaceBet's client seed as the raw bytes on the wire", () => {
+        const frame = commandFrame(SESSION_SEED, {
+            requestId: BET_REQUEST,
+            sessionId: SESSION_ID,
+            payloadCase: 'placeBet',
+            clientSeed: 'zürich 🎲',
+        });
+        const decoded = decodeClientEnvelope(splitSignedFrame(frame).body);
+
+        expect(decoded.placeBetClientSeed).toEqual(new TextEncoder().encode('zürich 🎲'));
+    });
+
+    it('reads no client seed off a command that is not a PlaceBet', () => {
+        const frame = commandFrame(SESSION_SEED, {
+            requestId: CASHOUT_REQUEST,
+            sessionId: SESSION_ID,
+            payloadCase: 'cashOut',
+            clientSeed: 'ignored',
+        });
+
+        expect(decodeClientEnvelope(splitSignedFrame(frame).body).placeBetClientSeed).toBeNull();
     });
 
     it('formats a UUID the way the play client keys its records', () => {
@@ -581,6 +605,52 @@ const FIXTURE = JSON.parse(readFileSync(fileURLToPath(receiptsExportFixtureUrl()
  * two implementations of §5.3 are held to identical answers, including the
  * de-lever case where one of them says `unavailable` on purpose.
  */
+describe('client seed in the export fixture', () => {
+    // Frames the PLAY CLIENT encoded, not this suite: the seed decoder is held
+    // to real protobuf-es output rather than to the fixtures it was written with.
+    it('reads a client seed off every PlaceBet command', () => {
+        let placeBets = 0;
+
+        for (const testCase of FIXTURE.cases) {
+            const imported = importReceipts(JSON.stringify(testCase.export));
+
+            if (imported.status !== 'ok') {
+                throw new Error(`${testCase.name}: ${imported.message}`);
+            }
+
+            for (const command of imported.receipts.commands.filter((c) => c.payloadCase === 'placeBet')) {
+                const decoded = decodeClientEnvelope(splitSignedFrame(command.frame).body);
+
+                expect(decoded.placeBetClientSeed, testCase.name).not.toBeNull();
+                placeBets += 1;
+            }
+        }
+
+        expect(placeBets).toBeGreaterThan(0);
+    });
+
+    it('reads the exact seed text the play client sent', () => {
+        const hiloPlain = FIXTURE.cases.find((c) => c.name === 'hilo-plain');
+        const imported = importReceipts(JSON.stringify(hiloPlain?.export));
+
+        expect(imported.status).toBe('ok');
+
+        if (imported.status !== 'ok') {
+            return;
+        }
+
+        const placeBet = imported.receipts.commands.find((c) => c.payloadCase === 'placeBet');
+
+        if (!placeBet) {
+            throw new Error('hilo-plain carries no PlaceBet command');
+        }
+
+        const seed = decodeClientEnvelope(splitSignedFrame(placeBet.frame).body).placeBetClientSeed;
+
+        expect(seed === null ? null : new TextDecoder().decode(seed)).toBe('fixture-client-seed');
+    });
+});
+
 describe('receipts export fixture', () => {
     it('is the schema this build reads', () => {
         expect(FIXTURE.schema).toBe('99dot5.receipts-export-fixture.v1');
@@ -633,7 +703,8 @@ describe('receipts export fixture', () => {
             // Commands are signed WITHOUT the receipt domain: the session key
             // signs one channel only.
             expect(verifyInboxSignature(split.signature, split.body, sessionKey)).toBe(true);
-            expect(decodeClientEnvelope(split.body)).toEqual({
+            // The seed a PlaceBet carries is pinned by the client-seed tests above.
+            expect(decodeClientEnvelope(split.body)).toMatchObject({
                 requestId: expected.requestId,
                 sessionId: expected.sessionIdHex,
                 payloadCase: expected.payloadCase,

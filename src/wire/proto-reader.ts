@@ -390,11 +390,28 @@ export interface DecodedClientEnvelope {
     requestId: string | null;
     sessionId: string | null;
     payloadCase: ClientPayloadCase | null;
+    /**
+     * `PlaceBetCommand.client_seed` as the raw UTF-8 bytes on the wire, or
+     * null when the command is not a `PlaceBet` or carries no seed.
+     *
+     * Bytes, not a decoded string: the sequencer hashes exactly these bytes
+     * into the transcript's `client_seed`, so a decode/re-encode round trip
+     * is a place a normalisation could hide.
+     */
+    placeBetClientSeed: Uint8Array | null;
 }
+
+// casino.v1.PlaceBetCommand
+const PLACE_BET_CLIENT_SEED = 2;
 
 /** Decode the protobuf BODY of a client command frame. */
 export function decodeClientEnvelope(body: Uint8Array): DecodedClientEnvelope {
-    const out: DecodedClientEnvelope = { requestId: null, sessionId: null, payloadCase: null };
+    const out: DecodedClientEnvelope = {
+        requestId: null,
+        sessionId: null,
+        payloadCase: null,
+        placeBetClientSeed: null,
+    };
 
     forEachField(body, (field) => {
         if (field.number === CLIENT_REQUEST_ID && field.wireType === WIRE_LENGTH_DELIMITED) {
@@ -406,6 +423,14 @@ export function decodeClientEnvelope(body: Uint8Array): DecodedClientEnvelope {
 
             if (payloadCase && field.wireType === WIRE_LENGTH_DELIMITED) {
                 out.payloadCase = payloadCase;
+
+                if (payloadCase === 'placeBet') {
+                    forEachField(field.bytes, (inner) => {
+                        if (inner.number === PLACE_BET_CLIENT_SEED && inner.wireType === WIRE_LENGTH_DELIMITED) {
+                            out.placeBetClientSeed = inner.bytes.slice();
+                        }
+                    });
+                }
             }
         }
     });

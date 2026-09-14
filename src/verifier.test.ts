@@ -219,6 +219,8 @@ interface RoundOptions {
     /** Extra transcripts for the same round id, appended after the honest one. */
     extraTranscripts?: { level: number; claimedPayout: bigint }[];
     signingSeed?: Uint8Array;
+    /** Defaults to the fold over the honest receipts' command frames. */
+    playerCommitment?: Uint8Array;
 }
 
 /**
@@ -259,7 +261,7 @@ function transcriptBody(options: RoundOptions, claimedPayout: bigint): number[] 
         ...Array.from(options.serverSeed ?? SERVER_SEED),
         ...u64(SEED_INDEX),
         ...u128(claimedPayout),
-        ...Array.from(PLAYER_COMMITMENT),
+        ...Array.from(options.playerCommitment ?? PLAYER_COMMITMENT),
         ...u32(wireActions.length),
         ...wireActions.flatMap((a) => [...u8(a.tag), ...byteVec(a.payload)]),
     ];
@@ -492,6 +494,91 @@ describe('verifyRound', () => {
 
         expect(statusOf(report, 'client-seed-text')).toBe('fail');
         expect(report.verdict).toBe('failed');
+    });
+
+    describe('client seed from the receipts', () => {
+        // Plinko, because it settles on its second action under ANY seed pair:
+        // these cases vary the client seed, and a HiLo guess could lose.
+        const PLINKO_ACTIONS = [action('place-bet', plinkoConfig(8, 'low')), action('cashout')];
+
+        /** Honest receipts whose PlaceBet carries `seedText`, and the commitment over them. */
+        function receiptsWithSeed(seedText: string): { receipts: ImportedReceipts; commitment: Uint8Array } {
+            const bet = commandFrame(SESSION_SEED, {
+                requestId: BET_REQUEST,
+                sessionId: SESSION_ID,
+                payloadCase: 'placeBet',
+                clientSeed: seedText,
+            });
+            const commitment = computeCommitment([bet, CASHOUT_COMMAND]);
+            const endedSpec: ServerFrameSpec = {
+                ...ROUND_ENDED_SPEC,
+                payload: { case: 'roundEnded', roundId: ROUND_ID, actionIndex: 1, playerCommitment: commitment },
+            };
+            const endedFrame = serverFrame(SIGNING_SEED, endedSpec);
+            const base = buildReceipts();
+
+            return {
+                commitment,
+                receipts: buildReceipts({
+                    commands: [{ ...base.commands[0], frame: bet }, base.commands[1]],
+                    frames: [
+                        ...base.frames.slice(0, 3),
+                        { sequence: 5n, payloadCase: 'roundEnded', relatedRequestId: CASHOUT_REQUEST, frame: endedFrame },
+                    ],
+                    roundEndedFrame: endedFrame,
+                }),
+            };
+        }
+
+        function plinkoRound(transcriptSeedText: string, commitment: Uint8Array): InboxMessage[] {
+            const clientSeed = blake2b(new TextEncoder().encode(transcriptSeedText), { dkLen: 32 });
+            const options = { gameType: plinko.GAME_TYPE, actions: PLINKO_ACTIONS, clientSeed, playerCommitment: commitment };
+
+            return buildRound({ ...options, claimedPayout: honestPayout(plinko.GAME_TYPE, options) });
+        }
+
+        it('reads the seed from the signed PlaceBet command when none is typed', () => {
+            const { receipts, commitment } = receiptsWithSeed('my lucky seed');
+            const report = verify(plinkoRound('my lucky seed', commitment), { receipts: { status: 'ok', receipts } });
+            const check = report.checks.find((c) => c.id === 'client-seed-text');
+
+            expect(check?.status).toBe('pass');
+            expect(check?.detail).toContain(`request ${BET_REQUEST}`);
+            expect(check?.detail).toContain('"my lucky seed"');
+            expect(report.verdict).toBe('verified');
+        });
+
+        it('fails when the transcript seed is not the one the player signed', () => {
+            // Every other proof passes: the commitment covers the command
+            // frames, not the transcript's seed field, so only this check sees
+            // a sequencer that swapped the seed.
+            const { receipts, commitment } = receiptsWithSeed('my lucky seed');
+            const report = verify(plinkoRound('a seed the server picked', commitment), {
+                receipts: { status: 'ok', receipts },
+            });
+
+            expect(statusOf(report, 'client-seed-text')).toBe('fail');
+            expect(statusOf(report, 'commitment-vs-chain')).toBe('pass');
+            expect(report.verdict).toBe('failed');
+        });
+
+        it('checks typed text as well, and fails when it disagrees', () => {
+            const { receipts, commitment } = receiptsWithSeed('my lucky seed');
+            const report = verify(plinkoRound('my lucky seed', commitment), {
+                receipts: { status: 'ok', receipts },
+                clientSeedText: 'a seed I misremember',
+            });
+            const check = report.checks.find((c) => c.id === 'client-seed-text');
+
+            expect(check?.status).toBe('fail');
+            expect(check?.detail).toContain('the text you typed');
+            expect(check?.detail).toContain(`request ${BET_REQUEST}`);
+        });
+
+        it('stays unavailable when the PlaceBet command carries no seed', () => {
+            // The default fixture's commands have empty payloads.
+            expect(statusOf(verify(buildRound()), 'client-seed-text')).toBe('unavailable');
+        });
     });
 
     it('leaves the client-seed check unavailable, not failed, when no text is given', () => {

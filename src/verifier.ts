@@ -52,6 +52,7 @@ import * as plinko from './verify/plinko';
 import { ReplayError, type ReplayResult, type TranscriptAction } from './verify/types';
 import type { RoundTranscriptMessage } from './wire/messages';
 import { decodeEdpk, verifyInboxSignature } from './wire/signature';
+import { decodeClientEnvelope } from './wire/proto-reader';
 
 export type CheckStatus = 'pass' | 'fail' | 'unavailable';
 
@@ -439,28 +440,65 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         });
     }
 
-    // ── Optional: the client seed the player actually typed ─────────────
-    // Hashed exactly as given, with no trimming: the sequencer hashes the
-    // text the player submitted, so silently normalising here would let a
-    // mismatched seed pass. `trim` decides only whether anything was supplied.
+    // ── Optional: the client seed the player chose ──────────────────────
+    // Two sources, checked independently, and every one supplied must match:
+    //
+    //   - the `client_seed` inside the round's own PlaceBet command, from the
+    //     receipts. Signed by the session key, so it is what the player's
+    //     client actually sent — and NOTHING else compares it with the
+    //     transcript: the commitment covers the command frames, not the
+    //     transcript's seed field, and the kernel never sees the text;
+    //   - the text typed into the form, if any.
+    //
+    // Both are hashed exactly as given, with no trimming: the sequencer hashes
+    // the bytes the player submitted, so normalising here would let a
+    // mismatched seed pass. `trim` decides only whether anything was typed.
+    const seedSources: { label: string; text: string; bytes: Uint8Array }[] = [];
+    const fromReceipts = clientSeedFromReceipts(input, roundId);
     const rawClientSeedText = input.clientSeedText ?? '';
 
+    if (fromReceipts) {
+        seedSources.push({
+            label: `the PlaceBet command in your receipts (request ${fromReceipts.requestId}, signed by the session key)`,
+            text: new TextDecoder().decode(fromReceipts.seed),
+            bytes: fromReceipts.seed,
+        });
+    }
+
     if (rawClientSeedText.trim()) {
-        const hashed = blake2b(new TextEncoder().encode(rawClientSeedText), { dkLen: 32 });
-        const matches = bytesEqual(hashed, transcript.clientSeed);
+        seedSources.push({
+            label: 'the text you typed',
+            text: rawClientSeedText,
+            bytes: new TextEncoder().encode(rawClientSeedText),
+        });
+    }
+
+    if (seedSources.length > 0) {
+        const compared = seedSources.map((source) => {
+            const hashed = blake2b(source.bytes, { dkLen: 32 });
+
+            return { ...source, hashed, matches: bytesEqual(hashed, transcript.clientSeed) };
+        });
 
         checks.push({
             id: 'client-seed-text',
-            title: 'Transcript client_seed is the hash of your client-seed text',
-            status: matches ? 'pass' : 'fail',
-            detail: `blake2b-256(utf8 text) = ${bytesToHex(hashed)} ${matches ? '=' : '≠'} transcript client_seed = ${clientSeedHex}. The engine consumes the lowercase hex of those bytes, so this is what ties the replay below to the seed you chose.`,
+            title: 'Transcript client_seed is the hash of your client seed',
+            status: compared.every((c) => c.matches) ? 'pass' : 'fail',
+            detail:
+                compared
+                    .map(
+                        (c) =>
+                            `${c.label}: blake2b-256(utf8 "${c.text}") = ${bytesToHex(c.hashed)} ${c.matches ? '=' : '≠'} transcript client_seed ${clientSeedHex}`,
+                    )
+                    .join('; ') +
+                '. The engine consumes the lowercase hex of those bytes, so this is what ties the replay below to the seed you chose.',
         });
     } else {
         checks.push({
             id: 'client-seed-text',
-            title: 'Transcript client_seed is the hash of your client-seed text',
+            title: 'Transcript client_seed is the hash of your client seed',
             status: 'unavailable',
-            detail: `no client-seed text supplied — optional. The transcript carries only the 32-byte hash ${clientSeedHex}; supply the original text to prove the round was played under the seed you chose.`,
+            detail: `no client seed to compare — optional. The transcript carries only the 32-byte hash ${clientSeedHex}; load receipts that include this round's PlaceBet command, or type the original text, to prove the round was played under the seed you chose.`,
         });
     }
 
@@ -580,6 +618,59 @@ export function verifyRound(input: VerifyInput): VerificationReport {
     };
 }
 
+
+/**
+ * The client seed from the round's own PlaceBet command in the receipts, or
+ * null when there is none to read.
+ *
+ * WHICH command is this round's place-bet comes from the recomputation, never
+ * from the export's labels: its first command is the one the server's signed
+ * frames place at index 0, and index 0 is always the place-bet. The command's
+ * own signed request id must name the same request, so a relabelled command
+ * cannot stand in. Its session-key signature is checked by the receipts
+ * authenticity proof; a forged frame fails that check and the verdict with it.
+ *
+ * Any gap — no receipts, a declined recomputation, an undecodable frame, a
+ * command with no seed — is null, which the caller reports as an absent
+ * source rather than a mismatch.
+ */
+function clientSeedFromReceipts(input: VerifyInput, roundId: string): { requestId: string; seed: Uint8Array } | null {
+    if (input.receipts?.status !== 'ok') {
+        return null;
+    }
+
+    const { commands, frames } = input.receipts.receipts;
+    const recomputed = recomputeRoundCommitment({ roundIdHex: roundId, commands, frames });
+
+    if (recomputed.status !== 'ok' || recomputed.orderedRequestIds.length === 0) {
+        return null;
+    }
+
+    const requestId = recomputed.orderedRequestIds[0];
+    const command = commands.find((c) => c.requestId === requestId);
+
+    if (!command) {
+        return null;
+    }
+
+    try {
+        const split = splitSignedFrame(command.frame);
+
+        if (split.tag !== CLIENT_FRAME_TAG) {
+            return null;
+        }
+
+        const decoded = decodeClientEnvelope(split.body);
+
+        if (decoded.payloadCase !== 'placeBet' || decoded.requestId !== requestId || !decoded.placeBetClientSeed) {
+            return null;
+        }
+
+        return { requestId, seed: decoded.placeBetClientSeed };
+    } catch {
+        return null;
+    }
+}
 
 /** The first admissible key this message's signature verifies under, or null. */
 function matchSigningKey(message: InboxMessage, keys: VerifierKey[]): VerifierKey | null {

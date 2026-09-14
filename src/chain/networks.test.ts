@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import rawNetworks from './networks.json';
-import { NETWORKS, parseNetworks } from './networks';
+import { deploymentsForTenant, NETWORKS, parseNetworks } from './networks';
 
 /** A minimal valid document; each negative test breaks exactly one thing in a copy. */
 function validDocument() {
@@ -25,6 +25,52 @@ function validDocument() {
         ],
     };
 }
+
+describe('deploymentsForTenant', () => {
+    const OTHER_DEPLOYMENT = {
+        status: 'active',
+        tenantId: 'stg-99dot5-com-shadownet',
+        rollupAddress: 'sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL',
+        originationAdministrator: { address: 'KT1JrXpRDfHFUBCNT944VYJTTYUmqiq2YuF6', level: 5050472 },
+        evidence: ['sr_originate at level 5050472'],
+    };
+
+    function twoNetworks(secondNetworkDeployments: unknown[]) {
+        const document = validDocument();
+
+        return parseNetworks({
+            networks: [
+                ...document.networks,
+                {
+                    id: 'mainnet',
+                    label: 'Mainnet',
+                    tzktApiUrl: 'https://api.tzkt.io',
+                    rpcUrl: 'https://rpc.tzkt.io/mainnet',
+                    deployments: secondNetworkDeployments,
+                },
+            ],
+        });
+    }
+
+    it('finds the one deployment carrying a slug, on whichever network it lives', () => {
+        const matches = deploymentsForTenant(twoNetworks([OTHER_DEPLOYMENT]), 'stg-99dot5-com-shadownet');
+
+        expect(matches.map((m) => [m.network.id, m.deployment.rollupAddress])).toEqual([
+            ['mainnet', 'sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL'],
+        ]);
+    });
+
+    it('returns every deployment when a re-origination kept the slug', () => {
+        const retired = { ...validDocument().networks[0].deployments[0], status: 'retired', tenantId: 'stg-99dot5-com-shadownet' };
+        const networks = twoNetworks([OTHER_DEPLOYMENT, retired]);
+
+        expect(deploymentsForTenant(networks, 'stg-99dot5-com-shadownet')).toHaveLength(2);
+    });
+
+    it('returns nothing for a slug no deployment carries', () => {
+        expect(deploymentsForTenant(twoNetworks([OTHER_DEPLOYMENT]), 'unknown-tenant')).toEqual([]);
+    });
+});
 
 describe('networks.json', () => {
     it('parses the shipped file', () => {

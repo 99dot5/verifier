@@ -6,7 +6,7 @@
  * The page only fetches from the chain sources configured below (TzKT + a
  * Tezos archive RPC — both swappable) or verifies messages you paste in.
  */
-import { NETWORKS, type Deployment, type NetworkConfig } from './chain/networks';
+import { deploymentsForTenant, NETWORKS, type Deployment, type NetworkConfig } from './chain/networks';
 import { scanRange, type InboxMessage, type ScanProgress } from './chain/inbox';
 import { headLevel } from './chain/inbox';
 import { fetchAdminLineage, keysForTenant, vaultsForPool, type AdminLineage } from './chain/admin-lineage';
@@ -115,7 +115,7 @@ app.innerHTML = `
                 <input id="to-level" type="number" min="0" />
             </label>
             <label>Client seed text (optional)
-                <input id="client-seed-text" placeholder="the seed you typed, if you kept it" spellcheck="false" />
+                <input id="client-seed-text" placeholder="read from your receipts when loaded" spellcheck="false" />
             </label>
         </div>
         <p class="note">
@@ -125,8 +125,9 @@ app.innerHTML = `
         </p>
         <p class="note">
             The transcript carries only <code>blake2b-256</code> of your client-seed text, not the text
-            itself. Every other check works from that hash alone; typing the original text adds one more
-            proof — that the round was played under the seed <em>you</em> chose.
+            itself. Every other check works from that hash alone; the original text adds one more proof —
+            that the round was played under the seed <em>you</em> chose. Loaded receipts supply it from your
+            signed bet command; type it here only to check the text you remember as well.
         </p>
         <details open>
             <summary>Your play receipts (optional — adds the third proof)</summary>
@@ -218,6 +219,17 @@ const progress = el<HTMLSpanElement>('progress');
 
 const deploymentSelect = el<HTMLSelectElement>('deployment');
 
+/**
+ * Tenant and pool from the loaded receipts, or null when none are loaded.
+ *
+ * Changing the network or deployment used to overwrite both — tenant with the
+ * deployment's slug, pool with nothing — so picking a deployment AFTER loading
+ * receipts silently dropped the pool they named. While receipts are loaded
+ * their scope wins over the deployment defaults. Declared before the first
+ * `applyNetwork` call below, which reads it.
+ */
+let receiptsScope: { tenantId: string; poolId: string } | null = null;
+
 for (const network of NETWORKS) {
     const option = document.createElement('option');
 
@@ -265,11 +277,11 @@ function applyNetwork(network: NetworkConfig): void {
 }
 
 function applyDeployment(network: NetworkConfig, deployment: Deployment | null): void {
-    tenantInput.value = deployment?.tenantId ?? '';
+    tenantInput.value = receiptsScope?.tenantId ?? deployment?.tenantId ?? '';
     // The pool is a fact about the SESSION, not the rollup: it comes from the
     // receipts, from the lineage when the tenant has a single pool, or from the
     // reader. A deployment default would be wrong for every other pool's player.
-    poolInput.value = '';
+    poolInput.value = receiptsScope?.poolId ?? '';
     rollupInput.value = deployment?.rollupAddress ?? '';
     adminInput.value = deployment?.originationAdministrator.address ?? '';
     // The override starts EMPTY on every deployment: the derived set is the
@@ -433,8 +445,7 @@ receiptsFileInput.addEventListener('change', async () => {
     }
 
     receiptsTextarea.value = await file.text();
-    receiptsStatus.textContent = `loaded ${file.name} (${file.size} bytes) — it is read in this page and never uploaded`;
-    adoptReceiptsScope();
+    adoptReceiptsScope(`loaded ${file.name} (${file.size} bytes) — it is read in this page and never uploaded`);
     // Clear the input so re-selecting the same (possibly re-exported) file
     // fires `change` again.
     receiptsFileInput.value = '';
@@ -727,16 +738,23 @@ function depositVaults(lineage: AdminLineage): string[] {
  * the EXPORTER'S LABELS, used only as form defaults: the keys still come from
  * the lineage, and a wrong label derives an empty key set, never a pass.
  */
-function adoptReceiptsScope(): void {
+function adoptReceiptsScope(statusPrefix: string): void {
     const text = receiptsTextarea.value.trim();
 
+    // Every load starts a fresh status line; the notes below are appended to
+    // THIS load's prefix, never to a previous load's.
+    receiptsStatus.textContent = text ? statusPrefix : '';
+
     if (!text) {
+        receiptsScope = null;
+
         return;
     }
 
     const result = importReceipts(text);
 
     if (result.status !== 'ok') {
+        receiptsScope = null;
         receiptsStatus.textContent = `receipts rejected: ${result.message}`;
 
         return;
@@ -745,6 +763,39 @@ function adoptReceiptsScope(): void {
     const { tenantId, poolId } = result.receipts;
     const roundId = hyphenateUuid(result.receipts.roundIdHex);
     const changed: string[] = [];
+    const previous = { tenant: tenantInput.value.trim(), pool: poolInput.value.trim() };
+
+    receiptsScope = { tenantId, poolId };
+
+    // The receipts name a tenant but no network or rollup. Select both only when
+    // exactly one known deployment carries that slug; with several (a
+    // re-origination that kept it) or none, the reader picks, because verifying
+    // against the wrong lineage would fail an honest round's signatures.
+    const matches = deploymentsForTenant(NETWORKS, tenantId);
+
+    if (matches.length === 1) {
+        const { network, deployment } = matches[0];
+
+        if (networkSelect.value !== network.id || rollupInput.value.trim() !== deployment.rollupAddress) {
+            networkSelect.value = network.id;
+            applyNetwork(network);
+            deploymentSelect.value = deployment.rollupAddress;
+            applyDeployment(network, deployment);
+            changed.push(`${network.label} deployment ${deploymentLabel(deployment)}`);
+        } else {
+            // Same deployment: re-apply only the receipts' tenant and pool, so
+            // the lineage already shown is not thrown away.
+            tenantInput.value = tenantId;
+            poolInput.value = poolId;
+        }
+    } else {
+        tenantInput.value = tenantId;
+        poolInput.value = poolId;
+        receiptsStatus.textContent +=
+            matches.length === 0
+                ? ` — NOTE: no known deployment registers tenant ${tenantId}; choose the network and deployment yourself`
+                : ` — NOTE: ${matches.length} deployments register tenant ${tenantId}; choose the one this round was played on`;
+    }
 
     // The round ID is filled only when the field is empty: a reader who typed a
     // round and then loaded receipts for a different one should see the
@@ -757,13 +808,11 @@ function adoptReceiptsScope(): void {
             ` — NOTE: these receipts are labelled round ${roundId}, not the round ID entered above`;
     }
 
-    if (tenantInput.value.trim() !== tenantId) {
-        tenantInput.value = tenantId;
+    if (previous.tenant !== tenantId) {
         changed.push(`tenant ${tenantId}`);
     }
 
-    if (poolInput.value.trim() !== poolId) {
-        poolInput.value = poolId;
+    if (previous.pool !== poolId) {
         changed.push(`pool ${poolId}`);
     }
 
@@ -785,7 +834,7 @@ function hyphenateUuid(value: string): string {
         : hex;
 }
 
-receiptsTextarea.addEventListener('change', adoptReceiptsScope);
+receiptsTextarea.addEventListener('change', () => adoptReceiptsScope('receipts read from the text box'));
 
 function runVerification(
     roundId: string,

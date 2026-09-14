@@ -252,11 +252,47 @@ export function verifyRound(input: VerifyInput): VerificationReport {
     // mirror that by keeping the earliest level, then the earliest position
     // within the block. It matters: the commitment-ordering check compares
     // against this message's level.
-    const earliest = (predicate: (m: InboxMessage) => boolean): InboxMessage | undefined =>
-        inTenant.filter(predicate).sort((a, b) => a.level - b.level || a.messageIndex - b.messageIndex)[0];
+    //
+    // "Earliest" means earliest AUTHENTICATED. The inbox is shared by every
+    // rollup on the network and writable by anyone, and slugs are not unique
+    // across deployments, so frames under this tenant's slug that no lineage
+    // key signed are real traffic — another deployment's, or a forgery. The
+    // kernel drops those before touching state, so a verifier that picked one
+    // would compare against a seed batch the kernel never saw (observed live
+    // on shadownet: a foreign-signed SeedBatch covering the same indices
+    // landed ~1000 levels ahead of the tenant's own). Only when NO candidate
+    // authenticates does the earliest unauthenticated one stand in, so the
+    // signature check still reports the failure instead of hiding the round.
+    const authenticates = (m: InboxMessage): boolean =>
+        input.keys.status === 'available' && matchSigningKey(m, input.keys.keys) !== null;
+
+    const earliest = (predicate: (m: InboxMessage) => boolean, what: string): InboxMessage | undefined => {
+        const candidates = inTenant
+            .filter(predicate)
+            .sort((a, b) => a.level - b.level || a.messageIndex - b.messageIndex);
+
+        if (input.keys.status !== 'available' || input.keys.keys.length === 0) {
+            return candidates[0];
+        }
+
+        const chosen = candidates.find(authenticates);
+        const skipped = candidates.filter((m) => m !== chosen && !authenticates(m));
+
+        if (chosen && skipped.length > 0) {
+            findings.push(
+                `Skipped ${skipped.length} ${what} frame(s) under this tenant's slug that verify under no key the ` +
+                    `tenant registered (${skipped.map((m) => `level ${m.level}, op ${m.operationHash}`).join('; ')}). ` +
+                    'The rollup inbox is shared and permissionless, and the kernel drops unauthenticated frames, ' +
+                    `so the authenticated ${what} at level ${chosen.level} is the one it applied.`,
+            );
+        }
+
+        return chosen ?? candidates[0];
+    };
 
     const transcriptMessage = earliest(
         (m) => m.envelope.message.kind === 'round-transcript' && m.envelope.message.roundId === roundId,
+        'RoundTranscript',
     );
 
     if (!transcriptMessage || transcriptMessage.envelope.message.kind !== 'round-transcript') {
@@ -316,6 +352,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             m.envelope.poolId === transcriptMessage.envelope.poolId &&
             m.envelope.message.startIndex <= seedIndex &&
             seedIndex < m.envelope.message.startIndex + BigInt(m.envelope.message.hashes.length),
+        'SeedBatch',
     );
 
     // ── Signatures ──────────────────────────────────────────────────────
@@ -1021,8 +1058,17 @@ function resolveMissingTranscript(
     // it is provably later by construction, where a sibling transcript is not
     // orderable against this round from the receipts at all.
     const sessionId = receipts.sessionIdHex;
+    // Authenticated frames only: this is the evidence behind the ONE accusatory
+    // verdict, and a foreign-signed EndSession carrying the session id is
+    // exactly what anyone could post to the shared inbox to manufacture it.
+    // `framesAuthentic` above already guarantees a usable key set here.
+    const admissible = input.keys.status === 'available' ? input.keys.keys : [];
     const ofSession = (m: InboxMessage): boolean => {
         const message = m.envelope.message;
+
+        if (matchSigningKey(m, admissible) === null) {
+            return false;
+        }
 
         if (message.kind === 'end-session') {
             return message.sessionId === sessionId;

@@ -375,6 +375,49 @@ describe('verifyRound', () => {
         expect(report.verdict).toBe('verified');
     });
 
+    it('prefers the authenticated SeedBatch over an EARLIER foreign-signed one covering the same index', () => {
+        // Observed live on shadownet: the inbox is shared across deployments,
+        // so a batch under the same tenant slug, signed by a key the tenant
+        // never registered, landed ahead of the tenant's own. The kernel drops
+        // it; the verifier must too, not compare against its hashes.
+        const foreignSeed = new Uint8Array(32).fill(7);
+        const [foreignBatch] = buildRound({
+            serverSeed: new Uint8Array(32).fill(3),
+            signingSeed: foreignSeed,
+            batchLevel: BATCH_LEVEL - 10,
+            // Only the batch frame is used; an explicit payout skips replaying
+            // a seed under which the fixture's HiLo guess loses.
+            claimedPayout: 0n,
+        });
+        const report = verify([foreignBatch, ...buildRound()]);
+
+        expect(report.verdict).toBe('verified');
+        expect(statusOf(report, 'signatures')).toBe('pass');
+        expect(statusOf(report, 'commitment-hash')).toBe('pass');
+        expect(report.findings.join('\n')).toContain(`Skipped 1 SeedBatch frame(s)`);
+    });
+
+    it('prefers the authenticated transcript over an EARLIER foreign-signed one for the same round', () => {
+        const inflated = honestPayout(hilo.GAME_TYPE) + 1_000_000n;
+        const [, forged] = buildRound({
+            signingSeed: new Uint8Array(32).fill(7),
+            transcriptLevel: BATCH_LEVEL + 1,
+            claimedPayout: inflated,
+        });
+        const report = verify([forged, ...buildRound()]);
+
+        expect(report.verdict).toBe('verified');
+    });
+
+    it('still fails the signature check when NO candidate SeedBatch authenticates', () => {
+        const [foreignBatch] = buildRound({ signingSeed: new Uint8Array(32).fill(7) });
+        const [, transcript] = buildRound();
+        const report = verify([foreignBatch, transcript]);
+
+        expect(report.verdict).toBe('failed');
+        expect(statusOf(report, 'signatures')).toBe('fail');
+    });
+
     it('fails when the claimed payout is inflated', () => {
         const report = verify(buildRound({ claimedPayout: honestPayout(hilo.GAME_TYPE) + 1n }));
 

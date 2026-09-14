@@ -128,6 +128,23 @@ app.innerHTML = `
             itself. Every other check works from that hash alone; typing the original text adds one more
             proof — that the round was played under the seed <em>you</em> chose.
         </p>
+        <details open>
+            <summary>Your play receipts (optional — adds the third proof)</summary>
+            <p class="note">
+                Your game client stores every command it sent and every signed frame it received. Exporting
+                them and loading the JSON here adds the proof the chain alone cannot give: that the round
+                L1 replayed commits to the commands <em>you</em> authorised. Without it, the transcript’s
+                <code>player_commitment</code> is a number the server chose, and the verdict caps at
+                <strong>INCOMPLETE</strong>. Nothing is uploaded — the file is read in this page, and loading
+                it fills in the round, tenant and pool for you.
+            </p>
+            <div class="actions">
+                <input id="receipts-file" type="file" accept="application/json,.json" />
+            </div>
+            <textarea id="receipts-json" rows="4" spellcheck="false"
+                placeholder='{"schema":"99dot5.receipts.v1", …}'></textarea>
+            <p class="note" id="receipts-status"></p>
+        </details>
         <div class="actions">
             <button id="fetch-verify" class="primary">Fetch from chain &amp; verify</button>
             <button id="abort" hidden>Abort</button>
@@ -145,22 +162,6 @@ app.innerHTML = `
             <div class="actions">
                 <button id="paste-verify">Verify pasted messages</button>
             </div>
-        </details>
-        <details>
-            <summary>Load your play receipts (adds the third proof)</summary>
-            <p class="note">
-                Your game client stores every command it sent and every signed frame it received. Exporting
-                them and loading the JSON here adds the proof the chain alone cannot give: that the round
-                L1 replayed commits to the commands <em>you</em> authorised. Without it, the transcript’s
-                <code>player_commitment</code> is a number the server chose, and the verdict caps at
-                <strong>INCOMPLETE</strong>. Nothing is uploaded — the file is read in this page.
-            </p>
-            <div class="actions">
-                <input id="receipts-file" type="file" accept="application/json,.json" />
-            </div>
-            <textarea id="receipts-json" rows="6" spellcheck="false"
-                placeholder='{"schema":"99dot5.receipts.v1", …}'></textarea>
-            <p class="note" id="receipts-status"></p>
         </details>
     </section>
 
@@ -434,6 +435,9 @@ receiptsFileInput.addEventListener('change', async () => {
     receiptsTextarea.value = await file.text();
     receiptsStatus.textContent = `loaded ${file.name} (${file.size} bytes) — it is read in this page and never uploaded`;
     adoptReceiptsScope();
+    // Clear the input so re-selecting the same (possibly re-exported) file
+    // fires `change` again.
+    receiptsFileInput.value = '';
 });
 
 /** Parse whatever is in the receipts box; an empty box is `absent`, not an error. */
@@ -733,11 +737,25 @@ function adoptReceiptsScope(): void {
     const result = importReceipts(text);
 
     if (result.status !== 'ok') {
+        receiptsStatus.textContent = `receipts rejected: ${result.message}`;
+
         return;
     }
 
     const { tenantId, poolId } = result.receipts;
+    const roundId = hyphenateUuid(result.receipts.roundIdHex);
     const changed: string[] = [];
+
+    // The round ID is filled only when the field is empty: a reader who typed a
+    // round and then loaded receipts for a different one should see the
+    // mismatch in the report, not have their input silently replaced.
+    if (!roundIdInput.value.trim()) {
+        roundIdInput.value = roundId;
+        changed.push(`round ${roundId}`);
+    } else if (roundIdInput.value.trim().toLowerCase() !== roundId) {
+        receiptsStatus.textContent +=
+            ` — NOTE: these receipts are labelled round ${roundId}, not the round ID entered above`;
+    }
 
     if (tenantInput.value.trim() !== tenantId) {
         tenantInput.value = tenantId;
@@ -751,8 +769,20 @@ function adoptReceiptsScope(): void {
 
     if (changed.length > 0) {
         receiptsStatus.textContent +=
-            ` — filled ${changed.join(' and ')} from the receipts (a label, not proof; edit if it looks wrong)`;
+            ` — filled ${changed.join(', ')} from the receipts (a label, not proof; edit if it looks wrong)`;
     }
+
+    progress.textContent = 'receipts loaded — press “Fetch from chain & verify”';
+    fetchButton.focus();
+}
+
+/** Accept a round id as 32 bare hex digits or already hyphenated. */
+function hyphenateUuid(value: string): string {
+    const hex = value.trim().toLowerCase();
+
+    return /^[0-9a-f]{32}$/.test(hex)
+        ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+        : hex;
 }
 
 receiptsTextarea.addEventListener('change', adoptReceiptsScope);

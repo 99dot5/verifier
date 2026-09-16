@@ -36,6 +36,19 @@ export interface ImportedCommand {
      * suppression bracket from L1, so nothing in a verdict may read this.
      */
     sentAtUnixMs: number;
+    /**
+     * How many times the client sent this command's bytes — the first send
+     * plus every re-send under the same request id.
+     *
+     * OPTIONAL and defaulted to 1: an export written before the client counted
+     * re-sends carries no such field, and reading its absence as "sent once" is
+     * the honest default rather than a claim. Like `sentAtUnixMs` this is a
+     * CLIENT-SIDE LABEL nobody signed — the server never sees a count — so no
+     * check may read it. The suppression finding quotes it as the player's own
+     * account of how hard they tried, which is exactly what the reader needs to
+     * weigh transport loss against suppression.
+     */
+    sendCount: number;
 }
 
 export interface ImportedFrame {
@@ -101,12 +114,21 @@ function readDocument(document: unknown): ImportedReceipts {
 
     const commands = asArray(root.commands, 'commands').map((entry, index) => {
         const command = asObject(entry, `commands[${index}]`);
+        const sendCount = command.sendCount;
 
         return {
             requestId: asString(command.requestId, `commands[${index}].requestId`),
             payloadCase: asString(command.payloadCase, `commands[${index}].payloadCase`),
             frame: asHex(command.frameHex, `commands[${index}].frameHex`),
             sentAtUnixMs: asNumber(command.sentAtUnixMs, `commands[${index}].sentAtUnixMs`),
+            // Absent means one send — the shape of an export written before the
+            // client counted re-sends. A present value is still validated: a
+            // malformed one is an import error rather than a silent default,
+            // because a broken field and a missing field say different things.
+            sendCount:
+                sendCount === null || sendCount === undefined
+                    ? 1
+                    : asPositiveInteger(sendCount, `commands[${index}].sendCount`),
         };
     });
 
@@ -174,6 +196,14 @@ function asString(value: unknown, what: string): string {
 function asNumber(value: unknown, what: string): number {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
         throw new Error(`${what}: expected a finite number`);
+    }
+
+    return value;
+}
+
+function asPositiveInteger(value: unknown, what: string): number {
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+        throw new Error(`${what}: expected an integer of at least 1`);
     }
 
     return value;

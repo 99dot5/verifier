@@ -46,6 +46,7 @@ import { splitSignedFrame, verifyServerFrameSignature, CLIENT_FRAME_TAG } from '
 import { TRANSCRIPT_DECIMALS } from './verify/assets';
 import { payoutUnits, unitsToDecimalString } from './verify/ints';
 import { bytesEqual, bytesToHex, serverSeedCommitment } from './verify/seed';
+import * as crash from './verify/crash';
 import * as hilo from './verify/hilo';
 import * as mines from './verify/mines';
 import * as plinko from './verify/plinko';
@@ -53,6 +54,13 @@ import { ReplayError, type ReplayResult, type TranscriptAction } from './verify/
 import type { RoundTranscriptMessage } from './wire/messages';
 import { decodeEdpk, verifyInboxSignature } from './wire/signature';
 import { decodeClientEnvelope } from './wire/proto-reader';
+import { analyseRejections } from './verify/rejections';
+import {
+    analyseProjection,
+    PROJECTION_CHECK_ID,
+    PROJECTION_CHECK_TITLE,
+    type ProjectionAction,
+} from './verify/projection';
 
 export type CheckStatus = 'pass' | 'fail' | 'unavailable';
 
@@ -200,7 +208,19 @@ export interface VerificationReport {
 }
 
 
+/**
+ * The replayers, by the `game_type` the transcript states.
+ *
+ * `hydra:v1` is deliberately ABSENT and has no port yet, so a hydra round can
+ * never reach `verified`: the payout check reports the game as unsupported,
+ * `replay-payout` does not pass, and `allProofsRan` is false. Every other proof
+ * — signatures, both commitments, and the action projection, which does have a
+ * hydra table — still runs, so a hydra round is checked in every way except
+ * the one that recomputes its money. A pre-existing limit, named here so it
+ * reads as a gap rather than as a verdict about the round.
+ */
 const REPLAYERS: Record<string, (s: string, c: string, a: TranscriptAction[]) => ReplayResult> = {
+    [crash.GAME_TYPE]: crash.replay,
     [hilo.GAME_TYPE]: hilo.replay,
     [plinko.GAME_TYPE]: plinko.replay,
     [mines.GAME_TYPE]: mines.replay,
@@ -308,7 +328,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             detail: `no RoundTranscript for round ${roundId} in the scanned messages — the round may still be open (a transcript is published only when the round settles), the transcript may not have been drained from the outbox yet, or the level range may be too narrow. Which of those it is, is what the verdict below decides.`,
         });
 
-        const receipts = runReceiptProofs(input, roundId, null, checks, findings);
+        const receipts = runReceiptProofs(input, roundId, null, null, checks, findings);
 
         return {
             roundId,
@@ -569,7 +589,23 @@ export function verifyRound(input: VerifyInput): VerificationReport {
     }
 
     // ── The third proof group: the player's own receipts ────────────────
-    const receipts = runReceiptProofs(input, roundId, transcript.playerCommitment, checks, findings);
+    const receipts = runReceiptProofs(
+        input,
+        roundId,
+        transcript.playerCommitment,
+        {
+            gameType: transcript.gameType,
+            serverSeedHex,
+            clientSeedHex,
+            actions: transcript.actions.map((a, index) => ({
+                index,
+                actionType: a.actionType,
+                payload: a.payload,
+            })),
+        },
+        checks,
+        findings,
+    );
 
     const anyFail = checks.some((c) => c.status === 'fail');
     // "verified" requires every proof to have actually run and passed. The
@@ -593,6 +629,14 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             'commitment-vs-chain',
             'commitment-vs-receipt',
             'receipt-vs-chain',
+            // The fourth proof JOINS the list (§P3.1). Leaving it out would let
+            // an `unavailable` projection still report `verified` — a check
+            // whose skip is invisible in the verdict. The consequence is
+            // stated rather than worked around: a round whose export carries
+            // no decodable command bodies degrades to `incomplete`, because
+            // without them nothing ties the transcript's actions to what the
+            // player authorised.
+            PROJECTION_CHECK_ID,
         ] as const
     ).every((id) => checks.find((c) => c.id === id)?.status === 'pass');
 
@@ -731,6 +775,24 @@ interface ReceiptState {
 }
 
 /**
+ * What the CHAIN says about the round, for the proofs that need more than the
+ * commitment — today, the refusal check, which derives a crash tick from the
+ * revealed seed. Null when no transcript was found.
+ */
+interface ChainRoundFacts {
+    gameType: string;
+    serverSeedHex: string;
+    clientSeedHex: string;
+    /**
+     * The transcript's actions, in index order — the fourth proof's right-hand
+     * side. Taken from the chain, never from the export: the question is what
+     * the KERNEL replayed, and a transcript the player supplied would let the
+     * comparison be satisfied by supplying both halves.
+     */
+    actions: ProjectionAction[];
+}
+
+/**
  * Run the four receipt proofs, in increasing order of what they prove.
  *
  *   (i)   every imported frame is authentic — a lineage key signed it;
@@ -750,6 +812,7 @@ function runReceiptProofs(
     input: VerifyInput,
     roundId: string,
     chainCommitment: Uint8Array | null,
+    chainRound: ChainRoundFacts | null,
     checks: Check[],
     findings: string[],
 ): ReceiptState {
@@ -884,6 +947,60 @@ function runReceiptProofs(
         });
     }
 
+    // ── refusals ────────────────────────────────────────────────────────
+    // Last, because it is the only group whose ABSENCE is normal: a round with
+    // no refusal pushes no check at all, and a round with one adds exactly
+    // one. It is deliberately outside `allProofsRan` for the same reason — a
+    // missing refusal must not degrade an honest round — while a `fail` still
+    // reaches the verdict through `anyFail`.
+    const rejections = analyseRejections({
+        roundIdHex: roundId,
+        gameType: chainRound?.gameType ?? null,
+        serverSeedHex: chainRound?.serverSeedHex ?? null,
+        clientSeedHex: chainRound?.clientSeedHex ?? null,
+        // How the round SETTLED, from the chain: a liveness refusal on a round
+        // that already ended by a claim is the correct answer, so only the
+        // expire shape is eligible to contradict the seed.
+        actions: chainRound?.actions ?? [],
+        frames: decoded.frames,
+        commands: document.commands,
+    });
+
+    checks.push(...rejections.checks);
+    findings.push(...rejections.findings);
+
+    // ── the fourth proof: what the commands SAID ────────────────────────
+    // The cause is read off the signed RoundEnded only when that frame names
+    // the round under verification. On a relabelled export it names another
+    // round, and a cause lifted from someone else's settle would be compared
+    // against this round's actions.
+    const projection = analyseProjection({
+        roundIdHex: roundId,
+        gameType: chainRound?.gameType ?? '',
+        actions: chainRound?.actions ?? [],
+        binding:
+            chainRound === null
+                ? null
+                : recomputed.status === 'ok'
+                  ? recomputed.orderedRequestIds.map((requestId, position) => ({
+                        requestId,
+                        index: recomputed.orderedIndices[position],
+                    }))
+                  : null,
+        bindingReason:
+            chainRound === null
+                ? `no RoundTranscript for round ${roundId} was found on chain, so there are no actions to project onto`
+                : recomputed.status === 'ok'
+                  ? null
+                  : `the reconstruction declined: ${recomputed.reason}`,
+        commands: document.commands,
+        frames: decoded.frames,
+        endCause: roundEnded.envelope.roundId === roundId ? roundEnded.envelope.roundEndCause : null,
+    });
+
+    checks.push(...projection.checks);
+    findings.push(...projection.findings);
+
     return {
         reconstruction: recomputed.status === 'ok' ? 'ok' : 'unavailable',
         framesAuthentic,
@@ -897,6 +1014,7 @@ const RECEIPT_CHECKS: readonly (readonly [string, string])[] = [
     ['commitment-vs-chain', 'Your commands reproduce the commitment ON CHAIN'],
     ['commitment-vs-receipt', 'Your commands reproduce the commitment the server SIGNED'],
     ['receipt-vs-chain', 'The commitment the server signed equals the one on chain'],
+    [PROJECTION_CHECK_ID, PROJECTION_CHECK_TITLE],
 ];
 
 function pushCommitmentCheck(

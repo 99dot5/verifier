@@ -189,6 +189,106 @@ describe('proto-reader', () => {
             sessionId: SESSION_ID,
             payloadCase: 'placeBet',
             placeBetClientSeed: null,
+            // A `PlaceBet` OPENS a round rather than naming one, so there is
+            // no round id in its body to read.
+            commandRoundId: null,
+            // No `game_data` arm was written, so the reader reports that
+            // rather than picking a game: the fourth proof has no rule for a
+            // command that names no game, and guessing at one would compare
+            // the transcript against a projection nobody signed.
+            commandBody: { case: 'unrecognised', description: 'a PlaceBet command with no game_data arm set' },
+        });
+    });
+
+    it("reads a CashOut's own signed round_id", () => {
+        // The field the refusal trust rule compares against: a server may echo
+        // any round id it likes onto a `CommandRejected`, and this is the one
+        // the PLAYER signed.
+        const frame = commandFrame(SESSION_SEED, {
+            requestId: CASHOUT_REQUEST,
+            sessionId: SESSION_ID,
+            payloadCase: 'cashOut',
+            roundId: ROUND_ID,
+        });
+
+        expect(decodeClientEnvelope(splitSignedFrame(frame).body)).toMatchObject({
+            payloadCase: 'cashOut',
+            commandRoundId: ROUND_ID,
+        });
+    });
+
+    it('reads a round-scoped rejection and an accepted command’s receipt stamp', () => {
+        // Both fields ride frames the tenant key signed, and both are read by
+        // the hand-rolled reader with no `@99dot5/*` in sight — the whole
+        // point of the export. The rejection's `round_id` lands on the SAME
+        // `roundId` field the four event classes use, because it is the same
+        // fact: the round these signed bytes are about.
+        const rejection = serverFrame(TENANT_SEED, {
+            sequence: 0,
+            sessionId: SESSION_ID,
+            relatedRequestId: CASHOUT_REQUEST,
+            payload: {
+                case: 'commandRejected',
+                reasonCode: 2,
+                detail: 'round is no longer alive',
+                roundId: ROUND_ID,
+                receivedAtUnixMs: 1_700_000_123_456n,
+            },
+        });
+        const acknowledgement = serverFrame(TENANT_SEED, {
+            sequence: 6,
+            sessionId: SESSION_ID,
+            relatedRequestId: BET_REQUEST,
+            payload: { case: 'commandAccepted', receivedAtUnixMs: 1_700_000_000_111n },
+        });
+
+        expect(decodeServerEnvelope(splitSignedFrame(rejection).body)).toMatchObject({
+            payloadCase: 'commandRejected',
+            roundId: ROUND_ID,
+            rejectionReasonCode: 2,
+            receivedAtUnixMs: 1_700_000_123_456n,
+        });
+        expect(decodeServerEnvelope(splitSignedFrame(acknowledgement).body)).toMatchObject({
+            payloadCase: 'commandAccepted',
+            roundId: null,
+            receivedAtUnixMs: 1_700_000_000_111n,
+        });
+    });
+
+    it('reads an omitted rejection reason as UNSPECIFIED, not as “none stated”', () => {
+        // proto3 implicit presence: the zero enum never reaches the wire, so
+        // an absent field MEANS zero. A reader that left it null would let a
+        // liveness rule read an unspecified refusal as a refusal with no code.
+        const frame = serverFrame(TENANT_SEED, {
+            sequence: 0,
+            sessionId: SESSION_ID,
+            relatedRequestId: CASHOUT_REQUEST,
+            payload: { case: 'commandRejected', reasonCode: 0 },
+        });
+        const decoded = decodeServerEnvelope(splitSignedFrame(frame).body);
+
+        expect(decoded.rejectionReasonCode).toBe(0);
+        expect(decoded.roundId).toBeNull();
+        expect(decoded.receivedAtUnixMs).toBeNull();
+    });
+
+    it("reads a crash RoundStarted's signed anchor and tick quantum", () => {
+        const frame = serverFrame(TENANT_SEED, {
+            sequence: 3,
+            sessionId: SESSION_ID,
+            relatedRequestId: BET_REQUEST,
+            payload: {
+                case: 'roundStarted',
+                roundId: ROUND_ID,
+                crashState: { tickQuantumMs: 50, serverAnchorUnixMs: 1_700_000_000_000n },
+            },
+        });
+        const decoded = decodeServerEnvelope(splitSignedFrame(frame).body);
+
+        expect(decoded.roundId).toBe(ROUND_ID);
+        expect(decoded.crashState).toEqual({
+            tickQuantumMs: 50n,
+            serverAnchorUnixMs: 1_700_000_000_000n,
         });
     });
 
@@ -337,6 +437,7 @@ function command(requestId: string, payloadCase: 'placeBet' | 'cashOut' | 'playe
         payloadCase,
         frame: commandFrame(SESSION_SEED, { requestId, sessionId: SESSION_ID, payloadCase }),
         sentAtUnixMs: at,
+        sendCount: 1,
     };
 }
 
@@ -559,6 +660,59 @@ describe('recomputeRoundCommitment', () => {
         });
     });
 
+    /**
+     * The acknowledgement predicate, stated as a rule rather than exercised.
+     *
+     * Scope is WIDER than acknowledgement: a command reaches a round through
+     * the server's signed correlation — including a `CommandRejected` that
+     * names the round — and, on the play client's side, through the `round_id`
+     * the player signed into the command's own body. "In scope" and "accepted"
+     * are therefore two different questions, and only the second decides the
+     * preimage. The predicate is literally `payloadCase === 'commandAccepted'`
+     * (`recompute.ts` step 2), mirrored verbatim from the play client's port.
+     *
+     * The refactor this guards against is "treat any frame naming the request
+     * id as an acknowledgement". Under it a refused command enters `kept` with
+     * no index, trips `accepted-command-without-index`, and degrades every
+     * round carrying a refusal from a reconstructed commitment to
+     * `unavailable` — with the export fixture failing on a reason that names
+     * none of this. The fixture exercises the path; this states the rule. Its
+     * twin lives in `libs/casino-client/src/receipts/recompute.test.ts`.
+     */
+    it('excludes a command whose only frame is a commandRejected from the fold', () => {
+        const LATE_CASHOUT = '44444444-4444-4444-8444-444444444444';
+        const round = honestRound();
+        const baseline = recomputeRoundCommitment(honestRound());
+
+        round.commands = [...round.commands, command(LATE_CASHOUT, 'cashOut', 3)];
+        round.frames = [
+            ...round.frames,
+            // The P4 shape: a refusal that NAMES the round, so it is a round
+            // frame and the command it names is in scope. It is still not an
+            // acknowledgement.
+            importedFrame({
+                sequence: 0,
+                sessionId: SESSION_ID,
+                relatedRequestId: LATE_CASHOUT,
+                payload: { case: 'commandRejected', reasonCode: 1, roundId: ROUND_ID },
+            }),
+        ];
+
+        const result = recomputeRoundCommitment(round);
+
+        expect(result.status).toBe('ok');
+        expect(baseline.status).toBe('ok');
+
+        if (result.status !== 'ok' || baseline.status !== 'ok') {
+            return;
+        }
+
+        // No index: it takes no position in the round's action vector.
+        expect(result.orderedRequestIds).toEqual([BET_REQUEST, CASHOUT_REQUEST]);
+        // No preimage bytes: the digest is the one the round would have had.
+        expect(bytesToHex(result.commitment)).toBe(bytesToHex(baseline.commitment));
+    });
+
     it('declines on a frame that is not a server frame', () => {
         const round = honestRound();
 
@@ -649,6 +803,46 @@ describe('client seed in the export fixture', () => {
 
         expect(seed === null ? null : new TextDecoder().decode(seed)).toBe('fixture-client-seed');
     });
+
+    it('names the game arm of every command the play client wrote', () => {
+        // The per-arm pin for the widened reader, and the one that matters:
+        // these bodies are protobuf-es output from the OTHER side of the
+        // protocol, not frames this suite encoded. An arm the reader cannot
+        // name is reported as `unrecognised`, which makes the fourth proof
+        // `unavailable` and degrades every round of that game to `incomplete`
+        // — quietly, and for as long as nobody looks.
+        const arms = new Set<string>();
+
+        for (const testCase of FIXTURE.cases) {
+            const imported = importReceipts(JSON.stringify(testCase.export));
+
+            if (imported.status !== 'ok') {
+                throw new Error(`${testCase.name}: ${imported.message}`);
+            }
+
+            for (const command of imported.receipts.commands) {
+                const body = decodeClientEnvelope(splitSignedFrame(command.frame).body).commandBody;
+
+                if (body === null) {
+                    // `EndSession` and the other round-less envelopes carry no
+                    // game action, which is not the same as an unreadable one.
+                    continue;
+                }
+
+                expect(body.case, `${testCase.name}: ${command.requestId}`).not.toBe('unrecognised');
+
+                if (body.case !== 'unrecognised') {
+                    arms.add(`${body.case}:${body.game}${'arm' in body ? `:${body.arm}` : ''}`);
+                }
+            }
+        }
+
+        // The fixture covers every arm of all three command messages, so a
+        // shrunken set means the fixture stopped exercising them rather than
+        // the reader getting better.
+        expect(arms.size).toBeGreaterThanOrEqual(15);
+    });
+
 });
 
 describe('receipts export fixture', () => {

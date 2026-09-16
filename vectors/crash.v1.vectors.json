@@ -231,5 +231,219 @@
       "crash_tick": 181,
       "max_win_multiplier_ppm": 3482202
     }
+  ],
+  "auto_cashout_ppm_vectors": {
+    "_comment": "Rule-level vectors for the ppm -> tick auto-cashout POLICY (not curve math): reject at or below m(0) = 1_000_000 ppm, reject above MAX_MULTIPLIER_CAP_PPM = 1_000_000_000 ppm, else auto_cashout_tick = crash_tick(ppm). Both boundaries are inclusive on the side named. Two implementations are bound to this table: the sequencer's command-decode path (services/sequencer/src/proto_conversions/crash/v1.rs) and the round verifier's projection rule (clients/round-verifier/src/verify/projection.ts), which must agree or a player's signed auto-cashout target cannot be checked against the transcript the kernel replayed. auto_cashout_tick is null exactly when accepted is false.",
+    "vectors": [
+      {
+        "auto_cashout_ppm": 500000,
+        "accepted": false,
+        "auto_cashout_tick": null,
+        "note": "0.50x -- below the curve floor"
+      },
+      {
+        "auto_cashout_ppm": 1000000,
+        "accepted": false,
+        "auto_cashout_tick": null,
+        "note": "exactly 1.00x = m(0), the inclusive lower REJECT boundary"
+      },
+      {
+        "auto_cashout_ppm": 1000001,
+        "accepted": true,
+        "auto_cashout_tick": 1,
+        "note": "the smallest accepted target: one ppm above m(0)"
+      },
+      {
+        "auto_cashout_ppm": 1500000,
+        "accepted": true,
+        "auto_cashout_tick": 59,
+        "note": "1.50x"
+      },
+      {
+        "auto_cashout_ppm": 2000000,
+        "accepted": true,
+        "auto_cashout_tick": 100,
+        "note": "2.00x -- one doubling, so the tick is DOUBLING_TICKS"
+      },
+      {
+        "auto_cashout_ppm": 10000000,
+        "accepted": true,
+        "auto_cashout_tick": 333,
+        "note": "10x"
+      },
+      {
+        "auto_cashout_ppm": 999999999,
+        "accepted": true,
+        "auto_cashout_tick": 996,
+        "note": "one ppm below the 1000x cap"
+      },
+      {
+        "auto_cashout_ppm": 1000000000,
+        "accepted": true,
+        "auto_cashout_tick": 996,
+        "note": "exactly the 1000x cap, the inclusive upper ACCEPT boundary"
+      },
+      {
+        "auto_cashout_ppm": 1000000001,
+        "accepted": false,
+        "auto_cashout_tick": null,
+        "note": "one ppm above the cap -- unreachable, a guaranteed loss"
+      },
+      {
+        "auto_cashout_ppm": 2000000000,
+        "accepted": false,
+        "auto_cashout_tick": null,
+        "note": "2000x, far above the cap"
+      }
+    ]
+  },
+  "transcript_vectors": [
+    {
+      "name": "manual-claim-below-crash-wins",
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "stake_units": "100000000",
+      "actions": [
+        {
+          "index": 0,
+          "action_type": "place-bet",
+          "payload_hex": "00"
+        },
+        {
+          "index": 1,
+          "action_type": "cashout",
+          "payload_hex": "28000000"
+        }
+      ],
+      "expected_outcome": "cashout",
+      "expected_cumulative_ppm": 1319508,
+      "expected_payout_units": "131950800"
+    },
+    {
+      "name": "manual-claim-at-crash-tick-loses",
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "stake_units": "100000000",
+      "actions": [
+        {
+          "index": 0,
+          "action_type": "place-bet",
+          "payload_hex": "00"
+        },
+        {
+          "index": 1,
+          "action_type": "cashout",
+          "payload_hex": "29000000"
+        }
+      ],
+      "expected_outcome": "lose",
+      "expected_cumulative_ppm": 0,
+      "expected_payout_units": "0"
+    },
+    {
+      "name": "manual-claim-u32-max-loses",
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "stake_units": "100000000",
+      "actions": [
+        {
+          "index": 0,
+          "action_type": "place-bet",
+          "payload_hex": "00"
+        },
+        {
+          "index": 1,
+          "action_type": "cashout",
+          "payload_hex": "ffffffff"
+        }
+      ],
+      "expected_outcome": "lose",
+      "expected_cumulative_ppm": 0,
+      "expected_payout_units": "0"
+    },
+    {
+      "name": "manual-claim-zero-wins-at-one-times",
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "stake_units": "100000000",
+      "actions": [
+        {
+          "index": 0,
+          "action_type": "place-bet",
+          "payload_hex": "00"
+        },
+        {
+          "index": 1,
+          "action_type": "cashout",
+          "payload_hex": "00000000"
+        }
+      ],
+      "expected_outcome": "cashout",
+      "expected_cumulative_ppm": 1000000,
+      "expected_payout_units": "100000000"
+    },
+    {
+      "name": "manual-expire-loses",
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "stake_units": "100000000",
+      "actions": [
+        {
+          "index": 0,
+          "action_type": "place-bet",
+          "payload_hex": "00"
+        },
+        {
+          "index": 1,
+          "action_type": "expire",
+          "payload_hex": ""
+        }
+      ],
+      "expected_outcome": "lose",
+      "expected_cumulative_ppm": 0,
+      "expected_payout_units": "0"
+    },
+    {
+      "name": "auto-target-below-crash-wins-at-target",
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "stake_units": "100000000",
+      "actions": [
+        {
+          "index": 0,
+          "action_type": "place-bet",
+          "payload_hex": "010a000000"
+        },
+        {
+          "index": 1,
+          "action_type": "cashout",
+          "payload_hex": "0a000000"
+        }
+      ],
+      "expected_outcome": "cashout",
+      "expected_cumulative_ppm": 1071773,
+      "expected_payout_units": "107177300"
+    },
+    {
+      "name": "auto-target-above-crash-loses",
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "stake_units": "100000000",
+      "actions": [
+        {
+          "index": 0,
+          "action_type": "place-bet",
+          "payload_hex": "0164000000"
+        },
+        {
+          "index": 1,
+          "action_type": "cashout",
+          "payload_hex": "64000000"
+        }
+      ],
+      "expected_outcome": "lose",
+      "expected_cumulative_ppm": 0,
+      "expected_payout_units": "0"
+    }
   ]
 }

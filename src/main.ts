@@ -32,8 +32,8 @@ app.innerHTML = `
         <h1>99dot5 round verifier</h1>
         <p class="tagline">Don’t trust us — replay us.</p>
         <p class="intro">
-            This page proves three independent things about a round. The first two come from the public
-            Tezos L1 inbox alone; the third needs the receipts your own game client kept:
+            This page proves four independent things about a round. The first two come from the public
+            Tezos L1 inbox alone; the last two need the receipts your own game client kept:
         </p>
         <ol class="intro">
             <li><strong>The payout was correct.</strong> It re-derives the outcome from
@@ -49,6 +49,13 @@ app.innerHTML = `
                 compares it with the one on chain. Without this, that commitment is a number the server
                 chose; with it, a server that swapped, dropped or invented one of your commands cannot
                 match it.</li>
+            <li><strong>Each action is the one you authorised.</strong> The commitment above proves
+                <em>which</em> commands the round was built from, not what they said — so this compares
+                each action in the transcript with what your own signed command at that index projects to:
+                the tile you revealed, the tick you claimed, the config you chose. It also asks the other
+                way round: for every cashout you signed for this round, the server owes you either a
+                cashout action or a signed refusal, and neither on a round that expired is the one thing
+                this page will call out.</li>
         </ol>
         <p class="intro">
             Supported games: <code>${supportedGameTypes().join('</code>, <code>')}</code>.

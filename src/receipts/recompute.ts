@@ -80,6 +80,18 @@ export type RecomputeResult =
           commitment: Uint8Array;
           /** The commands that went into the preimage, in server-index order. */
           orderedRequestIds: string[];
+          /**
+           * The server-stated action index each of those commands was bound
+           * to, positionally parallel to `orderedRequestIds`.
+           *
+           * NOT the array position: a SYSTEM step (the max-win de-lever's
+           * `partial-cashout`) occupies an index without binding a command, so
+           * on a de-lever round the k-th command sits at an index greater than
+           * k. A rule that read the position as the index would compare the
+           * player's action against the wrong transcript entry — and would do
+           * it silently, since both are small integers.
+           */
+          orderedIndices: number[];
       }
     | { status: 'unavailable'; reason: RecomputeUnavailableReason };
 
@@ -384,6 +396,7 @@ export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult
         status: 'ok',
         commitment: computeCommitment(ordered.map((entry) => entry.command.frame)),
         orderedRequestIds: ordered.map((entry) => entry.command.requestId),
+        orderedIndices: ordered.map((entry) => entry.index),
     };
 }
 

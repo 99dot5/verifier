@@ -27,11 +27,18 @@ frames per operation, each decoded independently) is:
 [0x09 0x95 | 64-byte Ed25519 signature | borsh(VersionedEnvelope)]
 ```
 
-- `0x09 0x95` is the external-message prefix.
-- The signature is `ed25519_sign(blake2b_256(payload))` — the Tezos
-  convention of a Blake2b-256 pre-hash, applied explicitly. `payload` is the
-  entire Borsh blob that follows, including its leading version byte, so a
-  V1 signature cannot be replayed against a future V2.
+- `0x09 0x95` is the external-message prefix — a *protocol* marker, not an
+  instance one: every 99dot5 rollup on a network shares the inbox and the
+  prefix, and which rollup a frame is for is stated by its signature.
+- The signature is `ed25519_sign(blake2b_256(chain_id ‖ rollup_address ‖ payload))`
+  — the Tezos convention of a Blake2b-256 pre-hash, applied explicitly, over
+  the **signing domain** then the payload. `chain_id` is the 4 raw bytes
+  behind the network's `NetX…` id and `rollup_address` the 20 raw bytes
+  behind the deployment's `sr1…`; **neither is on the wire**. `payload` is
+  the entire Borsh blob that follows, including its leading version byte, so
+  a V1 signature cannot be replayed against a future V2 — and because the
+  domain is in the hash, it cannot be replayed onto another rollup or another
+  chain either (see "The signing domain" below).
 - The signing key is the tenant's sequencer key. It is set on-chain by the
   administrator contract's `RegisterTenant` internal operation to the rollup
   (`bytes` parameter prefix `0x0100`, then `PACK((slug, key))`) and rotated
@@ -61,6 +68,28 @@ PoolScopedMessage struct:
   pool_id:   String        -- liquidity boundary, e.g. "standard"
   payload:   SequencerMessage
 ```
+
+**The signing domain.** The inbox is shared by every rollup on a network, it
+is public, and it is permissionless; and the same tenant slug under the same
+signing key can legitimately live on more than one rollup (a tenant moved to
+its own rollup, a recovery re-origination, staging beside production). A
+signature over the bare envelope verified on all of them — harvest a frame
+off rollup A's inbox and post it to rollup B's, no key needed. So the injector
+signs `blake2b_256(chain_id ‖ rollup_address ‖ envelope)`, with the two prefix
+fields taken from the tenant's config, and the kernel verifies with *its own*
+identity in their place — the address the host reveals for itself and the
+chain id baked into its durable storage at origination (`/config/chain-id`).
+A frame signed for another instance is simply a signature failure there, and
+it is simply a signature failure here: the verifier hashes the selected
+network's chain id and the selected deployment's rollup address ahead of the
+payload, so a frame under the right slug but signed for another rollup never
+authenticates, never stands in as this round's evidence, and never counts as
+proof of its suppression. Decode the domain with the prefixes `[87, 82, 0]`
+(`NetX…`, 4 bytes) and `[6, 124, 117]` (`sr1…`, 20 bytes); the layout is
+owned by `libs/smart-rollup-messages/src/signing.rs`, and
+`wire-vectors.json -> signing_domain` plus each vector's `signing_digest_hex`
+pin it across languages. Nothing was added to the envelope for this — the
+domain costs zero wire bytes and left the V1 layout untouched.
 
 ## SequencerMessage (enum tags in declaration order)
 
@@ -237,10 +266,12 @@ What makes a round provably fair, from inbox data alone:
    `RoundTranscript`'s L1 level (the kernel rejects a same-level commitment).
    Note this compares against the settle-time message, since that is when the
    round reaches L1 at all — the same comparison the kernel makes.
-4. Verify the frames' signatures against the tenant's sequencer key. The inbox
-   is permissionless, so an unauthenticated `SeedBatch` proves nothing: anyone
-   can inject one. Check the transcript **and** the batch it is verified
-   against.
+4. Verify the frames' signatures against the tenant's sequencer key, for the
+   rollup and chain you are verifying — the signature covers both, so a frame
+   the same key signed for another deployment of the same slug does not
+   verify here. The inbox is permissionless, so an unauthenticated `SeedBatch`
+   proves nothing: anyone can inject one. Check the transcript **and** the
+   batch it is verified against.
 5. **Not independently verifiable:** how the seed itself was derived. It comes
    from `blake2b_256(b"server-seed" ‖ batch_salt ‖ drand_round_le8 ‖
    drand_randomness ‖ ascii(drand_chain_hash) ‖ i_le8)`, but `batch_salt` is

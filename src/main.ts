@@ -850,9 +850,17 @@ function runVerification(
     receipts: ReceiptsInput,
     scan: ScanContext | null,
 ): VerificationReport {
+    const rollupAddress = rollupInput.value.trim();
+
     return verifyRound({
         roundId,
         tenantId: tenantInput.value.trim(),
+        // The instance every signature is checked against (#952): the
+        // selected network's chain id and the rollup the round was played on.
+        // The rollup field is editable, and an empty one means the instance
+        // is unknown — the signatures check then reports `unavailable` rather
+        // than guessing.
+        signingDomain: rollupAddress ? { chainId: currentNetwork().chainId, rollupAddress } : null,
         messages,
         keys,
         receipts,

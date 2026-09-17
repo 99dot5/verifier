@@ -24,7 +24,7 @@ import { bytesToHex, hexToBytes, serverSeedCommitment } from './verify/seed';
 import type { ReplayResult, TranscriptAction } from './verify/types';
 import { actionTypeOf, tagOf } from './wire/action-tags';
 import { decodeExternalMessage } from './wire/messages';
-import { encodeEdpk } from './wire/signature';
+import { encodeEdpk, sequencerSigningPreimage, type SigningDomain } from './wire/signature';
 import { commandFrame, serverFrame, type CommandGameSpec, type ServerFrameSpec } from './receipts/fixtures';
 import { PROJECTION_CHECK_ID } from './verify/projection';
 import { computeCommitment } from './receipts/commitment';
@@ -69,10 +69,30 @@ function uuid(hyphenated: string): number[] {
     return Array.from(hexToBytes(hyphenated.replaceAll('-', '')));
 }
 
-function frame(level: number, payloadBody: number[], signingSeed: Uint8Array = SIGNING_SEED): InboxMessage {
+/**
+ * Shadownet and the fixture rollup — the SIGNING DOMAIN every test frame is
+ * signed for (#952). Hashed ahead of the envelope, never on the wire; the
+ * verifier must be told which instance it is checking against.
+ */
+const DOMAIN: SigningDomain = { chainId: 'NetXsqzbfFenSTS', rollupAddress: 'sr1TMxAUtDA4sDL7C4r39L18iQjhRcBRzd8a' };
+
+/** A second deployment of the same tenant on the same chain, under the same key. */
+const OTHER_ROLLUP: SigningDomain = { ...DOMAIN, rollupAddress: 'sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL' };
+
+function frame(
+    level: number,
+    payloadBody: number[],
+    signingSeed: Uint8Array = SIGNING_SEED,
+    domain: SigningDomain = DOMAIN,
+): InboxMessage {
     // VersionedEnvelope::V1(PoolScopedMessage { tenant, pool, payload }).
     const payload = new Uint8Array([...u8(0), ...str(TENANT), ...str(POOL), ...payloadBody]);
-    const signature = ed.sign(blake2b(payload, { dkLen: 32 }), Uint8Array.from(signingSeed));
+    // sig = ed25519(blake2b-256(chain_id ‖ rollup_address ‖ payload)) — the
+    // injector's rule; the domain is what the kernel hashes in for itself.
+    const signature = ed.sign(
+        blake2b(sequencerSigningPreimage(domain, payload), { dkLen: 32 }),
+        Uint8Array.from(signingSeed),
+    );
     const raw = new Uint8Array([0x09, 0x95, ...signature, ...payload]);
     const envelope = decodeExternalMessage(raw);
 
@@ -282,6 +302,8 @@ interface RoundOptions {
     /** Extra transcripts for the same round id, appended after the honest one. */
     extraTranscripts?: { level: number; claimedPayout: bigint }[];
     signingSeed?: Uint8Array;
+    /** The instance the frames are signed for; defaults to the one `verify()` checks against. */
+    domain?: SigningDomain;
     /** Defaults to the fold over the honest receipts' command frames. */
     playerCommitment?: Uint8Array;
 }
@@ -353,14 +375,16 @@ function buildRound(options: RoundOptions = {}): InboxMessage[] {
                 ...str('52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971'),
             ],
             options.signingSeed,
+            options.domain,
         ),
         frame(
             options.transcriptLevel ?? TRANSCRIPT_LEVEL,
             transcriptBody(options, claimedPayout),
             options.signingSeed,
+            options.domain,
         ),
         ...(options.extraTranscripts ?? []).map((extra) =>
-            frame(extra.level, transcriptBody(options, extra.claimedPayout), options.signingSeed),
+            frame(extra.level, transcriptBody(options, extra.claimedPayout), options.signingSeed, options.domain),
         ),
     ];
 }
@@ -374,11 +398,14 @@ function verify(
         scan?: ScanContext | null;
         /** Verify a round OTHER than the one the fixture's receipts describe. */
         roundId?: string;
+        /** The instance to check signatures against; `null` = the shell does not know it. */
+        signingDomain?: SigningDomain | null;
     } = {},
 ) {
     const key = extra.publicKey === undefined ? PUBLIC_KEY : extra.publicKey;
 
     return verifyRound({
+        signingDomain: extra.signingDomain === undefined ? DOMAIN : extra.signingDomain,
         // The honest export and a bracketing range are the DEFAULTS, so every
         // pre-existing test still exercises a fully-evidenced round; a test
         // that cares about a missing half says so explicitly.
@@ -710,6 +737,37 @@ describe('verifyRound', () => {
 
         expect(statusOf(report, 'signatures')).toBe('fail');
         expect(report.verdict).toBe('failed');
+    });
+
+    it('fails a frame signed for another rollup, under the same slug and key (#952)', () => {
+        // The t10_06 replay: the same tenant, the same key, on a second rollup
+        // on the same chain. The frame is byte-identical on the wire apart
+        // from its signature, and that signature was computed over the OTHER
+        // rollup's address — so it does not verify for this one, exactly as
+        // this rollup's kernel would drop it.
+        const report = verify(buildRound({ domain: OTHER_ROLLUP }));
+
+        expect(statusOf(report, 'signatures')).toBe('fail');
+        expect(report.verdict).toBe('failed');
+        // And the same frames, checked against the instance they WERE signed
+        // for, pass — the signature is bound to an instance, not broken.
+        expect(statusOf(verify(buildRound({ domain: OTHER_ROLLUP }), { signingDomain: OTHER_ROLLUP }), 'signatures')).toBe(
+            'pass',
+        );
+    });
+
+    it('fails a frame signed for the same rollup on another chain (#952)', () => {
+        const mainnet: SigningDomain = { ...DOMAIN, chainId: 'NetXdQprcVkpaWU' };
+        const report = verify(buildRound({ domain: mainnet }));
+
+        expect(statusOf(report, 'signatures')).toBe('fail');
+    });
+
+    it('cannot check signatures without knowing the instance (absent proof, not a passed one)', () => {
+        const report = verify(buildRound(), { signingDomain: null });
+
+        expect(statusOf(report, 'signatures')).toBe('unavailable');
+        expect(report.verdict).toBe('incomplete');
     });
 
     it('authenticates the seed batch too, not just the transcript', () => {

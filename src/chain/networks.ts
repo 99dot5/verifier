@@ -80,6 +80,15 @@ export interface Deployment {
 export interface NetworkConfig {
     id: string;
     label: string;
+    /**
+     * The network's `NetX…` chain id. Every sequencer signature is computed
+     * over the chain and the rollup the message was signed for (#952), so the
+     * verifier needs this beside the selected deployment's rollup address to
+     * check any signature at all — and a frame another deployment signed
+     * under the same slug fails that check, exactly as it would on this
+     * rollup's kernel.
+     */
+    chainId: string;
     tzktApiUrl: string;
     rpcUrl: string;
     /** Newest first; empty = nothing originated on this network yet. */
@@ -90,6 +99,7 @@ const SLUG = /^[a-z0-9-]{1,32}$/;
 const BASE58 = '[1-9A-HJ-NP-Za-km-z]';
 const ROLLUP_ADDRESS = new RegExp(`^sr1${BASE58}{33}$`);
 const CONTRACT_ADDRESS = new RegExp(`^KT1${BASE58}{33}$`);
+const CHAIN_ID = new RegExp(`^NetX${BASE58}{11}$`);
 
 type Json = Record<string, unknown>;
 
@@ -186,11 +196,12 @@ export function parseNetworks(raw: unknown): NetworkConfig[] {
     const root = object(raw, 'networks.json', ['networks']);
     const networks = array(root.networks, 'networks').map((value, i): NetworkConfig => {
         const path = `networks[${i}]`;
-        const n = object(value, path, ['id', 'label', 'tzktApiUrl', 'rpcUrl', 'deployments']);
+        const n = object(value, path, ['id', 'label', 'chainId', 'tzktApiUrl', 'rpcUrl', 'deployments']);
 
         return {
             id: string(n.id, `${path}.id`, SLUG),
             label: string(n.label, `${path}.label`),
+            chainId: string(n.chainId, `${path}.chainId`, CHAIN_ID),
             tzktApiUrl: httpsUrl(n.tzktApiUrl, `${path}.tzktApiUrl`),
             rpcUrl: httpsUrl(n.rpcUrl, `${path}.rpcUrl`),
             deployments: array(n.deployments, `${path}.deployments`).map((d, j) =>

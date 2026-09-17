@@ -1,14 +1,25 @@
 /**
  * Ed25519 verification of sequencer inbox messages.
  *
- * The injector signs `blake2b-256(borsh(VersionedEnvelope))` — the Tezos
- * convention of a Blake2b pre-hash, applied explicitly (mirrors
- * `services/sequencer/src/injector/signer.rs` and the kernel's
- * `libs/smart-rollup/src/signature.rs`). The public key is the tenant's
- * sequencer key, registered ON-CHAIN by the administrator contract's
- * `RegisterTenant` / `RotateSequencerKey` operations and stored in rollup
- * durable storage at `/tenants/{t}/sequencer-keys/current` — so the
- * whole chain of trust is derivable from L1 without any operator input.
+ * The injector signs `blake2b-256(chain_id ‖ rollup_address ‖
+ * borsh(VersionedEnvelope))` — the Tezos convention of a Blake2b pre-hash,
+ * applied explicitly, over the SIGNING DOMAIN then the envelope (mirrors
+ * `services/sequencer/src/injector/signer.rs`, the kernel's
+ * `libs/smart-rollup/src/signature.rs`, and the layout owned by
+ * `libs/smart-rollup-messages/src/signing.rs`). The domain is the raw
+ * base58check payloads of the chain (`NetX…`, 4 bytes) and the rollup
+ * (`sr1…`, 20 bytes) the message was signed for, and it is NOT on the wire:
+ * the kernel hashes its own identity in, so a signature is valid on one
+ * rollup on one chain only (#952). A verifier therefore needs to know which
+ * instance it is checking against — the selected network's chain id and the
+ * selected deployment's rollup address — and a frame signed for any other
+ * instance simply fails to verify, exactly as it would on that kernel.
+ *
+ * The public key is the tenant's sequencer key, registered ON-CHAIN by the
+ * administrator contract's `RegisterTenant` / `RotateSequencerKey`
+ * operations and stored in rollup durable storage at
+ * `/tenants/{t}/sequencer-keys/current` — so the whole chain of trust is
+ * derivable from L1 without any operator input.
  *
  * `@noble/ed25519` v2 ships without a hash; wire its synchronous SHA-512 in
  * once, as an import side effect (same pattern as libs/casino-client).
@@ -28,33 +39,66 @@ const EDPK_PREFIX = [13, 15, 37, 217] as const;
 /** Tezos KT1 prefix bytes (originated contract, base58check payload = 20-byte hash). */
 const KT1_PREFIX = [2, 90, 121] as const;
 
+/** Tezos chain-id prefix bytes (`NetX…`, base58check payload = 4 bytes). */
+const CHAIN_ID_PREFIX = [87, 82, 0] as const;
+
+/** Tezos smart-rollup address prefix bytes (`sr1…`, base58check payload = 20-byte hash). */
+const SR1_PREFIX = [6, 124, 117] as const;
+
 /**
  * Decode a Tezos `edpk…` base58check string to the 32 raw Ed25519 public key
  * bytes. Self-contained (~30 lines) rather than a dependency, so the
  * published verifier source has nothing load-bearing hidden in node_modules.
  */
 export function decodeEdpk(edpk: string): Uint8Array {
-    const decoded = base58Decode(edpk.trim());
+    return decodeBase58Check(edpk, EDPK_PREFIX, 32, 'edpk');
+}
 
-    if (decoded.length !== 4 + 32 + 4) {
-        throw new RangeError(`not an edpk: decoded length ${decoded.length}`);
+/** Decode a `NetX…` chain id to its 4 raw bytes — the first half of the signing domain. */
+export function decodeChainId(chainId: string): Uint8Array {
+    return decodeBase58Check(chainId, CHAIN_ID_PREFIX, 4, 'chain id');
+}
+
+/** Decode an `sr1…` rollup address to its 20 raw bytes — the second half of the signing domain. */
+export function decodeSr1(address: string): Uint8Array {
+    return decodeBase58Check(address, SR1_PREFIX, 20, 'sr1');
+}
+
+/**
+ * Base58check-DECODE a prefixed payload, checking the checksum, the prefix
+ * and the width. A wrong prefix (an `sr1` where a `NetX` was expected) is a
+ * `RangeError`, never a silently mis-sized domain.
+ */
+function decodeBase58Check(
+    value: string,
+    prefix: readonly number[],
+    payloadLength: number,
+    label: string,
+): Uint8Array {
+    const decoded = base58Decode(value.trim());
+    const bodyLength = prefix.length + payloadLength;
+
+    if (decoded.length !== bodyLength + 4) {
+        throw new RangeError(`not a ${label}: decoded length ${decoded.length}`);
     }
 
-    const body = decoded.slice(0, 36);
-    const checksum = decoded.slice(36);
+    const body = decoded.slice(0, bodyLength);
+    const checksum = decoded.slice(bodyLength);
     const digest = sha256sha256(body);
 
     for (let i = 0; i < 4; i++) {
         if (checksum[i] !== digest[i]) {
             throw new RangeError('bad base58check checksum');
         }
+    }
 
-        if (body[i] !== EDPK_PREFIX[i]) {
-            throw new RangeError('not an edpk prefix');
+    for (let i = 0; i < prefix.length; i++) {
+        if (body[i] !== prefix[i]) {
+            throw new RangeError(`not a ${label} prefix`);
         }
     }
 
-    return body.slice(4);
+    return body.slice(prefix.length);
 }
 
 /**
@@ -121,13 +165,61 @@ export function encodeKt1(hash: Uint8Array): string {
     return encodeBase58Check(KT1_PREFIX, hash);
 }
 
-/** Verify one inbox message signature: `ed25519.verify(sig, blake2b256(payload), pk)`. */
+/**
+ * The instance a sequencer message was signed for (#952): the network's
+ * `NetX…` chain id and the deployment's `sr1…` rollup address, in the forms
+ * `networks.json` and the operator's `tenants.yaml` spell them.
+ */
+export interface SigningDomain {
+    chainId: string;
+    rollupAddress: string;
+}
+
+/**
+ * The bytes a sequencer signature is computed over, before the blake2b
+ * pre-hash: `chain_id(4) ‖ rollup_address(20) ‖ signedPayload`. Mirrors
+ * `smart_rollup_messages::signing::signing_preimage`; the shared
+ * `wire-vectors.json` pins the digest of this preimage per vector.
+ */
+export function sequencerSigningPreimage(domain: SigningDomain, signedPayload: Uint8Array): Uint8Array {
+    const chainId = decodeChainId(domain.chainId);
+    const rollupAddress = decodeSr1(domain.rollupAddress);
+    const preimage = new Uint8Array(chainId.length + rollupAddress.length + signedPayload.length);
+
+    preimage.set(chainId, 0);
+    preimage.set(rollupAddress, chainId.length);
+    preimage.set(signedPayload, chainId.length + rollupAddress.length);
+
+    return preimage;
+}
+
+/**
+ * Verify one inbox message signature for `domain`:
+ * `ed25519.verify(sig, blake2b256(chain_id ‖ rollup_address ‖ payload), pk)`.
+ * A frame signed for another rollup or another chain fails here — there is
+ * no separate "foreign instance" outcome, because the kernel has none either.
+ */
 export function verifyInboxSignature(
     signature: Uint8Array,
     signedPayload: Uint8Array,
+    domain: SigningDomain,
     publicKey: Uint8Array,
 ): boolean {
-    const digest = blake2b(signedPayload, { dkLen: 32 });
+    return verifyPrehashedSignature(signature, sequencerSigningPreimage(domain, signedPayload), publicKey);
+}
+
+/**
+ * The one signing rule every channel shares: `ed25519.verify(sig, blake2b256(bytes), pk)`.
+ * What differs per channel is what `bytes` is — the domain-prefixed inbox
+ * preimage above, the `RECEIPT_DOMAIN`-prefixed server frame below, or a
+ * player command's bare protobuf.
+ */
+export function verifyPrehashedSignature(
+    signature: Uint8Array,
+    bytes: Uint8Array,
+    publicKey: Uint8Array,
+): boolean {
+    const digest = blake2b(bytes, { dkLen: 32 });
 
     try {
         return ed.verify(signature, digest, publicKey);
@@ -187,9 +279,11 @@ export const SIGNATURE_LENGTH = 64;
  * ASCII `99dot5:server-frame:v1`, owned by `services/sequencer/src/codec.rs`
  * and pinned by `libs/proto-definitions/testdata/receipt-vectors.json`. The
  * sequencer key signs both WS frames and rollup inbox messages through the
- * same `ed25519(blake2b-256(bytes))` chain, so the prefix is the ONLY thing
- * that stops a signature harvested from one channel being presented as valid
- * on the other. A verifier that dropped it would accept exactly that forgery.
+ * same `ed25519(blake2b-256(bytes))` chain, so the two prefixes — this ASCII
+ * tag here, the 24-byte chain + rollup domain on the inbox side — are the
+ * ONLY thing that stops a signature harvested from one channel being
+ * presented as valid on the other. A verifier that dropped either would
+ * accept exactly that forgery.
  */
 export const RECEIPT_DOMAIN = new TextEncoder().encode('99dot5:server-frame:v1');
 
@@ -224,5 +318,5 @@ export function verifyServerFrameSignature(
     preimage.set(RECEIPT_DOMAIN, 0);
     preimage.set(body, RECEIPT_DOMAIN.length);
 
-    return verifyInboxSignature(signature, preimage, publicKey);
+    return verifyPrehashedSignature(signature, preimage, publicKey);
 }

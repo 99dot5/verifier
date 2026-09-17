@@ -26,7 +26,7 @@ import {
     decodeEdpk,
     encodeEdpk,
     splitSignedFrame,
-    verifyInboxSignature,
+    verifyPrehashedSignature,
     verifyServerFrameSignature,
 } from '../wire/signature';
 
@@ -896,7 +896,7 @@ describe('receipts export fixture', () => {
             expect(split.tag).toBe(0x05);
             // Commands are signed WITHOUT the receipt domain: the session key
             // signs one channel only.
-            expect(verifyInboxSignature(split.signature, split.body, sessionKey)).toBe(true);
+            expect(verifyPrehashedSignature(split.signature, split.body, sessionKey)).toBe(true);
             // The seed a PlaceBet carries is pinned by the client-seed tests above.
             expect(decodeClientEnvelope(split.body)).toMatchObject({
                 requestId: expected.requestId,

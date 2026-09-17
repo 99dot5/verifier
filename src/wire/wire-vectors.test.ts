@@ -31,10 +31,18 @@ import {
     tagOf,
 } from './action-tags';
 import { decodeExternalMessage } from './messages';
+import { decodeChainId, decodeSr1, sequencerSigningPreimage } from './signature';
 import { wireVectorsUrl } from './wire-vectors-path';
 
 interface WireVectors {
     envelope_header_max_bytes: number;
+    signing_domain: {
+        chain_id: string;
+        chain_id_hex: string;
+        rollup_address: string;
+        rollup_address_hex: string;
+        preimage_prefix_hex: string;
+    };
     size_budget: Record<string, number>;
     message_tags: { seed_batch: number; round_transcript: number; end_session: number };
     action_tags: { tag: number; action_type: string }[];
@@ -65,6 +73,7 @@ interface WireVectors {
         encoded_bytes: number;
         borsh_hex: string;
         signed_frame_hex: string;
+        signing_digest_hex: string;
     }[];
 }
 
@@ -246,6 +255,31 @@ describe('round transcript encodings', () => {
             }
         });
     }
+
+    it('reproduces the signing digest of every vector under the shared signing domain (#952)', () => {
+        // The one cross-language pin of the signing rule: blake2b-256 over
+        // `chain_id ‖ rollup_address ‖ envelope`, where the two prefix fields
+        // are the raw base58check payloads the generator decoded
+        // independently. A verifier that hashed the bare envelope, or
+        // decoded the domain to the wrong width, disagrees here and nowhere
+        // else — the kernel pins the same digests from the Rust side.
+        const domain = { chainId: vectors.signing_domain.chain_id, rollupAddress: vectors.signing_domain.rollup_address };
+
+        expect(vectors.size_budget.chain_id_bytes).toBe(4);
+        expect(vectors.size_budget.rollup_address_bytes).toBe(20);
+        expect(vectors.size_budget.signing_domain_bytes).toBe(24);
+        expect(bytesToHex(decodeChainId(domain.chainId))).toBe(vectors.signing_domain.chain_id_hex);
+        expect(bytesToHex(decodeSr1(domain.rollupAddress))).toBe(vectors.signing_domain.rollup_address_hex);
+        expect(bytesToHex(sequencerSigningPreimage(domain, new Uint8Array()))).toBe(
+            vectors.signing_domain.preimage_prefix_hex,
+        );
+
+        for (const entry of vectors.round_transcript) {
+            const preimage = sequencerSigningPreimage(domain, hexToBytes(entry.borsh_hex));
+
+            expect(bytesToHex(blake2b(preimage, { dkLen: 32 })), entry.description).toBe(entry.signing_digest_hex);
+        }
+    });
 
     it('keeps the worst case inside the size budget it was derived from', () => {
         const worst = vectors.round_transcript.find(

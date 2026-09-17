@@ -10,6 +10,7 @@ function validDocument() {
             {
                 id: 'shadownet',
                 label: 'Shadownet',
+                chainId: 'NetXsqzbfFenSTS',
                 tzktApiUrl: 'https://api.shadownet.tzkt.io',
                 rpcUrl: 'https://rpc.shadownet.teztnets.com',
                 deployments: [
@@ -44,6 +45,7 @@ describe('deploymentsForTenant', () => {
                 {
                     id: 'mainnet',
                     label: 'Mainnet',
+                    chainId: 'NetXdQprcVkpaWU',
                     tzktApiUrl: 'https://api.tzkt.io',
                     rpcUrl: 'https://rpc.tzkt.io/mainnet',
                     deployments: secondNetworkDeployments,

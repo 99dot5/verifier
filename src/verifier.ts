@@ -52,7 +52,7 @@ import * as mines from './verify/mines';
 import * as plinko from './verify/plinko';
 import { ReplayError, type ReplayResult, type TranscriptAction } from './verify/types';
 import type { RoundTranscriptMessage } from './wire/messages';
-import { decodeEdpk, verifyInboxSignature } from './wire/signature';
+import { decodeEdpk, type SigningDomain, verifyInboxSignature, verifyPrehashedSignature } from './wire/signature';
 import { decodeClientEnvelope } from './wire/proto-reader';
 import { analyseRejections } from './verify/rejections';
 import {
@@ -233,6 +233,18 @@ export function supportedGameTypes(): string[] {
 export interface VerifyInput {
     roundId: string;
     tenantId: string;
+    /**
+     * The rollup and chain the round was played on — the SIGNING DOMAIN every
+     * sequencer message on this instance was signed for (#952). The injector
+     * hashes `chain_id ‖ rollup_address` ahead of the envelope and the kernel
+     * hashes its own identity in when it verifies, so a frame signed for
+     * another deployment under the same slug fails the signature check here
+     * exactly as it fails on that kernel. `null` when the shell does not know
+     * the instance (no deployment selected, no rollup address typed): then
+     * there is nothing to verify signatures against, and the check is
+     * `unavailable` — an absent proof, not a passed one.
+     */
+    signingDomain: SigningDomain | null;
     /** Every decoded inbox message the caller gathered (any order, any kinds). */
     messages: InboxMessage[];
     /**
@@ -284,8 +296,15 @@ export function verifyRound(input: VerifyInput): VerificationReport {
     // landed ~1000 levels ahead of the tenant's own). Only when NO candidate
     // authenticates does the earliest unauthenticated one stand in, so the
     // signature check still reports the failure instead of hiding the round.
+    // Authentication is against THIS instance's signing domain (#952): a
+    // frame another deployment signed under the same slug and key fails it,
+    // which is what makes "another deployment's" the same case as "a
+    // forgery" here. With no domain known, nothing authenticates and the
+    // earliest candidate stands in — and the signature check says so.
     const authenticates = (m: InboxMessage): boolean =>
-        input.keys.status === 'available' && matchSigningKey(m, input.keys.keys) !== null;
+        input.keys.status === 'available' &&
+        input.signingDomain !== null &&
+        matchSigningKey(m, input.signingDomain, input.keys.keys) !== null;
 
     const earliest = (predicate: (m: InboxMessage) => boolean, what: string): InboxMessage | undefined => {
         const candidates = inTenant
@@ -395,6 +414,13 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             status: 'unavailable',
             detail: `the administrator lineage could not be derived, so there is nothing to check against: ${keySet.reason}. This is an absent proof, not a passed one — the inbox is permissionless, so unauthenticated frames prove nothing about who wrote them.`,
         });
+    } else if (input.signingDomain === null) {
+        checks.push({
+            id: 'signatures',
+            title: 'Ed25519 signatures verify against a key the tenant registered on-chain',
+            status: 'unavailable',
+            detail: `no rollup address is set for this network, so the signing domain the sequencer hashed ahead of every envelope (chain id ‖ rollup address, never sent on the wire) is unknown and no signature can be checked. Select the deployment the round was played on. This is an absent proof, not a passed one.`,
+        });
     } else if (keySet.keys.length === 0) {
         checks.push({
             id: 'signatures',
@@ -404,7 +430,11 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         });
     } else {
         const admissible = keySet.keys;
-        const matches = toCheck.map((message) => ({ message, key: matchSigningKey(message, admissible) }));
+        const domain = input.signingDomain;
+        const matches = toCheck.map((message) => ({
+            message,
+            key: matchSigningKey(message, domain, admissible),
+        }));
         const unmatched = matches.filter((m) => m.key === null);
 
         checks.push({
@@ -416,10 +446,10 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                     ? matches
                           .map((m) => `${describeMessage(m.message)} → ${describeKey(m.key as VerifierKey)}`)
                           .join('; ') +
-                      `. Each is sig = ed25519(blake2b-256(payload)); the key set is every key registered for this tenant across the administrator lineage (${admissible.length} key(s)), so the whole chain of trust starts at the pinned origination administrator and needs no operator input.`
+                      `. Each is sig = ed25519(blake2b-256(${domain.chainId} ‖ ${domain.rollupAddress} ‖ payload)) — the signature binds the frame to this chain and this rollup, so it could not have been lifted from another deployment's inbox traffic; the key set is every key registered for this tenant across the administrator lineage (${admissible.length} key(s)), so the whole chain of trust starts at the pinned origination administrator and needs no operator input.`
                     : `${unmatched.length}/${toCheck.length} message(s) verify under NO key this tenant ever registered (${admissible
                           .map((k) => k.edpk)
-                          .join(', ')}) — either the frames are not this tenant's, or a key was used that never reached L1`,
+                          .join(', ')}) for rollup ${domain.rollupAddress} on ${domain.chainId} — either the frames are not this tenant's, they were signed for a different rollup or chain (another deployment under the same slug), or a key was used that never reached L1`,
         });
     }
 
@@ -716,8 +746,8 @@ function clientSeedFromReceipts(input: VerifyInput, roundId: string): { requestI
     }
 }
 
-/** The first admissible key this message's signature verifies under, or null. */
-function matchSigningKey(message: InboxMessage, keys: VerifierKey[]): VerifierKey | null {
+/** The first admissible key this message's signature verifies under, for `domain`, or null. */
+function matchSigningKey(message: InboxMessage, domain: SigningDomain, keys: VerifierKey[]): VerifierKey | null {
     for (const key of keys) {
         let raw: Uint8Array;
 
@@ -730,7 +760,7 @@ function matchSigningKey(message: InboxMessage, keys: VerifierKey[]): VerifierKe
             continue;
         }
 
-        if (verifyInboxSignature(message.envelope.signature, message.envelope.signedPayload, raw)) {
+        if (verifyInboxSignature(message.envelope.signature, message.envelope.signedPayload, domain, raw)) {
             return key;
         }
     }
@@ -1142,7 +1172,7 @@ function pushFrameAuthenticityCheck(
         // Commands are signed WITHOUT the receipt domain prefix: the session
         // key signs only this one channel, so there is no second channel to
         // separate it from.
-        if (!sessionKey || !verifyInboxSignature(split.signature, split.body, sessionKey)) {
+        if (!sessionKey || !verifyPrehashedSignature(split.signature, split.body, sessionKey)) {
             badCommands.push(command.requestId);
         }
     }
@@ -1272,10 +1302,11 @@ function resolveMissingTranscript(
     // exactly what anyone could post to the shared inbox to manufacture it.
     // `framesAuthentic` above already guarantees a usable key set here.
     const admissible = input.keys.status === 'available' ? input.keys.keys : [];
+    const domain = input.signingDomain;
     const ofSession = (m: InboxMessage): boolean => {
         const message = m.envelope.message;
 
-        if (matchSigningKey(m, admissible) === null) {
+        if (domain === null || matchSigningKey(m, domain, admissible) === null) {
             return false;
         }
 

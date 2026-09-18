@@ -32,7 +32,7 @@
  * of the whole key chain, so a reader who takes it on trust has reintroduced
  * exactly the trust this tool removes. Each entry's `evidence` says how it was
  * established; cross-check it against the origination ceremony's own records
- * (docs/runbooks/originate-rollup.md, Step 10).
+ * (docs/runbooks/onboard-tenant.md, Step 8).
  */
 import rawNetworks from './networks.json';
 

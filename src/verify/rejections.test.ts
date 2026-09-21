@@ -66,6 +66,7 @@ const RATE_LIMITED = 7;
 const INVALID_PAYLOAD = 9;
 const INTERNAL_ERROR = 11;
 const ROUND_MODE_AUTO = 21;
+const CONCURRENT_ROUND_LIMIT = 22;
 /** A code no build of this verifier knows — the future-code case. */
 const UNKNOWN_REASON = 9_999;
 
@@ -480,6 +481,22 @@ describe('analyseRejections', () => {
         expect(report.findings[0]).toContain(`code ${UNKNOWN_REASON} (unknown to this build)`);
     });
 
+    it('says nothing about a refusal for too many open rounds of one game', () => {
+        // `CONCURRENT_ROUND_LIMIT` is emitted from the PlaceBet gate and
+        // nowhere else, so it can never be the answer to a cashout — which is
+        // precisely what the `uninformative` finding would claim it might be
+        // ("indistinguishable from a suppressed one"). Classifying it as
+        // `command-validity` is what keeps that sentence true of the codes
+        // that do carry it.
+        const report = analyseRejections(
+            withRejection(
+                rejected({ reasonCode: CONCURRENT_ROUND_LIMIT, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
+            ),
+        );
+
+        expect(report).toEqual({ checks: [], findings: [] });
+    });
+
     it('says nothing about a refusal that faults the bytes you signed', () => {
         // `INVALID_PAYLOAD` is self-evidently about the command, and the
         // player can see the fault without trusting the server about any state
@@ -755,6 +772,7 @@ describe('classifyRefusalReason', () => {
         [19, 'MAX_WIN_EXCEEDED', 'uninformative'],
         [20, 'STAKE_BELOW_MINIMUM', 'uninformative'],
         [21, 'ROUND_MODE_AUTO', 'mode'],
+        [22, 'CONCURRENT_ROUND_LIMIT', 'command-validity'],
     ];
 
     it.each(EXPECTED)('classifies %i (%s) as %s', (code, _name, expected) => {

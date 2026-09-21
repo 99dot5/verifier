@@ -145,6 +145,7 @@ const REASON_STATE_OUT_OF_SYNC = 8;
 const REASON_INVALID_PAYLOAD = 9;
 const REASON_UNSUPPORTED_GAME = 10;
 const REASON_ROUND_MODE_AUTO = 21;
+const REASON_CONCURRENT_ROUND_LIMIT = 22;
 
 /**
  * The codes that ASSERT the round was not settleable when the command landed
@@ -169,6 +170,18 @@ const LIVENESS_REASONS: ReadonlySet<number> = new Set([REASON_ROUND_CLOSED, REAS
  * no finding either, because it is not the shape a suppression would take: a
  * suppressed cashout is a WELL-FORMED command the server declined to act on.
  *
+ * `CONCURRENT_ROUND_LIMIT` is the one member that is not purely a property of
+ * the bytes, and it is here because the DEFAULT would be wrong by
+ * construction. An unclassified code falls to `uninformative`, whose finding
+ * reads "a timely cashout refused this way is indistinguishable from a
+ * suppressed one". That sentence cannot be true of this code: the sequencer
+ * emits it from the PlaceBet gate alone, so it can never be the answer to a
+ * `CashOut`, and a refusal that can never answer a cashout cannot disguise a
+ * suppressed one. Leaving it to the default would mean a finding on every
+ * honest over-bet — crying wolf on the exact shape the rule exists to keep
+ * meaningful. What it asserts is also checkable by the player rather than a
+ * claim about hidden state: they are holding the bet they already placed.
+ *
  * Everything not listed here and not a liveness or mode code is
  * `uninformative` — `DUPLICATE_COMMAND`, `RATE_LIMITED`, `INTERNAL_ERROR`,
  * `SESSION_NOT_ACTIVE`, the pool/tenant lifecycle codes, `UNSPECIFIED`, and
@@ -180,6 +193,7 @@ const COMMAND_VALIDITY_REASONS: ReadonlySet<number> = new Set([
     REASON_INVALID_SELECTION,
     REASON_INVALID_PAYLOAD,
     REASON_UNSUPPORTED_GAME,
+    REASON_CONCURRENT_ROUND_LIMIT,
 ]);
 
 /**
@@ -240,6 +254,7 @@ const REASON_NAMES: Record<number, string> = {
     19: 'MAX_WIN_EXCEEDED',
     20: 'STAKE_BELOW_MINIMUM',
     21: 'ROUND_MODE_AUTO',
+    22: 'CONCURRENT_ROUND_LIMIT',
 };
 
 /** Exported for the same reason `classifyRefusalReason` is: one vocabulary. */

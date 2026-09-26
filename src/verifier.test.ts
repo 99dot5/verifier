@@ -828,7 +828,7 @@ describe('verifyRound', () => {
         expect(report.verdict).toBe('incomplete');
     });
 
-    it('is incomplete, never verified, without the player\u2019s receipts', () => {
+    it("is incomplete, never verified, without the player's receipts", () => {
         // The chain proofs all pass, but nothing ties the on-chain round to
         // the commands the player authorised — so the transcript's
         // player_commitment is a number the server chose, and the verdict must
@@ -885,7 +885,7 @@ describe('verifyRound', () => {
         expect(report.verdict).toBe('failed');
     });
 
-    it('fails when the export\u2019s commitment does not match the chain', () => {
+    it("fails when the export's commitment does not match the chain", () => {
         // A server that archived different commands than the player sent. The
         // reconstruction succeeds, so the mismatch IS substantiated.
         const receipts = buildReceipts();
@@ -951,7 +951,7 @@ describe('verifyRound', () => {
         expect(report.references.some((r) => r.summary.includes('EndSession'))).toBe(true);
     });
 
-    it('is INCONCLUSIVE when the scan started after the session\u2019s deposit', () => {
+    it("is INCONCLUSIVE when the scan started after the session's deposit", () => {
         const report = verify(withoutTranscript(), {
             scan: { ...BRACKETING_SCAN, fromLevel: BRACKETING_SCAN.deposit!.level + 1 },
         });
@@ -1008,7 +1008,7 @@ describe('verifyRound', () => {
         ]);
     }
 
-    it('stays UNDETERMINED when only a sibling round\u2019s transcript is on chain', () => {
+    it("stays UNDETERMINED when only a sibling round's transcript is on chain", () => {
         const report = verify([...withoutTranscript(), siblingTranscript(TRANSCRIPT_LEVEL + 2)]);
 
         expect(report.verdict).toBe('undetermined');

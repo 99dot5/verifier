@@ -89,7 +89,7 @@ describe('decodeAdminPayload', () => {
         });
     });
 
-    it('decodes the live RegisterPoolVault, which names the pool\u2019s vault', () => {
+    it("decodes the live RegisterPoolVault, which names the pool's vault", () => {
         // The vault address is what the deposit bracket (§8.3(d)) is checked
         // against, so it is derived from the same lineage as the keys rather
         // than being a second address a reader has to take on trust.

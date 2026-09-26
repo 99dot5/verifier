@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { computeCommitment } from './commitment';
 import { commandFrame, serverFrame, type ServerFrameSpec } from './fixtures';
 import { importReceipts, RECEIPTS_SCHEMA, type ImportedFrame } from './import';
-import { recomputeRoundCommitment } from './recompute';
+import { decodeReceiptFrame, labelFindings, recomputeRoundCommitment } from './recompute';
 import { receiptsExportFixtureUrl, receiptVectorsUrl } from './receipt-vectors-path';
 import { bytesToHex, hexToBytes } from '../verify/seed';
 import { decodeClientEnvelope, decodeServerEnvelope, ProtoError, uuidFromParts } from '../wire/proto-reader';
@@ -124,7 +124,7 @@ describe('proto-reader', () => {
                 sequence: 3,
                 sessionId: SESSION_ID,
                 relatedRequestId: BET_REQUEST,
-                payload: { case: 'betPlaced', roundId: ROUND_ID },
+                payload: { case: 'roundStarted', roundId: ROUND_ID },
             },
             {
                 sequence: 4,
@@ -148,7 +148,7 @@ describe('proto-reader', () => {
             payloadCase: 'commandAccepted',
             roundId: null,
         });
-        expect(decoded[1]).toMatchObject({ payloadCase: 'betPlaced', roundId: ROUND_ID, actionIndex: null });
+        expect(decoded[1]).toMatchObject({ payloadCase: 'roundStarted', roundId: ROUND_ID, actionIndex: null });
         expect(decoded[2]).toMatchObject({ payloadCase: 'roundUpdated', actionIndex: 1, origin: 'system' });
         expect(decoded[3]).toMatchObject({ payloadCase: 'roundEnded', actionIndex: 2 });
         expect(bytesToHex(decoded[3].playerCommitment as Uint8Array)).toBe(bytesToHex(commitment));
@@ -552,9 +552,14 @@ describe('recomputeRoundCommitment', () => {
         ];
 
         // The index WAS read (as 0), so this is not
-        // `accepted-command-without-index`. What this export actually lacks is
-        // the opening BetPlaced/RoundStarted that says which command is the bet.
-        expect(recomputeRoundCommitment(round)).toEqual({ status: 'unavailable', reason: 'no-place-bet' });
+        // `accepted-command-without-index`; and because index 0 is bound, the
+        // round recomputes. Asserting the ORDER pins that the 0 was read as
+        // the number 0 and placed the bet first — a port that read "no index"
+        // would answer `accepted-command-without-index` instead.
+        const result = recomputeRoundCommitment(round);
+
+        expect(result.status).toBe('ok');
+        expect(result.status === 'ok' && result.orderedRequestIds).toEqual([BET_REQUEST, CASHOUT_REQUEST]);
     });
 
     it('counts a SYSTEM step as a position and not as a command', () => {
@@ -585,6 +590,37 @@ describe('recomputeRoundCommitment', () => {
 
         expect(result.status).toBe('ok');
         expect(result.status === 'ok' && result.orderedRequestIds).toEqual([BET_REQUEST, CASHOUT_REQUEST]);
+    });
+
+    it('does not let a SYSTEM step at index 0 stand in for a bound opening index', () => {
+        // The system arm `continue`s BEFORE an index is assigned, so the
+        // sentinel is never reached for it. A system step occupies position 0
+        // but binds no command, and "index 0 was bound" must stay false.
+        const round = {
+            roundIdHex: ROUND_ID,
+            commands: [command(BET_REQUEST, 'placeBet' as const, 1)],
+            frames: [
+                importedFrame({
+                    sequence: 2,
+                    sessionId: SESSION_ID,
+                    relatedRequestId: BET_REQUEST,
+                    payload: { case: 'commandAccepted' as const },
+                }),
+                importedFrame({
+                    sequence: 3,
+                    sessionId: SESSION_ID,
+                    relatedRequestId: BET_REQUEST,
+                    payload: {
+                        case: 'roundUpdated' as const,
+                        roundId: ROUND_ID,
+                        actionIndex: 0,
+                        origin: 'system' as const,
+                    },
+                }),
+            ],
+        };
+
+        expect(recomputeRoundCommitment(round)).toEqual({ status: 'unavailable', reason: 'no-place-bet' });
     });
 
     it('declines when an unmarked second index cannot be told from a conflict', () => {
@@ -619,6 +655,70 @@ describe('recomputeRoundCommitment', () => {
             status: 'unavailable',
             reason: 'server-index-without-command',
         });
+    });
+
+    it('decodes a payload tag it does not know to a null payloadCase', () => {
+        // FORWARD SKEW, not history: this verifier ships separately from the
+        // sequencer, so a newer server can emit a payload an older build has
+        // never heard of. Leaving it null — rather than guessing — is what
+        // keeps it out of the index fold and out of the label comparison.
+        const spec: ServerFrameSpec = {
+            sequence: 3,
+            sessionId: SESSION_ID,
+            relatedRequestId: BET_REQUEST,
+            payload: { case: 'unknownPayload', roundId: ROUND_ID },
+        };
+        const decoded = decodeServerEnvelope(splitSignedFrame(serverFrame(TENANT_SEED, spec)).body);
+
+        expect(decoded.payloadCase).toBeNull();
+        // `related_request_id` is an ENVELOPE field, so it still reads.
+        expect(decoded.relatedRequestId).toBe(BET_REQUEST);
+    });
+
+    it('raises no relabelling finding for a frame whose payload it cannot decode', () => {
+        // The `derived !== null` guard. Without it, every unknown payload
+        // would read as "the exporter lied about this frame's case" — an
+        // accusation manufactured by the verifier being older than the server.
+        const frame: ImportedFrame = {
+            sequence: 3n,
+            payloadCase: 'somethingNewerThanThisBuild',
+            relatedRequestId: BET_REQUEST,
+            frame: serverFrame(TENANT_SEED, {
+                sequence: 3,
+                sessionId: SESSION_ID,
+                relatedRequestId: BET_REQUEST,
+                payload: { case: 'unknownPayload', roundId: ROUND_ID },
+            }),
+        };
+
+        expect(labelFindings([decodeReceiptFrame(frame)], ROUND_ID)).toEqual([]);
+    });
+
+    it('binds index 0 from a RoundEnded that states it, with no opener frame present', () => {
+        // The sentinel asserts "index 0 was bound", not "a frame that is by
+        // construction the opener exists". A round that settles on its own bet
+        // states index 0 on `RoundEnded` and emits no opener at all; the
+        // recomputation has everything it needs and must not degrade.
+        const round = {
+            roundIdHex: ROUND_ID,
+            commands: [command(BET_REQUEST, 'placeBet' as const, 1)],
+            frames: [
+                importedFrame({
+                    sequence: 2,
+                    sessionId: SESSION_ID,
+                    relatedRequestId: BET_REQUEST,
+                    payload: { case: 'commandAccepted' as const },
+                }),
+                importedFrame({
+                    sequence: 3,
+                    sessionId: SESSION_ID,
+                    relatedRequestId: BET_REQUEST,
+                    payload: { case: 'roundEnded' as const, roundId: ROUND_ID, actionIndex: 0 },
+                }),
+            ],
+        };
+
+        expect(recomputeRoundCommitment(round).status).toBe('ok');
     });
 
     it('declines when no frame opens the round', () => {

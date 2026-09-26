@@ -21,7 +21,14 @@ const SERVER_RELATED_REQUEST_ID = 2;
 const SERVER_SESSION_ID = 3;
 const SERVER_COMMAND_ACCEPTED = 11;
 const SERVER_COMMAND_REJECTED = 12;
-const SERVER_BET_PLACED = 13;
+/**
+ * A payload tag this build's reader does not map, for the forward-skew tests:
+ * the verifier ships separately from the sequencer, so a newer server can emit
+ * a payload an older verifier has never heard of. Deliberately far above the
+ * assigned range rather than a recycled number, so it cannot start meaning
+ * something the day a real tag is added.
+ */
+const SERVER_UNKNOWN_TAG = 99;
 const SERVER_ROUND_STARTED = 14;
 const SERVER_ROUND_UPDATED = 15;
 const SERVER_ROUND_ENDED = 16;
@@ -123,7 +130,7 @@ export type ServerPayloadSpec =
           roundId?: string;
           receivedAtUnixMs?: number | bigint;
       }
-    | { case: 'betPlaced'; roundId: string }
+    | { case: 'unknownPayload'; roundId: string }
     | { case: 'roundStarted'; roundId: string; crashState?: CrashStateSpec }
     | { case: 'roundUpdated'; roundId: string; actionIndex: number; origin?: keyof typeof ORIGIN_VALUES }
     | {
@@ -196,8 +203,8 @@ export function serverFrame(seed: Uint8Array, spec: ServerFrameSpec): Uint8Array
             envelope.bytes(SERVER_COMMAND_REJECTED, rejected.finish());
             break;
         }
-        case 'betPlaced':
-            envelope.bytes(SERVER_BET_PLACED, roundBearing(spec.payload.roundId).finish());
+        case 'unknownPayload':
+            envelope.bytes(SERVER_UNKNOWN_TAG, roundBearing(spec.payload.roundId).finish());
             break;
         case 'roundStarted': {
             const started = roundBearing(spec.payload.roundId);

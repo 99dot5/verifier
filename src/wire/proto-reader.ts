@@ -209,7 +209,10 @@ const SERVER_PAYLOAD_CASES: Record<number, ServerPayloadCase> = {
     10: 'pong',
     11: 'commandAccepted',
     12: 'commandRejected',
-    13: 'betPlaced',
+    // 13 is unassigned and free for reuse: the frame that held it was
+    // retired before any durable data existed, so no bytes anywhere carry
+    // it. A tag this table does not know decodes to a null `payloadCase`,
+    // which is the FORWARD-SKEW contract below, not a statement about 13.
     14: 'roundStarted',
     15: 'roundUpdated',
     16: 'roundEnded',
@@ -224,7 +227,6 @@ export type ServerPayloadCase =
     | 'pong'
     | 'commandAccepted'
     | 'commandRejected'
-    | 'betPlaced'
     | 'roundStarted'
     | 'roundUpdated'
     | 'roundEnded'
@@ -395,7 +397,6 @@ export function decodeServerEnvelope(body: Uint8Array): DecodedServerEnvelope {
         out.payloadCase = payloadCase;
 
         switch (payloadCase) {
-            case 'betPlaced':
             case 'roundStarted':
             case 'roundUpdated':
             case 'roundEnded':
@@ -421,7 +422,7 @@ export function decodeServerEnvelope(body: Uint8Array): DecodedServerEnvelope {
 function readRoundBearingEvent(
     bytes: Uint8Array,
     out: DecodedServerEnvelope,
-    payloadCase: 'betPlaced' | 'roundStarted' | 'roundUpdated' | 'roundEnded',
+    payloadCase: 'roundStarted' | 'roundUpdated' | 'roundEnded',
 ): void {
     forEachField(bytes, (field) => {
         if (field.number === EVENT_ROUND_ID && field.wireType === WIRE_LENGTH_DELIMITED) {

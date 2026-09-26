@@ -38,7 +38,13 @@ import { splitSignedFrame, SERVER_FRAME_TAG } from '../wire/signature';
  * gap in the evidence the export carries.
  */
 export type RecomputeUnavailableReason =
-    /** No `BetPlaced`/`RoundStarted` frame names the command that opened the round. */
+    /**
+     * No frame binds index 0. The name is historical — it is kept because it
+     * is verifier API surface — but the condition is the general one: SOME
+     * frame must place a command at the round's opening index, whether that is
+     * an opener or a `RoundEnded` stating index 0 on a round that settled on
+     * its own bet.
+     */
     | 'no-place-bet'
     /**
      * The server stated an index for a command the export does not carry. The
@@ -199,7 +205,7 @@ export function labelFindings(frames: ReceiptFrame[], roundIdHex: string): strin
 }
 
 /** The payload cases that place a command at a position in the round. */
-const INDEX_BEARING_CASES = new Set(['betPlaced', 'roundStarted', 'roundUpdated', 'roundEnded']);
+const INDEX_BEARING_CASES = new Set(['roundStarted', 'roundUpdated', 'roundEnded']);
 
 export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult {
     const decoded = decodeReceiptFrames(input.frames);
@@ -276,7 +282,7 @@ export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult
      * behind them, so they contribute to contiguity and not to the preimage.
      */
     const systemIndices = new Set<number>();
-    let sawPlaceBetFrame = false;
+    let sawOpeningIndex = false;
 
     for (const frame of roundFrames) {
         const payloadCase = frame.envelope.payloadCase;
@@ -288,11 +294,9 @@ export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult
         let index: number;
 
         switch (payloadCase) {
-            case 'betPlaced':
             case 'roundStarted':
                 // Index 0 by construction: the opening bet is always step 0,
-                // and neither frame states an index.
-                sawPlaceBetFrame = true;
+                // and the opener states no index.
                 index = 0;
                 break;
             case 'roundUpdated': {
@@ -304,7 +308,7 @@ export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult
                 // `RoundEnded.action_index` next door IS `optional` and its
                 // absence is a real absence: a voided round.) No shipped game
                 // reports step 0 as a `RoundUpdated` — actions[0] is always the
-                // `place-bet`, announced by `BetPlaced`/`RoundStarted` — so this
+                // `place-bet`, announced by `RoundStarted` — so this
                 // is a conformance point, not a live path. Treating it as a
                 // missing index would degrade an honest round to `unavailable`
                 // the day one does.
@@ -342,10 +346,26 @@ export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult
         }
 
         indices.set(frame.envelope.relatedRequestId, index);
+
+        // The sentinel means "index 0 was bound", by whatever frame bound it —
+        // set HERE rather than in an arm, because the SYSTEM `roundUpdated`
+        // arm `continue`s before an index is assigned and a system step at
+        // index 0 binds no command.
+        //
+        // Widening it cannot mint a false `verified`: `status: 'ok'` is an
+        // INPUT to the comparison against the on-chain transcript and the
+        // signed `RoundEnded`, never a verdict. All it converts is an
+        // `unavailable` (which reads as `attested`) into a real comparison,
+        // and the four remaining guards — `server-index-without-command`,
+        // `accepted-command-without-index`, dense contiguity, and the digest
+        // itself — still gate a dishonest index-0 claim.
+        if (index === 0) {
+            sawOpeningIndex = true;
+        }
     }
 
     // ---- step 4: any residual ambiguity is `unavailable` ---------------
-    if (!sawPlaceBetFrame) {
+    if (!sawOpeningIndex) {
         return unavailable('no-place-bet');
     }
 

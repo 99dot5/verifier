@@ -40,16 +40,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -92,16 +86,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -111,7 +95,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -121,7 +105,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -131,7 +115,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 5,
+            "index": 4,
             "sequence": "6",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -141,7 +125,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 6,
+            "index": 5,
             "sequence": "7",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -217,16 +201,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -275,16 +253,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -294,7 +262,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -304,7 +272,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -314,7 +282,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 5,
+            "index": 4,
             "sequence": "6",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -324,7 +292,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 6,
+            "index": 5,
             "sequence": "7",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -334,7 +302,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 7,
+            "index": 6,
             "sequence": "8",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -410,16 +378,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -468,16 +430,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -487,7 +439,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -497,7 +449,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -507,7 +459,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 5,
+            "index": 4,
             "sequence": "6",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -517,7 +469,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 6,
+            "index": 5,
             "sequence": "7",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -527,7 +479,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 7,
+            "index": 6,
             "sequence": "8",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -586,16 +538,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -620,16 +566,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -639,7 +575,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "roundEnded",
             "relatedRequestId": null,
@@ -698,16 +634,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -738,16 +668,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -757,7 +677,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -767,7 +687,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -825,16 +745,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -859,16 +773,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -878,7 +782,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "roundEnded",
             "relatedRequestId": null,
@@ -943,16 +847,10 @@
             "frameHex": "063b84231ac75cdde8e104bc04828df29446fadd6c0cc5a60737a9d3c644cbfcd6ec87a39e87f41734ff9231193f714f80487dc1506578b06c6136e434ec7986050801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a0708f8d095ffbc31"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -989,16 +887,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -1008,7 +896,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1018,7 +906,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1028,7 +916,7 @@
             "playerCommitmentHex": "df9174012d9901878f772e9d031555f19f5abc045e28670add6c89ca54aae016"
           },
           {
-            "index": 5,
+            "index": 4,
             "sequence": "0",
             "payloadCase": "commandRejected",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000d4",
@@ -1097,16 +985,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -1137,16 +1019,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -1156,7 +1028,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -1166,7 +1038,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000a2",
@@ -1242,16 +1114,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -1306,16 +1172,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -1325,7 +1181,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000f6",
@@ -1335,7 +1191,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000f6",
@@ -1345,7 +1201,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 5,
+            "index": 4,
             "sequence": "6",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-000000000007",
@@ -1355,7 +1211,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 6,
+            "index": 5,
             "sequence": "7",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-000000000007",
@@ -1365,7 +1221,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 7,
+            "index": 6,
             "sequence": "8",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1375,7 +1231,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 8,
+            "index": 7,
             "sequence": "9",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1481,16 +1337,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -1581,16 +1431,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -1600,7 +1440,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-000000000018",
@@ -1610,7 +1450,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-000000000018",
@@ -1620,7 +1460,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 5,
+            "index": 4,
             "sequence": "6",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-000000000029",
@@ -1630,7 +1470,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 6,
+            "index": 5,
             "sequence": "7",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-000000000029",
@@ -1640,7 +1480,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 7,
+            "index": 6,
             "sequence": "8",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-00000000003a",
@@ -1650,7 +1490,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 8,
+            "index": 7,
             "sequence": "9",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-00000000003a",
@@ -1660,7 +1500,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 9,
+            "index": 8,
             "sequence": "10",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-00000000004b",
@@ -1670,7 +1510,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 10,
+            "index": 9,
             "sequence": "11",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-00000000004b",
@@ -1680,7 +1520,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 11,
+            "index": 10,
             "sequence": "12",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-00000000005c",
@@ -1690,7 +1530,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 12,
+            "index": 11,
             "sequence": "13",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-00000000005c",
@@ -1700,7 +1540,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 13,
+            "index": 12,
             "sequence": "14",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1710,7 +1550,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 14,
+            "index": 13,
             "sequence": "15",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1804,16 +1644,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -1844,16 +1678,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -1863,7 +1687,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1873,7 +1697,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -1943,16 +1767,10 @@
             "frameHex": "062c316a01fb9f51524f7d625f7116773143e8014ec4727835af7cb069bb653e3716836280cd7c59c978cf5e8b0549654dfa7c296b77015401ed80f1452a6c650c0801120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599015a00"
           },
           {
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "06580d5d6146035a154d2e75dbcf193d82e47f8c38b2a3fea6e3a82ca0627c065c64902d7cdb95eed7e556a3a959d0cb6935c0f1599d303701ab28f962b48b4e090802120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed599016a220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
-          },
-          {
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "frameHex": "066be648cdf96bd182b6d25d52e415e0f87b5abf6638bc3a0393b19ebfb0f3386308b82e3f34cf88778a4acb121f4cad12c1edc83076a4d30638223435ff998d090803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172180a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd01"
+            "frameHex": "06de53f9b7f4918bf45797b9460f0c1428c5a94162e9b13dd93cf92fd63f0b87dc1b69d8a210e899f896130c1ed3088cb629a027298ba5ab45a62de229e3f02a050803120f0880800110b18180808080808080011a150888ef99abc5e88c91111080febbefcdf9aed5990172220a1608cc99efddabd5aad5aa0110eeddbbf7eeddfbeedd0112080a0354455a120131"
           },
           {
             "sequence": "4",
@@ -1995,16 +1813,6 @@
           },
           {
             "index": 1,
-            "sequence": "2",
-            "payloadCase": "betPlaced",
-            "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
-            "roundIdHex": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-            "actionIndex": null,
-            "origin": null,
-            "playerCommitmentHex": null
-          },
-          {
-            "index": 2,
             "sequence": "3",
             "payloadCase": "roundStarted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000b1",
@@ -2014,7 +1822,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 3,
+            "index": 2,
             "sequence": "4",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000e5",
@@ -2024,7 +1832,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 4,
+            "index": 3,
             "sequence": "5",
             "payloadCase": "roundUpdated",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000e5",
@@ -2034,7 +1842,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 5,
+            "index": 4,
             "sequence": "6",
             "payloadCase": "commandAccepted",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",
@@ -2044,7 +1852,7 @@
             "playerCommitmentHex": null
           },
           {
-            "index": 6,
+            "index": 5,
             "sequence": "7",
             "payloadCase": "roundEnded",
             "relatedRequestId": "00000000-0000-4000-8000-0000000000c3",

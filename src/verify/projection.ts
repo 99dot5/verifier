@@ -438,9 +438,9 @@ function projectUnbound(
 
     if (action.actionType === 'place-bet') {
         // Unreachable through an honest reconstruction — it declines with
-        // `no-place-bet` unless a `BetPlaced`/`RoundStarted` frame binds a
-        // command to index 0 — so this is a gap in the evidence, not a server
-        // contradiction, and it must not read as one.
+        // `no-place-bet` unless some frame binds a command to index 0 — so
+        // this is a gap in the evidence, not a server contradiction, and it
+        // must not read as one.
         return {
             kind: 'unavailable',
             line: `${at}: the round's opening bet is bound to no command of yours, so there is nothing signed to project onto it`,

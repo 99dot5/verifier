@@ -53,7 +53,13 @@ import * as plinko from './verify/plinko';
 import { ReplayError, type ReplayResult, type TranscriptAction } from './verify/types';
 import type { RoundTranscriptMessage } from './wire/messages';
 import { decodeEdpk, type SigningDomain, verifyInboxSignature, verifyPrehashedSignature } from './wire/signature';
-import { decodeClientEnvelope } from './wire/proto-reader';
+import {
+    decodeClientEnvelope,
+    decodeServerEnvelope,
+    type DecodedClientEnvelope,
+    type DecodedMoney,
+} from './wire/proto-reader';
+import { evaluateStakeAgreement, STAKE_CHECK_ID } from './verify/stake';
 import { analyseRejections } from './verify/rejections';
 import {
     analyseProjection,
@@ -637,6 +643,22 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         findings,
     );
 
+    // The stake cross-check. Pushed with a stable id even when it cannot run,
+    // so "no evidence" and "evidence agreed" stay distinguishable in the
+    // report rather than both reading as a missing row.
+    const stakeVerdict = evaluateStakeAgreement(
+        transcript.stake,
+        placeBetFromReceipts(input, roundId)?.decoded.placeBetAmount ?? null,
+        openerStakeFromReceipts(input, roundId),
+    );
+
+    checks.push({
+        id: STAKE_CHECK_ID,
+        title: 'The stake the chain paid on is the stake that was authorised',
+        status: stakeVerdict.status,
+        detail: stakeVerdict.detail,
+    });
+
     const anyFail = checks.some((c) => c.status === 'fail');
     // "verified" requires every proof to have actually run and passed. The
     // payout and commitment halves are the substance, but the SIGNATURE check
@@ -667,6 +689,20 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             // without them nothing ties the transcript's actions to what the
             // player authorised.
             PROJECTION_CHECK_ID,
+            // The stake cross-check JOINS the list, on the same ground as the
+            // projection check: leaving it out would let a round with no
+            // signed statement of its stake still report `verified`, and the
+            // stake is the one input the payout proof takes on trust — the
+            // kernel derives the payout FROM it, so an understated stake
+            // replays perfectly and every other proof here passes.
+            //
+            // The cost is stated rather than worked around: a round whose
+            // export carries neither the player's PlaceBet nor the opening
+            // frame degrades to `incomplete`. That is the same degradation
+            // the projection check already imposes on an export with no
+            // decodable command bodies, and a peer-tab round — which has
+            // neither — is already `attested` rather than `verified`.
+            STAKE_CHECK_ID,
         ] as const
     ).every((id) => checks.find((c) => c.id === id)?.status === 'pass');
 
@@ -708,7 +744,48 @@ export function verifyRound(input: VerifyInput): VerificationReport {
  * command with no seed — is null, which the caller reports as an absent
  * source rather than a mismatch.
  */
-function clientSeedFromReceipts(input: VerifyInput, roundId: string): { requestId: string; seed: Uint8Array } | null {
+/**
+ * `RoundStartedEvent.stake` off the round's own signed opening frame, or null.
+ *
+ * The frame is selected by the round id the SERVER signed on it, not by the
+ * export's labels — the same rule the receipts scoping uses, and the reason a
+ * relabelled export cannot substitute another round's opener here. A frame
+ * whose signature does not hold is caught by the receipts authenticity proof,
+ * which is a separate check and fails the verdict on its own; this lookup does
+ * not re-verify it.
+ *
+ * Null covers every gap without distinguishing them, because the comparison
+ * treats them identically: no receipts, an undecodable frame, no opener in the
+ * export (a tab that joined mid-round), or an opener from a producer that
+ * predates the field.
+ */
+function openerStakeFromReceipts(input: VerifyInput, roundId: string): DecodedMoney | null {
+    if (input.receipts?.status !== 'ok') {
+        return null;
+    }
+
+    for (const stored of input.receipts.receipts.frames) {
+        try {
+            const split = splitSignedFrame(stored.frame);
+            const decoded = decodeServerEnvelope(split.body);
+
+            if (decoded.payloadCase === 'roundStarted' && decoded.roundId === roundId && decoded.roundStartedStake) {
+                return decoded.roundStartedStake;
+            }
+        } catch {
+            // An undecodable frame is the authenticity proof's business, not
+            // this lookup's; skip it and let that check speak.
+            continue;
+        }
+    }
+
+    return null;
+}
+
+function placeBetFromReceipts(
+    input: VerifyInput,
+    roundId: string,
+): { requestId: string; decoded: DecodedClientEnvelope } | null {
     if (input.receipts?.status !== 'ok') {
         return null;
     }
@@ -736,14 +813,20 @@ function clientSeedFromReceipts(input: VerifyInput, roundId: string): { requestI
 
         const decoded = decodeClientEnvelope(split.body);
 
-        if (decoded.payloadCase !== 'placeBet' || decoded.requestId !== requestId || !decoded.placeBetClientSeed) {
+        if (decoded.payloadCase !== 'placeBet' || decoded.requestId !== requestId) {
             return null;
         }
 
-        return { requestId, seed: decoded.placeBetClientSeed };
+        return { requestId, decoded };
     } catch {
         return null;
     }
+}
+
+function clientSeedFromReceipts(input: VerifyInput, roundId: string): { requestId: string; seed: Uint8Array } | null {
+    const found = placeBetFromReceipts(input, roundId);
+
+    return found?.decoded.placeBetClientSeed ? { requestId: found.requestId, seed: found.decoded.placeBetClientSeed } : null;
 }
 
 /** The first admissible key this message's signature verifies under, for `domain`, or null. */

@@ -42,6 +42,7 @@ const REJECTED_RECEIVED_AT_UNIX_MS = 4;
 
 // RoundStartedEvent.game_state, crash arm; crash.v1.State
 const ROUND_STARTED_CRASH_STATE = 11;
+const ROUND_STARTED_STAKE = 2;
 const CRASH_STATE_TICK_QUANTUM_MS = 4;
 const CRASH_STATE_SERVER_ANCHOR_UNIX_MS = 6;
 
@@ -67,6 +68,7 @@ const CLIENT_PAYLOAD_FIELDS = {
 } as const;
 
 // PlaceBetCommand
+const PLACE_BET_AMOUNT = 1;
 const PLACE_BET_CLIENT_SEED = 2;
 
 // CashOutCommand / PlayerActionCommand
@@ -120,6 +122,22 @@ export interface CrashStateSpec {
     serverAnchorUnixMs: number | bigint;
 }
 
+/** A `common.v1.Money` to write: an asset code and an exact decimal string. */
+export interface MoneySpec {
+    asset: string;
+    value: string;
+}
+
+const MONEY_ASSET = 1;
+const MONEY_VALUE = 2;
+
+function money(spec: MoneySpec): Uint8Array {
+    return new ProtoWriter()
+        .bytes(MONEY_ASSET, new TextEncoder().encode(spec.asset))
+        .bytes(MONEY_VALUE, new TextEncoder().encode(spec.value))
+        .finish();
+}
+
 export type ServerPayloadSpec =
     | { case: 'commandAccepted'; receivedAtUnixMs?: number | bigint }
     | {
@@ -131,7 +149,7 @@ export type ServerPayloadSpec =
           receivedAtUnixMs?: number | bigint;
       }
     | { case: 'unknownPayload'; roundId: string }
-    | { case: 'roundStarted'; roundId: string; crashState?: CrashStateSpec }
+    | { case: 'roundStarted'; roundId: string; crashState?: CrashStateSpec; stake?: MoneySpec }
     | { case: 'roundUpdated'; roundId: string; actionIndex: number; origin?: keyof typeof ORIGIN_VALUES }
     | {
           case: 'roundEnded';
@@ -208,6 +226,14 @@ export function serverFrame(seed: Uint8Array, spec: ServerFrameSpec): Uint8Array
             break;
         case 'roundStarted': {
             const started = roundBearing(spec.payload.roundId);
+
+            // Written before the state arm so the fields ascend, matching what
+            // a protobuf-es producer emits; the reader does not care, but a
+            // fixture that differs from the real encoder is a fixture that can
+            // agree with a decoder the wire would not.
+            if (spec.payload.stake) {
+                started.bytes(ROUND_STARTED_STAKE, money(spec.payload.stake));
+            }
 
             if (spec.payload.crashState) {
                 const state = new ProtoWriter();
@@ -286,6 +312,12 @@ export interface CommandFrameSpec {
     /** `PlaceBetCommand.client_seed` text; only meaningful for `placeBet`. */
     clientSeed?: string;
     /**
+     * `PlaceBetCommand.amount` — the stake the PLAYER signs; only meaningful
+     * for `placeBet`. Omitted writes no field, which is the shape of a
+     * producer predating the stake cross-check.
+     */
+    amount?: MoneySpec;
+    /**
      * `round_id` inside the command body; only meaningful for `cashOut` and
      * `playerAction`, which are the two arms that carry one.
      *
@@ -354,6 +386,10 @@ function commandPayload(spec: CommandFrameSpec): Uint8Array {
     const writer = new ProtoWriter();
 
     if (spec.payloadCase === 'placeBet') {
+        if (spec.amount !== undefined) {
+            writer.bytes(PLACE_BET_AMOUNT, money(spec.amount));
+        }
+
         if (spec.clientSeed !== undefined) {
             writer.bytes(PLACE_BET_CLIENT_SEED, new TextEncoder().encode(spec.clientSeed));
         }

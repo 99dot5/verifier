@@ -189,6 +189,11 @@ describe('proto-reader', () => {
             sessionId: SESSION_ID,
             payloadCase: 'placeBet',
             placeBetClientSeed: null,
+            // This fixture writes no `amount`, which is the shape of a
+            // producer predating the stake cross-check. Null, not zero: the
+            // comparison reports "no signed stake to compare" rather than
+            // accusing the chain of disagreeing with a fabricated zero.
+            placeBetAmount: null,
             // A `PlaceBet` OPENS a round rather than naming one, so there is
             // no round id in its body to read.
             commandRoundId: null,

@@ -272,6 +272,56 @@ const ROUND_END_CAUSES: Record<number, RoundEndCause> = {
  * own signed statement of when the round began, not a number supplied
  * alongside the complaint.
  */
+/**
+ * A `common.v1.Money` as it sits on the wire: an asset code and an exact
+ * decimal string.
+ *
+ * Kept as the STRING the server signed rather than parsed to a number here.
+ * The comparison that uses it converts through `decimalStringToUnits` at the
+ * transcript's scale, so a value with more fractional digits than the asset
+ * admits raises an error at the comparison instead of silently rounding into
+ * agreement.
+ */
+export interface DecodedMoney {
+    asset: string;
+    value: string;
+}
+
+/**
+ * Strict UTF-8, matching `borsh.ts`: invalid bytes throw rather than becoming
+ * replacement characters, because a silent `\uFFFD` in an asset code would
+ * compare unequal for a reason no report could explain.
+ *
+ * Caught by the one caller and surfaced as an EMPTY field, which the stake
+ * comparison treats as unreadable rather than as a mismatch — a malformed
+ * money on one frame must not break the scoping of unrelated frames.
+ */
+function decodeUtf8(bytes: Uint8Array): string {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
+function readMoney(bytes: Uint8Array): DecodedMoney {
+    const out: DecodedMoney = { asset: '', value: '' };
+
+    forEachField(bytes, (field) => {
+        if (field.wireType !== WIRE_LENGTH_DELIMITED) {
+            return;
+        }
+
+        try {
+            if (field.number === MONEY_ASSET) {
+                out.asset = decodeUtf8(field.bytes);
+            } else if (field.number === MONEY_VALUE) {
+                out.value = decodeUtf8(field.bytes);
+            }
+        } catch {
+            // Leaves the field empty; the comparison reports it unreadable.
+        }
+    });
+
+    return out;
+}
+
 export interface DecodedCrashState {
     /** `tick_quantum_ms` (field 4): milliseconds per integer tick. */
     tickQuantumMs: bigint | null;
@@ -319,6 +369,15 @@ export interface DecodedServerEnvelope {
     /** `crash.v1.State` off a `RoundStarted`'s `game_state`; null elsewhere. */
     crashState: DecodedCrashState | null;
     /**
+     * `RoundStartedEvent.stake` (2) — the SERVER-SIGNED opening stake, null on
+     * every other payload and on an opener that states none.
+     *
+     * Null is not zero and not a default: a producer predating the field is
+     * distinguishable from one that stated an amount, so the stake comparison
+     * can report "no signed stake to compare" instead of inventing a zero.
+     */
+    roundStartedStake: DecodedMoney | null;
+    /**
      * `RoundEnded.cause` (field 4), null when the frame states none.
      *
      * Null is NOT a default: the field is `optional`, so a producer that never
@@ -348,6 +407,16 @@ const ACCEPTED_RECEIVED_AT_UNIX_MS = 1;
 
 // casino.v1.RoundStartedEvent.game_state, the crash arm.
 const ROUND_STARTED_CRASH_STATE = 11;
+/**
+ * `RoundStartedEvent.stake` (2).
+ *
+ * Field 2 means something different on each round event — `action_index` on
+ * `RoundUpdated`, `outcome` on `RoundEnded`, both VARINT — so the read is
+ * gated on the payload case AND on the wire type, never on the number alone.
+ */
+const ROUND_STARTED_STAKE = 2;
+const MONEY_ASSET = 1;
+const MONEY_VALUE = 2;
 
 // crash.v1.State
 const CRASH_STATE_TICK_QUANTUM_MS = 4;
@@ -367,6 +436,7 @@ export function decodeServerEnvelope(body: Uint8Array): DecodedServerEnvelope {
         rejectionReasonCode: null,
         receivedAtUnixMs: null,
         crashState: null,
+        roundStartedStake: null,
         roundEndCause: null,
     };
 
@@ -437,6 +507,19 @@ function readRoundBearingEvent(
             field.wireType === WIRE_LENGTH_DELIMITED
         ) {
             out.crashState = readCrashState(field.bytes);
+
+            return;
+        }
+
+        // Both gates matter: field 2 is `action_index` on `RoundUpdated` and
+        // `outcome` on `RoundEnded`, and reading either as a Money would
+        // fabricate a stake out of a varint.
+        if (
+            payloadCase === 'roundStarted' &&
+            field.number === ROUND_STARTED_STAKE &&
+            field.wireType === WIRE_LENGTH_DELIMITED
+        ) {
+            out.roundStartedStake = readMoney(field.bytes);
 
             return;
         }
@@ -595,6 +678,16 @@ export interface DecodedClientEnvelope {
      */
     placeBetClientSeed: Uint8Array | null;
     /**
+     * `PlaceBetCommand.amount` (1) — the stake the PLAYER signed, null on
+     * every other arm and on a `PlaceBet` carrying none.
+     *
+     * The one number in this file read for a money comparison. It is admitted
+     * on the same ground as `client_seed`: a player attributing their OWN
+     * signed amount is reading a field they themselves signed, not an
+     * inference the sequencer is forbidden to make (D9).
+     */
+    placeBetAmount: DecodedMoney | null;
+    /**
      * The round id inside the PLAYER-SIGNED command body — `round_id`, field 1
      * on both `CashOutCommand` and `PlayerActionCommand`. Null on every other
      * arm (`PlaceBet` opens a round rather than naming one) and on an arm that
@@ -625,10 +718,15 @@ export interface DecodedClientEnvelope {
  * A decoded command body, keyed by `(payload case, game arm)`.
  *
  * Only the fields the projection rules compare are carried; everything else in
- * the frame stays inside the bytes the signature and the commitment cover. The
- * amounts are deliberately absent: a stake is checked against the transcript's
- * `stake` field by nothing here, and inventing a comparison the kernel does
- * not make would be a rule of this tool's own.
+ * the frame stays inside the bytes the signature and the commitment cover.
+ *
+ * The per-game amounts stay absent, but the top-level `PlaceBetCommand.amount`
+ * no longer does — it is read into {@link DecodedClientEnvelope.placeBetAmount}
+ * rather than here. The old note said comparing a stake would be "a rule of
+ * this tool's own"; that was true only while the stake appeared in ONE signed
+ * place. The server now signs it on `RoundStarted` too, so the comparison is
+ * between three statements the system already makes about one number, and the
+ * kernel's silence on it is precisely the gap worth closing off chain.
  */
 export type DecodedCommandBody =
     | { case: 'placeBet'; game: 'hilo' }
@@ -653,6 +751,7 @@ export type DecodedCommandBody =
     | { case: 'unrecognised'; description: string };
 
 // casino.v1.PlaceBetCommand
+const PLACE_BET_AMOUNT = 1;
 const PLACE_BET_CLIENT_SEED = 2;
 
 /**
@@ -948,6 +1047,7 @@ export function decodeClientEnvelope(body: Uint8Array): DecodedClientEnvelope {
         sessionId: null,
         payloadCase: null,
         placeBetClientSeed: null,
+        placeBetAmount: null,
         commandRoundId: null,
         commandBody: null,
     };
@@ -967,6 +1067,8 @@ export function decodeClientEnvelope(body: Uint8Array): DecodedClientEnvelope {
                     forEachField(field.bytes, (inner) => {
                         if (inner.number === PLACE_BET_CLIENT_SEED && inner.wireType === WIRE_LENGTH_DELIMITED) {
                             out.placeBetClientSeed = inner.bytes.slice();
+                        } else if (inner.number === PLACE_BET_AMOUNT && inner.wireType === WIRE_LENGTH_DELIMITED) {
+                            out.placeBetAmount = readMoney(inner.bytes);
                         }
                     });
                     out.commandBody = decodePlaceBetBody(field.bytes);

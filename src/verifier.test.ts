@@ -19,14 +19,21 @@ import * as hilo from './verify/hilo';
 import * as mines from './verify/mines';
 import * as plinko from './verify/plinko';
 import { REJECTION_CHECK_ID } from './verify/rejections';
-import { payoutUnits } from './verify/ints';
+import { payoutUnits, unitsToDecimalString } from './verify/ints';
 import { bytesToHex, hexToBytes, serverSeedCommitment } from './verify/seed';
 import type { ReplayResult, TranscriptAction } from './verify/types';
 import { actionTypeOf, tagOf } from './wire/action-tags';
 import { decodeExternalMessage } from './wire/messages';
 import { encodeEdpk, sequencerSigningPreimage, type SigningDomain } from './wire/signature';
-import { commandFrame, serverFrame, type CommandGameSpec, type ServerFrameSpec } from './receipts/fixtures';
+import {
+    commandFrame,
+    serverFrame,
+    type CommandGameSpec,
+    type MoneySpec,
+    type ServerFrameSpec,
+} from './receipts/fixtures';
 import { PROJECTION_CHECK_ID } from './verify/projection';
+import { STAKE_CHECK_ID } from './verify/stake';
 import { computeCommitment } from './receipts/commitment';
 import type { ImportedReceipts } from './receipts/import';
 import type { ReceiptsInput, ScanContext } from './verifier';
@@ -112,6 +119,14 @@ const BATCH_START = 100n;
 const BATCH_LEVEL = 1000;
 const TRANSCRIPT_LEVEL = 1005;
 const STAKE_MUTEZ = 100_000_000n;
+/**
+ * The same amount the transcript carries, as the decimal string a signed
+ * `Money` spells it with. DERIVED, never a second literal: the stake
+ * cross-check compares exactly these two, so a hand-typed copy could drift
+ * and turn a fixture bug into a green verdict.
+ */
+const STAKE_DECIMAL = unitsToDecimalString(STAKE_MUTEZ, 6);
+const STAKE_MONEY = { asset: 'TEZ', value: STAKE_DECIMAL };
 
 /**
  * `client_seed` on the wire is the blake2b-256 of the player's text, and the
@@ -148,12 +163,23 @@ const CASHOUT_REQUEST = '22222222-2222-4222-8222-222222222222';
  */
 const HILO_ARM: CommandGameSpec = { game: 'hilo' };
 
-function betCommand(game: CommandGameSpec = HILO_ARM, clientSeed?: string): Uint8Array {
+/**
+ * `amount` takes `null` — not `undefined` — to mean "write no amount".
+ * Passing `undefined` re-selects the default, which is the footgun that let
+ * two of the tests below keep a stake they meant to omit and pass for the
+ * wrong reason.
+ */
+function betCommand(
+    game: CommandGameSpec = HILO_ARM,
+    clientSeed?: string,
+    amount: MoneySpec | null = STAKE_MONEY,
+): Uint8Array {
     return commandFrame(SESSION_SEED, {
         requestId: BET_REQUEST,
         sessionId: SESSION_ID,
         payloadCase: 'placeBet',
         clientSeed,
+        amount: amount ?? undefined,
         game,
     });
 }
@@ -178,6 +204,8 @@ const PLAYER_COMMITMENT = computeCommitment([BET_COMMAND, CASHOUT_COMMAND]);
 /** Everything about an export that is not one of its `ImportedReceipts` fields. */
 interface ReceiptShape {
     bet?: Uint8Array;
+    /** `RoundStartedEvent.stake`; `null` writes no field (a producer predating it). */
+    openerStake?: MoneySpec | null;
     cashOut?: Uint8Array;
     /** `RoundEndedEvent.cause`; the honest default is the player's own action. */
     cause?: 'player-action' | 'system-sweep' | 'transcript-cap';
@@ -240,7 +268,11 @@ function buildReceipts(overrides: Partial<ImportedReceipts> = {}, shape: Receipt
                 sequence: 3,
                 sessionId: SESSION_ID,
                 relatedRequestId: BET_REQUEST,
-                payload: { case: 'roundStarted', roundId: ROUND_ID },
+                payload: {
+                    case: 'roundStarted',
+                    roundId: ROUND_ID,
+                    stake: shape.openerStake === null ? undefined : (shape.openerStake ?? STAKE_MONEY),
+                },
             }),
             frame({
                 sequence: 4,
@@ -517,6 +549,78 @@ describe('verifyRound', () => {
 
         expect(report.verdict).toBe('failed');
         expect(statusOf(report, 'replay-payout')).toBe('fail');
+    });
+
+    // ── The stake cross-check ───────────────────────────────────────────
+    //
+    // Until `RoundStartedEvent` carried a stake there was exactly ONE signed
+    // statement of what a round opened at, and the verifier fed it into the
+    // payout recomputation while comparing it to nothing.
+
+    it('FAILS a round whose chain stake is not the stake the player signed', () => {
+        // The attack this closes: debit 100 ꜩ, publish a transcript saying
+        // 1 ꜩ. The kernel derives its payout FROM the transcript's stake, so
+        // the round replays perfectly on chain and every other proof here
+        // passes — the player's own signed amount is the only evidence.
+        const shape = { bet: betCommand(HILO_ARM, undefined, { asset: 'TEZ', value: '1' }) };
+        const report = verify(buildRound(), {
+            receipts: { status: 'ok', receipts: buildReceipts({}, shape) },
+        });
+
+        expect(statusOf(report, STAKE_CHECK_ID)).toBe('fail');
+        expect(report.verdict).toBe('failed');
+        // The replay still agrees with itself, which is the whole point: the
+        // understatement is invisible to every proof but this one.
+        expect(statusOf(report, 'replay-payout')).toBe('pass');
+        expect(report.checks.find((c) => c.id === STAKE_CHECK_ID)?.detail).toContain('1000000 mutez');
+    });
+
+    it('FAILS a round whose chain stake is not the stake the server signed on the opener', () => {
+        // The other leg on its own. Weaker evidence — it is the server
+        // contradicting itself rather than contradicting the player — but a
+        // contradiction is still a contradiction.
+        const openerOnlyShape = {
+            // Player leg removed so the opener is the only source.
+            bet: betCommand(HILO_ARM, undefined, null),
+            openerStake: { asset: 'TEZ', value: '1' },
+        };
+        const report = verify(buildRound({ playerCommitment: commitmentOf(openerOnlyShape) }), {
+            receipts: {
+                status: 'ok',
+                receipts: buildReceipts({}, openerOnlyShape),
+            },
+        });
+
+        expect(statusOf(report, STAKE_CHECK_ID)).toBe('fail');
+        expect(report.verdict).toBe('failed');
+    });
+
+    it('does NOT fail a round that simply carries no signed stake — it degrades', () => {
+        // Absence is a gap in the evidence, never an accusation. The
+        // `STEP_ORIGIN_UNSPECIFIED` rule: a producer's silence is not an
+        // assertion, and a tool that read it as one would accuse an honest
+        // server.
+        const shape = { bet: betCommand(HILO_ARM, undefined, null), openerStake: null };
+        const report = verify(buildRound({ playerCommitment: commitmentOf(shape) }), {
+            receipts: { status: 'ok', receipts: buildReceipts({}, shape) },
+        });
+
+        expect(statusOf(report, STAKE_CHECK_ID)).toBe('unavailable');
+        // Nothing else broke: the degrade is the stake check's alone.
+        expect(report.checks.filter((c) => c.status === 'fail')).toEqual([]);
+        expect(report.verdict).toBe('incomplete');
+        expect(report.checks.find((c) => c.id === STAKE_CHECK_ID)?.detail).toContain('NOT a disagreement');
+    });
+
+    it('passes on the opener alone, and says the evidence is the server agreeing with itself', () => {
+        const shape = { bet: betCommand(HILO_ARM, undefined, null) };
+        const report = verify(buildRound({ playerCommitment: commitmentOf(shape) }), {
+            receipts: { status: 'ok', receipts: buildReceipts({}, shape) },
+        });
+
+        expect(statusOf(report, STAKE_CHECK_ID)).toBe('pass');
+        // A reader must never mistake the weak comparison for the strong one.
+        expect(report.checks.find((c) => c.id === STAKE_CHECK_ID)?.detail).toContain('server agreeing with itself');
     });
 
     it('fails when an action payload is tampered with', () => {

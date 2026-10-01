@@ -11,9 +11,15 @@
  * Two SYSTEM-ONLY transcript steps back the max-win cap
  * (docs/specs/max-win-cap.md): `partial-cashout` (banks part of the position
  * to the session balance — chain untouched; the layout and step pricing are
- * index-insensitive in mines) and `abandon`, which forfeits the live
- * position and pays the banked total. A mine hit likewise pays the banked
- * total (0 when nothing was banked).
+ * index-insensitive in mines) and `abandon`, which settles at the position's
+ * current value, `banked + live` — what a cashout would pay — with outcome
+ * `lose` (sec-28; it used to forfeit the live part, and before any reveal
+ * that is the stake). A mine hit pays the banked total (0 when nothing was
+ * banked).
+ *
+ * The payout follows the banked/live fold of `partial_cashout.rs` — the live
+ * part rounds at the asset grain on every safe reveal — not
+ * `floor(stake × cumulative)`.
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { divHalfUp, mulPpm, ppmToMultiplierString } from './ints';
@@ -23,9 +29,15 @@ import { abandonStep } from './hilo';
 import {
     ZERO_BANKED,
     addBanked,
+    bankFromLive,
     bankedAmountString,
     decodePartialCashout,
+    foldLive,
+    loseLive,
+    openPosition,
     partialCashoutStep,
+    positionValue,
+    type Position,
 } from './partial-cashout';
 
 export const GAME_TYPE = 'mines:v1';
@@ -126,6 +138,7 @@ export function replay(
     serverSeed: string,
     clientSeed: string,
     actions: TranscriptAction[],
+    stakeUnits: bigint,
 ): ReplayResult {
     if (actions.length === 0 || actions[0].actionType !== 'place-bet') {
         throw new ReplayError('mines transcript must start with place-bet');
@@ -154,6 +167,7 @@ export function replay(
     let outcome: Outcome = 'lose';
     let settled = false;
     let bankedTotal = ZERO_BANKED;
+    let position: Position = openPosition(stakeUnits);
 
     for (const action of actions.slice(1)) {
         if (settled) {
@@ -170,6 +184,7 @@ export function replay(
 
                 if (mineSet.has(tile)) {
                     cumulative = 0n;
+                    position = loseLive(position);
                     outcome = 'lose';
                     settled = true;
                     steps.push({
@@ -196,6 +211,7 @@ export function replay(
                 const step = stepMultiplierPpm(mineCount, revealed.size);
 
                 cumulative = mulPpm(cumulative, step);
+                position = foldLive(position, step);
                 revealed.add(tile);
 
                 const allSafeRevealed = revealed.size >= TOTAL_TILES - mineCount;
@@ -249,13 +265,15 @@ export function replay(
                 const banked = decodePartialCashout(action.payload);
 
                 bankedTotal = addBanked(bankedTotal, banked);
+                position = bankFromLive(position, banked.amount);
                 steps.push(partialCashoutStep(action.actionIndex, banked, bankedTotal, cumulative));
                 break;
             }
             case 'abandon':
-                cumulative = 0n;
+                // Admissible before any reveal (unlike a cashout): the sweep's
+                // only settling action for an untouched round, worth the stake.
                 outcome = 'lose';
-                steps.push(abandonStep(action.actionIndex, bankedAmountString(bankedTotal)));
+                steps.push(abandonStep(action.actionIndex, position, cumulative));
                 settled = true;
                 break;
             default:
@@ -263,5 +281,13 @@ export function replay(
         }
     }
 
-    return { gameType: GAME_TYPE, steps, cumulativePpm: cumulative, outcome, settled };
+    return {
+        gameType: GAME_TYPE,
+        steps,
+        cumulativePpm: cumulative,
+        outcome,
+        settled,
+        payoutUnits: positionValue(position),
+        bankedUnits: position.bankedUnits,
+    };
 }

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { vectorsUrl } from './vectors-path';
 import { describe, expect, it } from 'vitest';
-import { decimalStringToUnits, divHalfUp, unitsToDecimalString } from './ints';
+import { decimalStringToUnits, unitsToDecimalString } from './ints';
 import { hexToBytes } from './seed';
 import { deriveLayout, replay, stepMultiplierPpm, TOTAL_TILES } from './mines';
 import { mulPpm, SCALE_PPM } from './ints';
@@ -87,7 +87,7 @@ describe('mines:v1 vectors', () => {
                 actionType: s.action,
                 payload: hexToBytes(s.payload_borsh_hex ?? s.place_bet_payload_borsh_hex ?? ''),
             }));
-            const result = replay(rv.server_seed, rv.client_seed, actions);
+            const result = replay(rv.server_seed, rv.client_seed, actions, decimalStringToUnits(rv.stake, 6));
 
             expect(result.settled).toBe(true);
             expect(result.outcome).toBe(OUTCOME_BY_VECTOR[rv.final.outcome]);
@@ -97,28 +97,12 @@ describe('mines:v1 vectors', () => {
                 expect(result.steps[i].cumulativePpm).toBe(BigInt(s.cumulative_multiplier_ppm));
             }
 
-            // Payout via the banked/live fold, in integer micro-units: each
-            // safe reveal folds live' = half_up(live × step / 1e6); a bank
-            // moves value from live to banked; a mine hit zeroes live. The
-            // final payout is banked + live (the vectors' documented value
-            // model).
-            let liveUnits = decimalStringToUnits(rv.stake, 6);
-            let bankedUnits = 0n;
-
-            for (const s of rv.steps) {
-                if (s.action === 'partial-cashout') {
-                    const amount = BigInt(s.banked_micro ?? 0);
-
-                    bankedUnits += amount;
-                    liveUnits -= amount;
-                } else if (s.is_mine === false) {
-                    liveUnits = divHalfUp(liveUnits * BigInt(s.step_multiplier_ppm ?? 0), 1_000_000n);
-                } else if (s.is_mine === true) {
-                    liveUnits = 0n;
-                }
-            }
-
-            expect(unitsToDecimalString(bankedUnits + liveUnits, 6)).toBe(rv.final.payout);
+            // The vectors' payout is the banked/live fold (live' = half_up(live ×
+            // step / 1e6) per safe reveal, banks moving value from live to
+            // banked, a mine hit zeroing live, payout = banked + live). Asserted
+            // on `replay()`'s own figure, so the vectors bind the product rather
+            // than a fold rebuilt inside the test.
+            expect(unitsToDecimalString(result.payoutUnits, 6)).toBe(rv.final.payout);
         }
     });
 });

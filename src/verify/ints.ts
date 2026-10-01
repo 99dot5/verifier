@@ -38,19 +38,28 @@ export function mulPpm(aPpm: bigint, bPpm: bigint): bigint {
 }
 
 /**
- * The payout rule at the trust boundary, in the rollup's own units.
+ * The payout rule for the SINGLE-DECISION games (crash, plinko), in the
+ * rollup's own units.
  *
- * The kernel replays the round, computes `amount_won = stake ×
- * cumulative_multiplier_ppm / 1e6` as a decimal (half-up, ≤18 dp — exact for
- * any stake with ≤6 dp, i.e. every mutez-denominated stake), then converts to
- * `u128` atomic units by truncating TOWARD ZERO at the asset's scale
- * (`libs/smart-rollup/src/games.rs`: `decimal_to_units(truncate_to_decimals(
- * amount_won, decimals), decimals)`, where `decimals` comes from the session's
- * bound asset via `money::decimals_for` — the table this app mirrors in
- * `./assets`). For a stake in integer base units (mutez, scale 6) that
- * collapses to a single floor division:
+ * The kernel replays the round and credits the engine's `amount_won`,
+ * truncated TOWARD ZERO to the asset's grain and widened to `u128`
+ * (`libs/smart-rollup/src/games.rs`: `truncate_to_units`, with `decimals`
+ * from the session's bound asset via `money::decimals_for` — the table this
+ * app mirrors in `./assets`). Crash and plinko have one decision and no
+ * banked/live split, so `amount_won = stake × multiplier` and, for a stake in
+ * integer base units (mutez, scale 6), that collapses to one floor division:
  *
  *     payout_units = floor(stake_units × cumulative_ppm / 1e6)
+ *
+ * It is NOT the rule for the compounding games (hilo, mines, hydra). Their
+ * engines fold the LIVE position at the asset grain on every winning step
+ * (`partial_cashout::multiply_live`, half-up at 6 dp) and pay `banked + live`
+ * — see `./partial-cashout`'s `Position` fold. This verifier used to apply
+ * the floor rule to every game, which disagreed with the kernel on honest
+ * multi-step hilo/mines rounds (the per-step rounding) and by the whole
+ * banked amount on any round with a `partial-cashout`, so a passing
+ * `replay-payout` on those rounds was impossible before the replayers began
+ * carrying `payoutUnits` themselves.
  */
 export function payoutUnits(stakeUnits: bigint, cumulativePpm: bigint): bigint {
     if (stakeUnits < 0n || cumulativePpm < 0n) {

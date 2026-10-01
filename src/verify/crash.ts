@@ -28,7 +28,7 @@
  * the input-range guard below is what keeps that reasoning true.
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
-import { divHalfUp, ppmToMultiplierString } from './ints';
+import { divHalfUp, payoutUnits, ppmToMultiplierString } from './ints';
 import { bytesToHex, deriveSeed, rawU64 } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import { BorshError, BorshReader } from '../wire/borsh';
@@ -239,10 +239,18 @@ function roundDetails(round: CrashRound): [string, string][] {
  * The vocabulary is small and closed: `place-bet` at index 0, then at most one
  * of `cashout` (the player-claimed tick), `expire` (the crashed or
  * never-collected round) or `abandon` (termination from outside the round).
- * The kernel's per-game `AbandonPolicy` overrides crash to lose/0 rather than
- * parsing the abandon through the engine, which is what this reproduces.
+ * The kernel's `AbandonPolicy::SettleAsCashout` replays a crash abandon as the
+ * cashout the state admits (sec-28): an AUTO round settles at its
+ * pre-committed target tick, exactly as `cashout(target)` would; a MANUAL
+ * round has no claim to substitute and forfeits — the same loss as the
+ * sweep's `expire`. This reproduces both.
  */
-export function replay(serverSeed: string, clientSeed: string, actions: TranscriptAction[]): ReplayResult {
+export function replay(
+    serverSeed: string,
+    clientSeed: string,
+    actions: TranscriptAction[],
+    stakeUnits: bigint,
+): ReplayResult {
     if (actions.length === 0 || actions[0].actionType !== 'place-bet') {
         throw new ReplayError('crash transcript must start with place-bet');
     }
@@ -305,6 +313,48 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
                 settled = true;
                 break;
             }
+            case 'abandon': {
+                if (config.autoCashoutTick === null) {
+                    cumulative = 0n;
+                    steps.push({
+                        actionIndex: action.actionIndex,
+                        actionType: 'abandon',
+                        title: 'abandon (system) — manual round, no cashout to substitute: forfeited, pays 0',
+                        details: [
+                            ['rule', "the kernel replays a system abandon as the cashout the state admits (sec-28); a manual round has no claim to substitute, so it forfeits — the same loss as the deadline sweep's expire"],
+                        ],
+                        cumulativePpm: 0n,
+                    });
+                    outcome = 'lose';
+                    settled = true;
+                    break;
+                }
+
+                // Auto round: the kernel substitutes `Cashout { tick: target }`,
+                // the very action the sequencer's own sweep writes for it, so a
+                // forged abandon on an auto winner pays the win.
+                const target = config.autoCashoutTick;
+                const win = target < round.crashTick;
+
+                cumulative = win ? multiplierPpm(target) : 0n;
+                steps.push({
+                    actionIndex: action.actionIndex,
+                    actionType: 'abandon',
+                    title: win
+                        ? `abandon (system) — auto round: the kernel substitutes the pre-committed target tick ${target}, WIN, pays ${ppmToMultiplierString(cumulative)}`
+                        : `abandon (system) — auto round: the kernel substitutes the pre-committed target tick ${target}, LOSE, the round crashed at tick ${round.crashTick}`,
+                    details: [
+                        ['pre-committed auto target (from your signed PlaceBet config)', target.toString()],
+                        ['crash tick', round.crashTick.toString()],
+                        ['rule', 'sec-28: a system abandon settles exactly as cashout(target) would — stake × m(target) iff target < crash_tick, else 0'],
+                        ['multiplier', ppmToMultiplierString(cumulative)],
+                    ],
+                    cumulativePpm: cumulative,
+                });
+                outcome = win ? 'cashout' : 'lose';
+                settled = true;
+                break;
+            }
             case 'expire':
                 cumulative = 0n;
                 steps.push({
@@ -320,22 +370,20 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
                 outcome = 'lose';
                 settled = true;
                 break;
-            case 'abandon':
-                cumulative = 0n;
-                steps.push({
-                    actionIndex: action.actionIndex,
-                    actionType: 'abandon',
-                    title: 'abandon (system) — round forfeited, pays 0',
-                    details: [['rule', "the rollup's crash AbandonPolicy overrides an abandoned round to lose / 0"]],
-                    cumulativePpm: 0n,
-                });
-                outcome = 'lose';
-                settled = true;
-                break;
             default:
                 throw new ReplayError(`unknown crash action: ${action.actionType}`);
         }
     }
 
-    return { gameType: GAME_TYPE, steps, cumulativePpm: cumulative, outcome, settled };
+    return {
+        gameType: GAME_TYPE,
+        steps,
+        cumulativePpm: cumulative,
+        outcome,
+        settled,
+        // Single decision, no banked/live split: the kernel's fold collapses to
+        // one floor division.
+        payoutUnits: payoutUnits(stakeUnits, cumulative),
+        bankedUnits: 0n,
+    };
 }

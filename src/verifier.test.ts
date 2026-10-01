@@ -19,9 +19,9 @@ import * as hilo from './verify/hilo';
 import * as mines from './verify/mines';
 import * as plinko from './verify/plinko';
 import { REJECTION_CHECK_ID } from './verify/rejections';
-import { payoutUnits, unitsToDecimalString } from './verify/ints';
+import { unitsToDecimalString } from './verify/ints';
 import { bytesToHex, hexToBytes, serverSeedCommitment } from './verify/seed';
-import type { ReplayResult, TranscriptAction } from './verify/types';
+import type { Replayer } from './verify/types';
 import { actionTypeOf, tagOf } from './wire/action-tags';
 import { decodeExternalMessage } from './wire/messages';
 import { encodeEdpk, sequencerSigningPreimage, type SigningDomain } from './wire/signature';
@@ -347,7 +347,7 @@ interface RoundOptions {
  * restating it here would only pin this file to itself.
  */
 function honestPayout(gameType: string, options: RoundOptions = {}): bigint {
-    const replayers: Record<string, (s: string, c: string, a: TranscriptAction[]) => ReplayResult> = {
+    const replayers: Record<string, Replayer> = {
         [crash.GAME_TYPE]: crash.replay,
         [hilo.GAME_TYPE]: hilo.replay,
         [mines.GAME_TYPE]: mines.replay,
@@ -362,9 +362,10 @@ function honestPayout(gameType: string, options: RoundOptions = {}): bigint {
             actionType: actionTypeOf(a.tag) ?? '',
             payload: a.payload,
         })),
+        STAKE_MUTEZ,
     );
 
-    return payoutUnits(STAKE_MUTEZ, replayed.cumulativePpm);
+    return replayed.payoutUnits;
 }
 
 function transcriptBody(options: RoundOptions, claimedPayout: bigint): number[] {

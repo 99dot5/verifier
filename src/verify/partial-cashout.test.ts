@@ -10,6 +10,9 @@ import { TRANSCRIPT_DECIMALS } from './assets';
 import { hiloStep, replay } from './hilo';
 import { ReplayError, type TranscriptAction } from './types';
 
+/** 100 TEZ in mutez: the stake every replay below is folded from. */
+const STAKE_UNITS = 100_000_000n;
+
 /**
  * Borsh-encode `Payload { amount: u128 LE }`. Built on an explicit
  * `ArrayBuffer` so the produced view is assignable whether the ambient TS lib
@@ -101,7 +104,7 @@ describe('hilo replay with a partial cashout', () => {
             action(1, 'partial-cashout', encodePartialCashout(30_000_000n)),
             action(2, winning),
             action(3, 'cashout'),
-        ]);
+        ], STAKE_UNITS);
 
         expect(result.settled).toBe(true);
         expect(result.outcome).toBe('cashout');
@@ -114,15 +117,34 @@ describe('hilo replay with a partial cashout', () => {
         expect(bankStep.title).toContain('30 banked');
     });
 
-    it('abandonment reports the banked total', () => {
+    it('abandonment settles at the current position — banked plus live (sec-28)', () => {
+        // 12.5 banked out of a 100 stake leaves 87.5 live; the abandon pays
+        // both, exactly what a cashout here would, so a forged one gains
+        // nothing. Outcome stays `lose` — no decision of the player's ended it.
         const result = replay(SERVER, CLIENT, [
             action(0, 'place-bet'),
             action(1, 'partial-cashout', encodePartialCashout(12_500_000n)),
             action(2, 'abandon'),
-        ]);
+        ], STAKE_UNITS);
 
         expect(result.outcome).toBe('lose');
-        expect(result.steps[2].title).toContain('pays the banked total 12.5');
+        expect(result.settled).toBe(true);
+        expect(result.bankedUnits).toBe(12_500_000n);
+        expect(result.payoutUnits).toBe(STAKE_UNITS);
+        expect(result.steps[2].title).toContain("settles at the position's current value: banked 12.5 + live 87.5 = 100");
+        // The chain is left where the bank left it, as a cashout would leave it.
+        expect(result.steps[2].cumulativePpm).toBe(1_000_000n);
+    });
+
+    it('rejects a partial-cashout larger than the live position', () => {
+        // Mirrors `apply_bank`: banking more than is live would mint value, and
+        // the kernel rejects the transcript rather than replaying it.
+        expect(() =>
+            replay(SERVER, CLIENT, [
+                action(0, 'place-bet'),
+                action(1, 'partial-cashout', encodePartialCashout(STAKE_UNITS + 1n)),
+            ], STAKE_UNITS),
+        ).toThrow(ReplayError);
     });
 
     it('rejects a malformed partial-cashout payload', () => {
@@ -130,7 +152,7 @@ describe('hilo replay with a partial cashout', () => {
             replay(SERVER, CLIENT, [
                 action(0, 'place-bet'),
                 action(1, 'partial-cashout', new Uint8Array(3)),
-            ]),
+            ], STAKE_UNITS),
         ).toThrow(ReplayError);
     });
 });

@@ -14,8 +14,16 @@
  * Two SYSTEM-ONLY transcript steps back the max-win cap
  * (docs/specs/max-win-cap.md): `partial-cashout` (banks part of the position
  * to the session balance — chain untouched; note it consumes an action
- * index, shifting every later card draw) and `abandon`, which forfeits the
- * live position and pays the banked total.
+ * index, shifting every later card draw) and `abandon`, which settles the
+ * round at the position's current value — `banked + live`, what a cashout
+ * would pay — with outcome `lose`. It used to forfeit the live part; sec-28
+ * (security finding sec-28, recorded in `docs/architecture.md`) closed that,
+ * because an abandon is the one step the sequencer writes with no player
+ * signature behind it, so forfeiting on it made forging one profitable.
+ *
+ * The payout follows the banked/live fold of `partial_cashout.rs`, NOT
+ * `floor(stake × cumulative)`: the live part rounds at the asset grain on
+ * every winning step, so the two differ on any round of two or more guesses.
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { mulPpm, ppmToMultiplierString, toPpmRatio } from './ints';
@@ -24,9 +32,16 @@ import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type Tr
 import {
     ZERO_BANKED,
     addBanked,
+    bankFromLive,
     bankedAmountString,
     decodePartialCashout,
+    foldLive,
+    loseLive,
+    openPosition,
     partialCashoutStep,
+    positionString,
+    positionValue,
+    type Position,
 } from './partial-cashout';
 
 export const GAME_TYPE = 'hilo:v1';
@@ -114,6 +129,7 @@ export function replay(
     serverSeed: string,
     clientSeed: string,
     actions: TranscriptAction[],
+    stakeUnits: bigint,
 ): ReplayResult {
     if (actions.length === 0 || actions[0].actionType !== 'place-bet') {
         throw new ReplayError('hilo transcript must start with place-bet');
@@ -125,6 +141,7 @@ export function replay(
     let outcome: Outcome = 'lose';
     let settled = false;
     let bankedTotal = ZERO_BANKED;
+    let position: Position = openPosition(stakeUnits);
 
     steps.push({
         actionIndex: 0,
@@ -151,6 +168,7 @@ export function replay(
                     action.actionType === 'higher' ? current.higherMultiplierPpm : current.lowerMultiplierPpm;
 
                 cumulative = win ? mulPpm(cumulative, quoted) : 0n;
+                position = win ? foldLive(position, quoted) : loseLive(position);
 
                 steps.push({
                     actionIndex: action.actionIndex,
@@ -198,12 +216,14 @@ export function replay(
                 const banked = decodePartialCashout(action.payload);
 
                 bankedTotal = addBanked(bankedTotal, banked);
+                position = bankFromLive(position, banked.amount);
                 steps.push(partialCashoutStep(action.actionIndex, banked, bankedTotal, cumulative));
                 break;
             }
             case 'abandon':
-                cumulative = 0n;
-                steps.push(abandonStep(action.actionIndex, bankedAmountString(bankedTotal)));
+                // The chain is left where the last guess put it, exactly as a
+                // cashout leaves it: the abandon deals no card.
+                steps.push(abandonStep(action.actionIndex, position, cumulative));
                 outcome = 'lose';
                 settled = true;
                 break;
@@ -212,17 +232,35 @@ export function replay(
         }
     }
 
-    return { gameType: GAME_TYPE, steps, cumulativePpm: cumulative, outcome, settled };
+    return {
+        gameType: GAME_TYPE,
+        steps,
+        cumulativePpm: cumulative,
+        outcome,
+        settled,
+        payoutUnits: positionValue(position),
+        bankedUnits: position.bankedUnits,
+    };
 }
 
-/** Abandonment is a real engine action: the live position is forfeited but
- *  the banked total (already the player's) is the round's payout. */
-export function abandonStep(actionIndex: number, bankedTotal: string): StepWorking {
+/**
+ * Abandonment is a real engine action for the compounding games: it settles
+ * the round at the position's CURRENT value, `banked + live` — what a cashout
+ * would pay — with outcome `lose`, because no player decision ended it.
+ * Shared with mines, whose engine applies the same rule.
+ */
+export function abandonStep(actionIndex: number, position: Position, cumulativePpm: bigint): StepWorking {
     return {
         actionIndex,
         actionType: 'abandon',
-        title: `abandon (system) — live position forfeited, pays the banked total ${bankedTotal}`,
-        details: [['rule', 'abandonment settles as a loss paying the banked total']],
-        cumulativePpm: 0n,
+        title: `abandon (system) — settles at the position's current value: ${positionString(position)}`,
+        details: [
+            [
+                'rule',
+                'an abandon pays banked + live, exactly what a cashout would pay here (sec-28: the one step the sequencer writes without a player signature must gain a forger nothing)',
+            ],
+            ['outcome', 'lose — the round did not end on a decision of yours; only the payout rule changed'],
+        ],
+        cumulativePpm,
     };
 }

@@ -305,9 +305,19 @@ nonce**. Both seeds enter as their 64-character lowercase hex, and
 seed bytes and its payout rule is specified, with golden vectors, in
 `vectors/*.json` (the `algorithm` block of each file).
 
-The settlement rule at the trust boundary: the rollup replays the transcript,
-computes the cumulative multiplier in exact integer ppm, and credits
-`payout = floor(stake × cumulative_ppm / 1_000_000)`, in the same atomic units.
+The settlement rule at the trust boundary: the rollup replays the transcript
+and credits the engine's `amount_won`, truncated toward zero to the asset's
+grain, in the same atomic units. For the compounding games (hilo, mines,
+hydra) that is the banked/live fold of `libs/games/src/partial_cashout.rs`:
+the live position starts at the stake, each winning step rounds it half-up at
+the asset grain (`live' = half_up(live × step_ppm / 1_000_000)`), each
+`partial-cashout` moves its amount from live to banked, a lost decision zeroes
+live, and a cashout — or, since sec-28, an `abandon` — pays `banked + live`.
+For the single-decision games (crash, plinko) there is nothing to fold and it
+collapses to `payout = floor(stake × cumulative_ppm / 1_000_000)`. Note that
+`floor(stake × cumulative)` is NOT the rule for a multi-step round: the
+per-step rounding makes the two differ by a few atomic units, and a
+`partial-cashout` by the whole banked amount.
 Compare that against `claimed_payout` — on mismatch, the rollup records a discrepancy
 and credits its own computed value, so the sequencer's claim is advisory,
 never authoritative. There is no claimed outcome on the wire at all: the

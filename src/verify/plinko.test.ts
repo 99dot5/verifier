@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { vectorsUrl } from './vectors-path';
 import { describe, expect, it } from 'vitest';
-import { decimalStringToUnits, payoutUnits, unitsToDecimalString } from './ints';
+import { decimalStringToUnits, unitsToDecimalString } from './ints';
 import { bytesToHex, deriveSeed, hexToBytes } from './seed';
 import { GAME_TYPE, binIndex, derivePath, exactRtp, multipliers, replay, type Risk } from './plinko';
 
@@ -68,21 +68,33 @@ describe('plinko:v1 vectors', () => {
             expect(derivePath(seed, rv.rows)).toEqual(rv.path);
             expect(binIndex(rv.path)).toBe(rv.bin_index);
 
+            const stakeUnits = decimalStringToUnits(rv.stake, 6);
+            const placeBet = {
+                actionIndex: 0,
+                actionType: 'place-bet',
+                payload: hexToBytes(rv.place_bet_payload_borsh_hex),
+            };
             const result = replay(rv.server_seed, rv.client_seed, [
-                {
-                    actionIndex: 0,
-                    actionType: 'place-bet',
-                    payload: hexToBytes(rv.place_bet_payload_borsh_hex),
-                },
+                placeBet,
                 { actionIndex: 1, actionType: 'cashout', payload: new Uint8Array() },
-            ]);
+            ], stakeUnits);
 
             expect(result.settled).toBe(true);
             expect(result.cumulativePpm).toBe(BigInt(rv.multiplier_ppm));
+            expect(unitsToDecimalString(result.payoutUnits, 6)).toBe(rv.payout);
+            expect(result.bankedUnits).toBe(0n);
 
-            const stakeUnits = decimalStringToUnits(rv.stake, 6);
+            // sec-28: a system abandon settles at the sealed outcome, exactly
+            // what the cashout pays — the kernel substitutes the cashout.
+            const abandoned = replay(rv.server_seed, rv.client_seed, [
+                placeBet,
+                { actionIndex: 1, actionType: 'abandon', payload: new Uint8Array() },
+            ], stakeUnits);
 
-            expect(unitsToDecimalString(payoutUnits(stakeUnits, result.cumulativePpm), 6)).toBe(rv.payout);
+            expect(abandoned.settled).toBe(true);
+            expect(abandoned.payoutUnits).toBe(result.payoutUnits);
+            expect(abandoned.outcome).toBe(result.outcome);
+            expect(abandoned.steps[1].title).toContain('sealed outcome');
         }
     });
 });

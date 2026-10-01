@@ -44,13 +44,13 @@ import {
 } from './receipts/recompute';
 import { splitSignedFrame, verifyServerFrameSignature, CLIENT_FRAME_TAG } from './wire/signature';
 import { TRANSCRIPT_DECIMALS } from './verify/assets';
-import { payoutUnits, unitsToDecimalString } from './verify/ints';
+import { unitsToDecimalString } from './verify/ints';
 import { bytesEqual, bytesToHex, serverSeedCommitment } from './verify/seed';
 import * as crash from './verify/crash';
 import * as hilo from './verify/hilo';
 import * as mines from './verify/mines';
 import * as plinko from './verify/plinko';
-import { ReplayError, type ReplayResult, type TranscriptAction } from './verify/types';
+import { ReplayError, type ReplayResult, type Replayer, type TranscriptAction } from './verify/types';
 import type { RoundTranscriptMessage } from './wire/messages';
 import { decodeEdpk, type SigningDomain, verifyInboxSignature, verifyPrehashedSignature } from './wire/signature';
 import {
@@ -225,7 +225,7 @@ export interface VerificationReport {
  * the one that recomputes its money. A pre-existing limit, named here so it
  * reads as a gap rather than as a verdict about the round.
  */
-const REPLAYERS: Record<string, (s: string, c: string, a: TranscriptAction[]) => ReplayResult> = {
+const REPLAYERS: Record<string, Replayer> = {
     [crash.GAME_TYPE]: crash.replay,
     [hilo.GAME_TYPE]: hilo.replay,
     [plinko.GAME_TYPE]: plinko.replay,
@@ -595,16 +595,25 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         }));
 
         try {
-            replayResult = replayer(serverSeedHex, clientSeedHex, actions);
+            replayResult = replayer(serverSeedHex, clientSeedHex, actions, transcript.stake);
 
-            const computedPayout = payoutUnits(transcript.stake, replayResult.cumulativePpm);
+            // The replayer carries the payout itself: for the compounding
+            // games it is the banked/live fold (live rounded at the asset
+            // grain on every winning step, each partial-cashout moving value
+            // from live to banked), for crash/plinko it collapses to
+            // floor(stake × cumulative / 1e6). A single `floor(stake ×
+            // cumulative)` here would disagree with the kernel on every
+            // multi-step or de-levered round — see `verify/ints.ts`.
+            const computedPayout = replayResult.payoutUnits;
+            const liveUnits = computedPayout - replayResult.bankedUnits;
             const payoutMatches = computedPayout === transcript.claimedPayout;
+            const tez = (units: bigint): string => unitsToDecimalString(units, TRANSCRIPT_DECIMALS);
 
             checks.push({
                 id: 'replay-payout',
                 title: 'Recomputed payout equals the claimed payout',
                 status: payoutMatches ? 'pass' : 'fail',
-                detail: `floor(stake ${transcript.stake} × cumulative ${replayResult.cumulativePpm} ppm / 1e6) = ${computedPayout} mutez (${unitsToDecimalString(computedPayout, TRANSCRIPT_DECIMALS)} TEZ) vs claimed ${transcript.claimedPayout}. Derivation inputs are exactly (game_type, server_seed, client_seed, action_index) — there is no operator-controlled nonce, and the action index is the action's position in the transcript.`,
+                detail: `banked ${replayResult.bankedUnits} + live ${liveUnits} = ${computedPayout} mutez (${tez(computedPayout)} TEZ) vs claimed ${transcript.claimedPayout} (${tez(transcript.claimedPayout)} TEZ), from stake ${transcript.stake} at cumulative ${replayResult.cumulativePpm} ppm. The kernel's rule (libs/smart-rollup/src/games.rs, libs/games/src/partial_cashout.rs): the live position folds per winning step at the asset grain (half-up at ${TRANSCRIPT_DECIMALS} dp), each partial-cashout moves value from live to banked, and the sum is truncated to atomic units; for crash and plinko this collapses to floor(stake × cumulative / 1e6). Derivation inputs are exactly (game_type, server_seed, client_seed, action_index) — there is no operator-controlled nonce, and the action index is the action's position in the transcript.`,
             });
             checks.push({
                 id: 'replay-outcome',

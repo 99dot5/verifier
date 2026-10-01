@@ -9,7 +9,7 @@
  * deadline-swept round pays identically to a player-collected one.
  */
 import { SCALE_PPM } from './constants';
-import { ppmToMultiplierString } from './ints';
+import { payoutUnits, ppmToMultiplierString } from './ints';
 import { bytesToHex, deriveSeed } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 
@@ -128,7 +128,12 @@ export function outcomeFromMultiplier(multiplierPpm: bigint): Outcome {
 }
 
 /** Replay a full plinko transcript exactly the way the rollup kernel does. */
-export function replay(serverSeed: string, clientSeed: string, actions: TranscriptAction[]): ReplayResult {
+export function replay(
+    serverSeed: string,
+    clientSeed: string,
+    actions: TranscriptAction[],
+    stakeUnits: bigint,
+): ReplayResult {
     if (actions.length === 0 || actions[0].actionType !== 'place-bet') {
         throw new ReplayError('plinko transcript must start with place-bet');
     }
@@ -160,8 +165,8 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
             cumulativePpm: multiplierPpm,
         },
     ];
-    let outcome: Outcome = outcomeFromMultiplier(multiplierPpm);
-    let cumulative = multiplierPpm;
+    const outcome: Outcome = outcomeFromMultiplier(multiplierPpm);
+    const cumulative = multiplierPpm;
     let settled = false;
 
     for (const action of actions.slice(1)) {
@@ -183,14 +188,20 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
                 settled = true;
                 break;
             case 'abandon':
-                cumulative = 0n;
-                outcome = 'lose';
+                // The kernel substitutes the cashout the state admits for a
+                // system abandon (sec-28). Plinko's outcome is sealed at
+                // place-bet and its cashout is payload-free, so an abandon pays
+                // exactly what the player's — or the deadline sweep's — cashout
+                // pays. The old lose/0 override let an operator read the sealed
+                // result and forge an abandon on winners only.
                 steps.push({
                     actionIndex: action.actionIndex,
                     actionType: 'abandon',
-                    title: 'abandon (system) — round forfeited, pays 0',
-                    details: [['rule', 'the rollup overrides an abandoned plinko round to lose / 0']],
-                    cumulativePpm: 0n,
+                    title: `abandon (system) — settles at the sealed outcome, exactly what a cashout pays (sec-28): ${ppmToMultiplierString(multiplierPpm)}`,
+                    details: [
+                        ['rule', 'the rollup replays a system abandon as the cashout the state admits; for plinko that is the sealed multiplier, so the abandon and the cashout pay identically'],
+                    ],
+                    cumulativePpm: multiplierPpm,
                 });
                 settled = true;
                 break;
@@ -199,5 +210,15 @@ export function replay(serverSeed: string, clientSeed: string, actions: Transcri
         }
     }
 
-    return { gameType: GAME_TYPE, steps, cumulativePpm: cumulative, outcome, settled };
+    return {
+        gameType: GAME_TYPE,
+        steps,
+        cumulativePpm: cumulative,
+        outcome,
+        settled,
+        // Single decision, no banked/live split: the kernel's fold collapses to
+        // one floor division.
+        payoutUnits: payoutUnits(stakeUnits, cumulative),
+        bankedUnits: 0n,
+    };
 }

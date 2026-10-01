@@ -535,6 +535,27 @@ describe('a cashout the server never answered', () => {
         expect(result.findings.join(' ')).toContain('settled on an expire');
     });
 
+    it('treats a round settled on a system abandon as the same shape', () => {
+        // A dropped cashout on plinko (or hilo/mines) is settled by the sweep's
+        // `abandon`, not by crash's `expire`; the shape is the same and so is
+        // the report. Since sec-28 the kernel pays the abandon what the cashout
+        // would have, so this is about the unanswered command, not the money.
+        const result = run({
+            gameType: 'plinko:v1',
+            actions: [act(0, 'place-bet', new Uint8Array([...u32(8), 0])), act(1, 'abandon')],
+            binding: [{ requestId: BET, index: 0 }],
+            commands: [
+                command(BET, 'placeBet', { game: 'plinko', rows: 8, risk: 1 }),
+                command(SETTLE, 'cashOut', { game: 'plinko' }),
+            ],
+        });
+
+        expect(result.status).toBe('pass');
+        expect(result.findings.join(' ')).toContain('the transcript carries no cashout action bound to it');
+        expect(result.findings.join(' ')).toContain('settled on a system abandon');
+        expect(result.findings.join(' ')).toContain('REPORTED, NEVER CONCLUDED');
+    });
+
     it('quotes the client’s own send count when the command went out more than once', () => {
         // The one fact that separates "an unlucky packet" from "it kept being
         // ignored", and it is the player's label rather than anything signed.
@@ -608,13 +629,15 @@ describe('a cashout the server never answered', () => {
         expect(result.status).toBe('pass');
     });
 
-    it('reports rather than concludes when the round did not settle on an expire', () => {
+    it('reports rather than concludes when the round settled on neither an expire nor an abandon', () => {
+        // A transcript that never reached a system settle (here, one that
+        // never settled at all) is not the shape a dropped cashout leaves.
         const result = suppressed({
-            actions: [act(0, 'place-bet', new Uint8Array([0x00])), act(1, 'abandon')],
+            actions: [act(0, 'place-bet', new Uint8Array([0x00]))],
         });
 
         expect(result.status).toBe('pass');
-        expect(result.findings.join(' ')).toContain('did not settle on an expire');
+        expect(result.findings.join(' ')).toContain('did not settle on an expire or a system abandon');
     });
 
     it('is silent when the cashout IS the action at the index it was bound to', () => {

@@ -49,16 +49,20 @@
  *
  * The phase's central proof, and the one that does not fit the per-index shape
  * above. A server suppressing a cashout does not write a WRONG action — it
- * writes none at all: it drops the command and lets the deadline sweep settle
- * the round, which for a manual crash round is an `expire`, an action every
- * "legal with no bound command" rule whitelists as unremarkable. So the rule
- * runs over the COMMANDS instead of over the actions:
+ * writes none at all: it drops the command and lets a system step settle the
+ * round — the deadline sweep's `expire` on a manual crash round, or an
+ * `abandon` on any game — actions every "legal with no bound command" rule
+ * whitelists as unremarkable. So the rule runs over the COMMANDS instead of
+ * over the actions:
  *
  *   For every `CashOut` command in the export whose own signed body names the
  *   round under verification, look for EITHER a `cashout` action at the index
  *   the reconstruction binds it to, OR a signed `CommandRejected` naming the
  *   round and trusted under `rejections.ts`'s rule. Neither, with the round
- *   settled on `expire`, is the suppressed-cashout SHAPE.
+ *   settled on `expire` or on a system `abandon`, is the suppressed-cashout
+ *   SHAPE. (Since sec-28 the kernel settles an abandon at the cashout the
+ *   state admits, so the forgery no longer PAYS — but the dropped command is
+ *   still the player's evidence, and this rule still reports it.)
  *
  * Any trusted refusal counts as an answer, deliberately — the alternative is
  * this rule second-guessing a reason code, which is the server's to choose.
@@ -531,7 +535,11 @@ function suppressionRows(
 ): Row[] {
     const rows: Row[] = [];
     const seen = new Set<string>();
-    const settledOnExpire = input.actions.some((action) => action.actionType === 'expire');
+    // The system steps a dropped cashout leaves the round to settle on: the
+    // deadline sweep's `expire` (manual crash) or an `abandon` (any game).
+    const systemSettle = input.actions.find(
+        (action) => action.actionType === 'expire' || action.actionType === 'abandon',
+    );
 
     for (const command of input.commands) {
         const decoded = decodeCommand(input.commands, command.requestId, command);
@@ -592,18 +600,24 @@ function suppressionRows(
             `you signed a CashOut (request ${command.requestId}) naming round ${input.roundIdHex}; the transcript carries no cashout action bound to it and your receipts carry no signed refusal naming the round` +
             (game === 'crash' && mode.status === 'ok' ? ` (the round was opened in ${mode.mode} mode)` : '');
 
-        if (!settledOnExpire) {
-            // Not even the suppression SHAPE: without an `expire` the round did
-            // not settle as the loss a dropped cashout produces, so the missing
-            // action has explanations a report must not choose between.
+        if (!systemSettle) {
+            // Not even the suppression SHAPE: without an `expire` or an
+            // `abandon` the round did not settle on a system step the way a
+            // dropped cashout leaves it to, so the missing action has
+            // explanations a report must not choose between.
             findings.push(
-                `${evidence}. The round did not settle on an expire, so this is reported rather than concluded — the command may have been sent after the round had already settled by another path.`,
+                `${evidence}. The round did not settle on an expire or a system abandon, so this is reported rather than concluded — the command may have been sent after the round had already settled by another path.`,
             );
 
             continue;
         }
 
-        findings.push(`${evidence}, and the round settled on an expire (the deadline sweep's terminal loss). ${deliveryEvidence(input, command)}`);
+        const settledOn =
+            systemSettle.actionType === 'expire'
+                ? "settled on an expire (the deadline sweep's terminal loss)"
+                : 'settled on a system abandon (the sweep\'s settle for a round it found open — since sec-28 the kernel pays it what a cashout would have, so the money is yours either way, but the command you sent went unanswered)';
+
+        findings.push(`${evidence}, and the round ${settledOn}. ${deliveryEvidence(input, command)}`);
     }
 
     return rows;

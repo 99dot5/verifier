@@ -31,7 +31,23 @@ export interface ReplayResult {
     outcome: Outcome;
     /** False when the transcript ends without a settling action. */
     settled: boolean;
+    /**
+     * The kernel's `u128` payout in the asset's atomic units: `banked + live`
+     * after the fold, truncated to the grain. This — not `cumulativePpm` — is
+     * what the chain compares against `claimed_payout`.
+     */
+    payoutUnits: bigint;
+    /** The banked part of `payoutUnits` (0 for the single-decision games). */
+    bankedUnits: bigint;
 }
+
+/** Every replayer's shape; `stakeUnits` is the transcript's stake in atomic units. */
+export type Replayer = (
+    serverSeed: string,
+    clientSeed: string,
+    actions: TranscriptAction[],
+    stakeUnits: bigint,
+) => ReplayResult;
 
 /** Thrown when a transcript is malformed — mirrors the kernel's replay rejections. */
 export class ReplayError extends Error {}

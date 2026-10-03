@@ -1,44 +1,255 @@
 /**
  * Provably-fair seed derivation, byte-for-byte mirroring
- * `libs/game-engine-core/src/rng.rs::derive_seed` — and the seed-commitment
- * hashes mirroring `services/sequencer/src/seed_provisioner/seeds.rs`.
+ * `libs/game-engine-core/src/rng/v1.rs`, selected per game version as the
+ * engines select it — and the seed-commitment hashes
+ * mirroring `services/sequencer/src/seed_provisioner/seeds.rs`.
  *
  * The derivation input is EXACTLY `(game_type, server_seed, client_seed,
- * action_index)` — there is no operator-controlled nonce anywhere in it. The
- * only operator-supplied input is `server_seed`, and that is pre-committed
+ * decision, chunk)` — there is no operator-controlled nonce anywhere in it.
+ * The only operator-supplied input is `server_seed`, and that is pre-committed
  * on-chain (hash published in a `SeedBatch` inbox message) before the round
  * exists, which is what the commitment half of this verifier proves.
+ *
+ * A seed is keyed by the round's DECISION, not by the action's position in the
+ * transcript: a system step the sequencer inserts (a max-win partial cashout)
+ * consumes an action index but draws nothing, so under the decision key it
+ * cannot move a later draw.
  */
 import { blake2b } from '@noble/hashes/blake2.js';
 
 const encoder = new TextEncoder();
 
 /**
- * `blake2b-256("game-seed|" + game_type + "|" + server_seed + "|" +
- * client_seed + "|" + action_index.to_le_bytes(i32))`.
+ * The seed derivations this verifier knows by name. Each game version names
+ * the rule it replays under ({@link GAME_SEED_DERIVATIONS}), because a round
+ * replayed under a rule its engine did not run recomputes a different
+ * outcome. The verifier SELECTS the rule by the round's `game_type`
+ * ({@link seedRuleForGame}); nothing replays under a global one.
  *
- * The pipe separators are literal bytes; the strings are UTF-8; the action
- * index is a 4-byte little-endian SIGNED 32-bit integer.
+ * - `v1`: the layout of {@link seedPreimage}, under the domain
+ *   `99dot5:engine-seed:v1`.
  */
+export const DERIVATIONS = ['v1'] as const;
+export type Derivation = (typeof DERIVATIONS)[number];
+
+/** Every engine-seed domain is this prefix followed by the derivation's name. */
+export const ENGINE_SEED_DOMAIN_PREFIX = '99dot5:engine-seed:';
+
+/**
+ * The domain a derivation's preimages start with. Built from the identifier,
+ * so the name a game version states and the bytes its rule hashes cannot drift.
+ */
+export function engineSeedDomain(derivation: Derivation): string {
+    return ENGINE_SEED_DOMAIN_PREFIX + derivation;
+}
+/** How many 32-byte chunks one decision may draw. */
+export const MAX_CHUNKS_PER_DECISION = 4;
+/** The byte budget of one decision. */
+export const DECISION_STREAM_BYTES = MAX_CHUNKS_PER_DECISION * 32;
+
+function lengthPrefixed(field: string, name: string): Uint8Array {
+    const bytes = encoder.encode(field);
+
+    if (bytes.length > 255) {
+        throw new RangeError(`${name} is ${bytes.length} bytes; a length-prefixed seed field holds at most 255`);
+    }
+
+    return concatBytes(new Uint8Array([bytes.length]), bytes);
+}
+
+function u32Le(value: number, name: string): Uint8Array {
+    if (!Number.isInteger(value) || value < 0 || value > 0xffff_ffff) {
+        throw new RangeError(`${name} must be a u32, got ${value}`);
+    }
+
+    const out = new Uint8Array(4);
+
+    new DataView(out.buffer).setUint32(0, value, true);
+
+    return out;
+}
+
+function layoutPreimage(
+    domain: string,
+    gameType: string,
+    serverSeed: string,
+    clientSeed: string,
+    decision: number,
+    chunk: number,
+): Uint8Array {
+    return concatBytes(
+        encoder.encode(domain),
+        lengthPrefixed(gameType, 'game_type'),
+        lengthPrefixed(serverSeed, 'server_seed'),
+        lengthPrefixed(clientSeed, 'client_seed'),
+        u32Le(decision, 'decision'),
+        u32Le(chunk, 'chunk'),
+    );
+}
+
+/**
+ * The `v1` rule's exact bytes hashed for one 32-byte chunk:
+ *
+ *   "99dot5:engine-seed:v1" (21 ASCII bytes)
+ *   ‖ u8 len ‖ game_type ‖ u8 len ‖ server_seed ‖ u8 len ‖ client_seed
+ *   ‖ decision u32 LE ‖ chunk u32 LE
+ *
+ * The two u32s sit at fixed offsets after the last length-prefixed field, so
+ * they need no separator.
+ *
+ * The seeds are the 64-char lowercase hex strings, as UTF-8 bytes — the same
+ * strings the commitment is computed over.
+ */
+export function seedPreimage(
+    gameType: string,
+    serverSeed: string,
+    clientSeed: string,
+    decision: number,
+    chunk: number,
+): Uint8Array {
+    return layoutPreimage(engineSeedDomain('v1'), gameType, serverSeed, clientSeed, decision, chunk);
+}
+
+/** The `v1` rule's chunk: `blake2b-256(seedPreimage(…))`. */
 export function deriveSeed(
     gameType: string,
     serverSeed: string,
     clientSeed: string,
-    actionIndex: number,
+    decision: number,
+    chunk: number,
 ): Uint8Array {
-    const indexBytes = new Uint8Array(4);
-
-    new DataView(indexBytes.buffer).setInt32(0, actionIndex, true);
-
-    const payload = concatBytes(
-        encoder.encode(`game-seed|${gameType}|${serverSeed}|${clientSeed}|`),
-        indexBytes,
-    );
-
-    return blake2b(payload, { dkLen: 32 });
+    return blake2b(seedPreimage(gameType, serverSeed, clientSeed, decision, chunk), { dkLen: 32 });
 }
 
-/** Little-endian u64 of `seed[0..8]` — the standard "one draw" reduction. */
+/** One seed derivation: its name, its domain, and how it builds and hashes a chunk's preimage. */
+export interface SeedRule {
+    readonly derivation: Derivation;
+    readonly domain: string;
+    preimage(gameType: string, serverSeed: string, clientSeed: string, decision: number, chunk: number): Uint8Array;
+    derive(gameType: string, serverSeed: string, clientSeed: string, decision: number, chunk: number): Uint8Array;
+}
+
+/**
+ * The rules this build implements, by derivation. A derivation absent here is
+ * one a game version may name but this verifier cannot replay.
+ */
+const SEED_RULES: Partial<Record<Derivation, SeedRule>> = {
+    v1: {
+        derivation: 'v1',
+        domain: engineSeedDomain('v1'),
+        preimage: seedPreimage,
+        derive: deriveSeed,
+    },
+};
+
+/** The derivations this verifier can replay: exactly the rule table's keys. */
+export const SUPPORTED_DERIVATIONS: readonly Derivation[] = DERIVATIONS.filter((d) => SEED_RULES[d] !== undefined);
+
+/** The rule `derivation` names. Throws for one this build does not implement. */
+export function seedRule(derivation: Derivation): SeedRule {
+    const rule = SEED_RULES[derivation];
+
+    if (rule === undefined) {
+        throw new RangeError(`seed derivation "${derivation}" is not implemented by this verifier`);
+    }
+
+    return rule;
+}
+
+/**
+ * The seed derivation each game version names: a mirror of every engine's
+ * `SEED_DERIVATION` const (`libs/games/src/<game>/v1/engine.rs`), pinned
+ * against each game's `vectors.json` `algorithm.derivation`. A game version
+ * names its rule once and never changes it; a new rule ships with new game
+ * versions.
+ */
+export const GAME_SEED_DERIVATIONS: Readonly<Record<string, Derivation>> = {
+    'crash:v1': 'v1',
+    'hilo:v1': 'v1',
+    'mines:v1': 'v1',
+    'plinko:v1': 'v1',
+    'hydra:v1': 'v1',
+};
+
+/**
+ * The rule a round of `gameType` replays under, or `undefined` for a game
+ * type this verifier does not know or whose rule it does not implement.
+ */
+export function seedRuleForGame(gameType: string): SeedRule | undefined {
+    const derivation = Object.hasOwn(GAME_SEED_DERIVATIONS, gameType) ? GAME_SEED_DERIVATIONS[gameType] : undefined;
+
+    return derivation === undefined ? undefined : SEED_RULES[derivation];
+}
+
+/**
+ * The bytes one decision draws under its game's rule ({@link seedRuleForGame}),
+ * read sequentially from chunk 0. Chunks are
+ * derived lazily, only when a read reaches them, and the stream refuses to
+ * read past {@link DECISION_STREAM_BYTES} (128 bytes) — the same
+ * budget the Rust engine enforces, so a port that over-reads fails loudly
+ * instead of agreeing with itself.
+ */
+export class SeedStream {
+    private readonly chunks: Uint8Array[] = [];
+    private readonly rule: SeedRule;
+    private offset = 0;
+
+    /** Throws for a game type with no implemented rule. */
+    constructor(
+        private readonly gameType: string,
+        private readonly serverSeed: string,
+        private readonly clientSeed: string,
+        readonly decision: number,
+    ) {
+        const rule = seedRuleForGame(gameType);
+
+        if (rule === undefined) {
+            throw new RangeError(`game ${gameType} names no seed derivation this verifier implements`);
+        }
+
+        this.rule = rule;
+    }
+
+    /** The next `n` bytes of the stream. */
+    take(n: number): Uint8Array {
+        if (!Number.isInteger(n) || n < 0) {
+            throw new RangeError(`cannot read ${n} bytes`);
+        }
+
+        const end = this.offset + n;
+
+        if (end > DECISION_STREAM_BYTES) {
+            throw new RangeError(`decision ${this.decision} would read ${end} bytes; the budget is ${DECISION_STREAM_BYTES}`);
+        }
+
+        const out = new Uint8Array(n);
+
+        for (let i = 0; i < n; i++) {
+            const position = this.offset + i;
+
+            out[i] = this.chunk(Math.floor(position / 32))[position % 32];
+        }
+
+        this.offset = end;
+
+        return out;
+    }
+
+    /** Every chunk derived so far, for display. */
+    derivedChunks(): Uint8Array[] {
+        return [...this.chunks];
+    }
+
+    private chunk(index: number): Uint8Array {
+        while (this.chunks.length <= index) {
+            this.chunks.push(this.rule.derive(this.gameType, this.serverSeed, this.clientSeed, this.decision, this.chunks.length));
+        }
+
+        return this.chunks[index];
+    }
+}
+
+/** Little-endian u64 of `bytes[0..8]` — the standard "one draw" reduction. */
 export function rawU64(seed: Uint8Array): bigint {
     let value = 0n;
 

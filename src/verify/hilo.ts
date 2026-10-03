@@ -2,7 +2,9 @@
  * hilo:v1 — integer reimplementation of `libs/games/src/hilo/v1/engine.rs`,
  * pinned against `libs/games/src/hilo/v1/testdata/vectors.json`.
  *
- * Each step derives one card from the seed at that step's `action_index`.
+ * Each card is one DECISION: the opening card is decision 0 and the k-th guess
+ * is decision k, counting only the steps that draw a card. Each draws 8 bytes
+ * from its decision's stream.
  * Both directional multipliers are quoted on the CURRENT card; a guess pays
  * the multiplier quoted on the card it was made against. An equal rank wins
  * BOTH directions.
@@ -13,8 +15,9 @@
  *
  * Two SYSTEM-ONLY transcript steps back the max-win cap
  * (docs/specs/max-win-cap.md): `partial-cashout` (banks part of the position
- * to the session balance — chain untouched; note it consumes an action
- * index, shifting every later card draw) and `abandon`, which settles the
+ * to the session balance — chain untouched; it consumes an action index but
+ * draws no card, so it does NOT advance the decision and moves no later card)
+ * and `abandon`, which settles the
  * round at the position's current value — `banked + live`, what a cashout
  * would pay — with outcome `lose`. It used to forfeit the live part; sec-28
  * (security finding sec-28, recorded in `docs/architecture.md`) closed that,
@@ -27,7 +30,7 @@
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { mulPpm, ppmToMultiplierString, toPpmRatio } from './ints';
-import { bytesToHex, deriveSeed, rawU64 } from './seed';
+import { SeedStream, bytesToHex, rawU64 } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import {
     ZERO_BANKED,
@@ -56,7 +59,8 @@ const TOTAL_RANKS = 13n;
 const DECK_SIZE = 52n;
 
 export interface HiloStep {
-    actionIndex: number;
+    /** The decision this card was drawn under: 0 = opening card, k = k-th guess. */
+    decision: number;
     seedHex: string;
     rawU64: bigint;
     deckIndex: number;
@@ -80,10 +84,15 @@ function quote(fairPpm: bigint): bigint {
     return mulPpm(fairPpm, HOUSE_EDGE_PPM);
 }
 
-/** Derive the card and both directional quotes at one action index. */
-export function hiloStep(serverSeed: string, clientSeed: string, actionIndex: number): HiloStep {
-    const seed = deriveSeed(GAME_TYPE, serverSeed, clientSeed, actionIndex);
-    const raw = rawU64(seed);
+/**
+ * Derive the card and both directional quotes at one decision: 0 for the
+ * opening card, k for the k-th guess. NOT the action index — a system step
+ * between two guesses draws nothing and does not advance it.
+ */
+export function hiloStep(serverSeed: string, clientSeed: string, decision: number): HiloStep {
+    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, decision);
+    const raw = rawU64(stream.take(8));
+    const seed = stream.derivedChunks()[0];
     // Lemire wide-reduction: (raw * 52) >> 64 — uniform in 0..=51, no modulo bias.
     const deckIndex = Number((raw * DECK_SIZE) >> 64n);
     const rankNumeric = (deckIndex % 13) + 1;
@@ -93,7 +102,7 @@ export function hiloStep(serverSeed: string, clientSeed: string, actionIndex: nu
     const lowerProbabilityPpm = toPpmRatio(lowerCount, TOTAL_RANKS);
 
     return {
-        actionIndex,
+        decision,
         seedHex: bytesToHex(seed),
         rawU64: raw,
         deckIndex,
@@ -113,8 +122,9 @@ function cardName(step: HiloStep): string {
 
 function stepDetails(step: HiloStep): [string, string][] {
     return [
-        ['derived seed', step.seedHex],
-        ['raw u64 (LE of seed[0..8])', step.rawU64.toString()],
+        ['decision', String(step.decision)],
+        ['derived seed (chunk 0)', step.seedHex],
+        ['raw u64 (LE of the first 8 stream bytes)', step.rawU64.toString()],
         ['deck index ((raw × 52) >> 64)', String(step.deckIndex)],
         ['card', `${cardName(step)} (rank ${step.rankNumeric})`],
         ['P(lower or equal)', `${step.lowerProbabilityPpm} ppm`],
@@ -136,7 +146,10 @@ export function replay(
     }
 
     const steps: StepWorking[] = [];
-    let current = hiloStep(serverSeed, clientSeed, 0);
+    // The decision counter: the opening card is decision 0, and only a step
+    // that DRAWS a card advances it.
+    let decision = 0;
+    let current = hiloStep(serverSeed, clientSeed, decision);
     let cumulative = SCALE_PPM;
     let outcome: Outcome = 'lose';
     let settled = false;
@@ -159,7 +172,9 @@ export function replay(
         switch (action.actionType) {
             case 'higher':
             case 'lower': {
-                const next = hiloStep(serverSeed, clientSeed, action.actionIndex);
+                decision += 1;
+
+                const next = hiloStep(serverSeed, clientSeed, decision);
                 const win =
                     action.actionType === 'higher'
                         ? next.rankNumeric >= current.rankNumeric

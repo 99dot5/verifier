@@ -20,8 +20,11 @@ import {
     multiplierPpm,
     replay,
 } from './crash';
+import { payoutUnits } from './ints';
 import { ReplayError, type TranscriptAction } from './types';
 import { supportedGameTypes } from '../verifier';
+
+/** The seed rule every listed deployment selects today. */
 
 interface MultiplierVector {
     n: number;
@@ -29,6 +32,11 @@ interface MultiplierVector {
 }
 
 interface RoundVector {
+    /** Present on the rows a test addresses by name; the predicate is what the generator searched for. */
+    name?: string;
+    predicate?: string;
+    /** The generator's search counter for a named row. */
+    search_index?: number;
     server_seed: string;
     client_seed: string;
     raw_u64: string;
@@ -90,8 +98,31 @@ function cashout(tick: number): TranscriptAction {
     return { actionIndex: 1, actionType: 'cashout', payload: u32Le(tick) };
 }
 
-// server-2 / client-seed: crash_tick 41, so tick 40 is the last winning tick.
-const CRASH_AT_41 = vectors.round_vectors.find((rv) => rv.crash_tick === 41);
+/**
+ * A round vector addressed by its NAME, never by a seed-derived value. The
+ * generator searches for each named row's seed until its predicate holds; when
+ * the seed derivation changes it appends a freshly searched row rather than
+ * editing an existing one, so the tests below follow the name and never a
+ * hardcoded tick or a row position.
+ */
+function namedRound(name: string): RoundVector {
+    const row = vectors.round_vectors.find((rv) => rv.name === name);
+
+    if (row === undefined) {
+        throw new Error(`crash vectors.json has no round_vectors row named ${name}`);
+    }
+
+    return row;
+}
+
+// Predicate 41 <= crash_tick <= 100: a mid-curve round with room for a winning
+// auto target well below the crash and a losing claim past it.
+const MID_CURVE = namedRound('crash-mid-curve');
+const CRASH_TICK = BigInt(MID_CURVE.crash_tick);
+/** The last winning tick: a cashout here takes the round's best multiplier. */
+const LAST_WIN_TICK = CRASH_TICK - 1n;
+/** An auto target comfortably inside the winning range. */
+const AUTO_TICK = CRASH_TICK / 2n;
 const STAKE_MUTEZ = 100_000_000n; // 100 TEZ
 
 describe('crash:v1 vectors', () => {
@@ -116,10 +147,18 @@ describe('crash:v1 vectors', () => {
     });
 
     it('reproduces every round vector: raw u64, crash point, crash tick, best cashout', () => {
-        expect(vectors.round_vectors).toHaveLength(6);
+        // No hardcoded total and no unnamed count: a searched seed that equals
+        // an existing row's names that row in place, otherwise it is APPENDED,
+        // so neither number is stable. Six original rows is the floor, and
+        // every name the tests address must be present as a searched row.
+        expect(vectors.round_vectors.length).toBeGreaterThanOrEqual(6);
+
+        for (const name of ['crash-mid-curve', 'crash-instant-bust', 'crash-at-cap']) {
+            expect(namedRound(name).search_index).toBeTypeOf('number');
+        }
 
         for (const rv of vectors.round_vectors) {
-            const seed = deriveSeed(GAME_TYPE, rv.server_seed, rv.client_seed, 0);
+            const seed = deriveSeed(GAME_TYPE, rv.server_seed, rv.client_seed, 0, 0);
 
             expect(rawU64(seed).toString()).toBe(rv.raw_u64);
 
@@ -136,21 +175,20 @@ describe('crash:v1 vectors', () => {
     });
 
     it('covers both clamp endpoints with real vector rows', () => {
-        const instantBust = vectors.round_vectors.find((rv) => rv.crash_tick === 0);
-        const atCap = vectors.round_vectors.find((rv) => rv.crash_tick === 996);
+        const instantBust = namedRound('crash-instant-bust');
+        const atCap = namedRound('crash-at-cap');
 
         // The instant-bust row: crash point floored to 1.00×, no winning tick.
-        expect(instantBust).toBeDefined();
-        expect(instantBust?.crash_point_ppm).toBe(1_000_000);
-        expect(instantBust?.max_win_multiplier_ppm).toBe(0);
+        expect(instantBust.crash_tick).toBe(0);
+        expect(instantBust.crash_point_ppm).toBe(1_000_000);
+        expect(instantBust.max_win_multiplier_ppm).toBe(0);
 
         // The cap row: crash point ceilinged to 1000×, curve stops at tick 996.
-        expect(atCap).toBeDefined();
-        expect(atCap?.crash_point_ppm).toBe(1_000_000_000);
+        expect(atCap.crash_tick).toBe(Number(MAX_ROUND_TICK_CAP));
+        expect(atCap.crash_point_ppm).toBe(1_000_000_000);
 
         // Every cashout on an instant-bust round loses, tick 0 included.
-        const bust = instantBust as RoundVector;
-        const busted = replay(bust.server_seed, bust.client_seed, round(null, [cashout(0)]), STAKE_MUTEZ);
+        const busted = replay(instantBust.server_seed, instantBust.client_seed, round(null, [cashout(0)]), STAKE_MUTEZ);
 
         expect(busted.outcome).toBe('lose');
         expect(busted.cumulativePpm).toBe(0n);
@@ -159,37 +197,49 @@ describe('crash:v1 vectors', () => {
 });
 
 describe('crash:v1 replay', () => {
+    it('runs on a mid-curve row that still satisfies its predicate', () => {
+        // Every derived tick below leans on this range: a winning auto target
+        // strictly inside (0, crash), and a tick that fits one borsh byte.
+        expect(CRASH_TICK).toBeGreaterThanOrEqual(41n);
+        expect(CRASH_TICK).toBeLessThanOrEqual(100n);
+    });
+
     it('pays a manual cashout below the crash at m(tick)', () => {
-        const rv = CRASH_AT_41 as RoundVector;
-        const result = replay(rv.server_seed, rv.client_seed, round(null, [cashout(40)]), STAKE_MUTEZ);
+        const rv = MID_CURVE;
+        const result = replay(rv.server_seed, rv.client_seed, round(null, [cashout(Number(LAST_WIN_TICK))]), STAKE_MUTEZ);
 
         expect(result.settled).toBe(true);
         expect(result.outcome).toBe('cashout');
-        expect(result.cumulativePpm).toBe(multiplierPpm(40n));
-        expect(result.cumulativePpm).toBe(BigInt(rv.max_win_multiplier_ppm)); // tick 40 is the best available
-        expect(result.payoutUnits).toBe(131_950_800n);
+        expect(result.cumulativePpm).toBe(multiplierPpm(LAST_WIN_TICK));
+        expect(result.cumulativePpm).toBe(BigInt(rv.max_win_multiplier_ppm)); // the last winning tick is the best available
+        // Consistency only: payoutUnits is the helper replay itself calls. The
+        // payout math is pinned independently by the transcript_vectors below.
+        expect(result.payoutUnits).toBe(payoutUnits(STAKE_MUTEZ, multiplierPpm(LAST_WIN_TICK)));
+        // A strict win, so the payout figure discriminates a cashout from a refund.
+        expect(result.payoutUnits).toBeGreaterThan(STAKE_MUTEZ);
         expect(result.steps.map((s) => s.actionType)).toEqual(['place-bet', 'cashout']);
         // place-bet leaves the round in progress at 1.00× in both modes.
         expect(result.steps[0].cumulativePpm).toBe(1_000_000n);
     });
 
     it('settles an auto round at its pre-committed target tick', () => {
-        const rv = CRASH_AT_41 as RoundVector;
-        const actions = round(20, [cashout(20)]);
+        const rv = MID_CURVE;
+        const actions = round(Number(AUTO_TICK), [cashout(Number(AUTO_TICK))]);
 
-        expect(decodeConfig(actions[0].payload).autoCashoutTick).toBe(20n);
+        expect(decodeConfig(actions[0].payload).autoCashoutTick).toBe(AUTO_TICK);
 
         const result = replay(rv.server_seed, rv.client_seed, actions, STAKE_MUTEZ);
 
         expect(result.outcome).toBe('cashout');
-        expect(result.cumulativePpm).toBe(multiplierPpm(20n));
-        expect(result.payoutUnits).toBe(114_869_800n); // m(20) = 1.148698×
+        expect(result.cumulativePpm).toBe(multiplierPpm(AUTO_TICK));
+        // Consistency only; payout math is pinned by the transcript_vectors below.
+        expect(result.payoutUnits).toBe(payoutUnits(STAKE_MUTEZ, multiplierPpm(AUTO_TICK)));
     });
 
     it('loses a cashout at or past the crash tick', () => {
-        const rv = CRASH_AT_41 as RoundVector;
+        const rv = MID_CURVE;
 
-        for (const tick of [41, 42, 996]) {
+        for (const tick of [CRASH_TICK, CRASH_TICK + 1n, MAX_ROUND_TICK_CAP].map(Number)) {
             const result = replay(rv.server_seed, rv.client_seed, round(null, [cashout(tick)]), STAKE_MUTEZ);
 
             expect(result.outcome).toBe('lose');
@@ -198,7 +248,7 @@ describe('crash:v1 replay', () => {
     });
 
     it('loses a u32::MAX cashout — the comparison is on the UNCLAMPED tick', () => {
-        const rv = CRASH_AT_41 as RoundVector;
+        const rv = MID_CURVE;
         const actions = round(null, [cashout(0xffff_ffff)]);
 
         expect(decodeCashoutTick(actions[1].payload)).toBe(4_294_967_295n);
@@ -216,7 +266,7 @@ describe('crash:v1 replay', () => {
     it('settles expire, and a manual-round abandon, as lose / 0', () => {
         // A manual round has no cashout for the kernel to substitute on an
         // abandon, so it forfeits — the same loss as the sweep's expire.
-        const rv = CRASH_AT_41 as RoundVector;
+        const rv = MID_CURVE;
 
         for (const actionType of ['expire', 'abandon']) {
             const result = replay(
@@ -237,26 +287,28 @@ describe('crash:v1 replay', () => {
         // The kernel substitutes `Cashout { tick: target }` for a system abandon
         // on an auto round — the action the sweep itself writes — so a forged
         // abandon on an auto winner pays the win.
-        const rv = CRASH_AT_41 as RoundVector;
-        const viaCashout = replay(rv.server_seed, rv.client_seed, round(20, [cashout(20)]), STAKE_MUTEZ);
+        const rv = MID_CURVE;
+        const target = Number(AUTO_TICK);
+        const viaCashout = replay(rv.server_seed, rv.client_seed, round(target, [cashout(target)]), STAKE_MUTEZ);
         const viaAbandon = replay(
             rv.server_seed,
             rv.client_seed,
-            round(20, [{ actionIndex: 1, actionType: 'abandon', payload: new Uint8Array() }]),
+            round(target, [{ actionIndex: 1, actionType: 'abandon', payload: new Uint8Array() }]),
             STAKE_MUTEZ,
         );
 
         expect(viaAbandon.settled).toBe(true);
         expect(viaAbandon.outcome).toBe('cashout');
         expect(viaAbandon.cumulativePpm).toBe(viaCashout.cumulativePpm);
-        expect(viaAbandon.payoutUnits).toBe(114_869_800n); // m(20) = 1.148698×
-        expect(viaAbandon.steps[1].title).toContain('target tick 20');
+        // Consistency only; payout math is pinned by the transcript_vectors below.
+        expect(viaAbandon.payoutUnits).toBe(payoutUnits(STAKE_MUTEZ, multiplierPpm(AUTO_TICK)));
+        expect(viaAbandon.steps[1].title).toContain(`target tick ${target}`);
 
         // And an auto target past the crash is a determined loss either way.
         const lost = replay(
             rv.server_seed,
             rv.client_seed,
-            round(60, [{ actionIndex: 1, actionType: 'abandon', payload: new Uint8Array() }]),
+            round(Number(CRASH_TICK), [{ actionIndex: 1, actionType: 'abandon', payload: new Uint8Array() }]),
             STAKE_MUTEZ,
         );
 
@@ -265,20 +317,24 @@ describe('crash:v1 replay', () => {
     });
 
     it('NEGATIVE: one mutated payload byte changes the payout, so the replay check fails', () => {
-        const rv = CRASH_AT_41 as RoundVector;
-        const honest = round(null, [cashout(40)]);
+        const rv = MID_CURVE;
+        const honestTick = Number(LAST_WIN_TICK);
+        const honest = round(null, [cashout(honestTick)]);
         const honestResult = replay(rv.server_seed, rv.client_seed, honest, STAKE_MUTEZ);
         const claimedPayout = honestResult.payoutUnits;
 
-        // Flip the low byte of the borsh u32 tick: 40 → 39, one tick earlier.
-        const tampered = round(null, [cashout(40)]);
+        // Flip the low byte of the borsh u32 tick one tick earlier. The predicate
+        // keeps the crash tick below 256, so the whole tick lives in byte 0.
+        expect(honestTick).toBeLessThan(256);
 
-        tampered[1].payload[0] = 39;
+        const tampered = round(null, [cashout(honestTick)]);
+
+        tampered[1].payload[0] = honestTick - 1;
 
         const tamperedResult = replay(rv.server_seed, rv.client_seed, tampered, STAKE_MUTEZ);
 
         expect(tamperedResult.cumulativePpm).not.toBe(honestResult.cumulativePpm);
-        expect(tamperedResult.cumulativePpm).toBe(multiplierPpm(39n));
+        expect(tamperedResult.cumulativePpm).toBe(multiplierPpm(LAST_WIN_TICK - 1n));
 
         // This is the comparison verifier.ts's `replay-payout` check makes: the
         // recomputed payout no longer equals the payout the transcript claimed.
@@ -286,7 +342,7 @@ describe('crash:v1 replay', () => {
     });
 
     it('rejects a malformed transcript', () => {
-        const rv = CRASH_AT_41 as RoundVector;
+        const rv = MID_CURVE;
         const rejects = (actions: TranscriptAction[]) =>
             expect(() => replay(rv.server_seed, rv.client_seed, actions, STAKE_MUTEZ)).toThrow(ReplayError);
 

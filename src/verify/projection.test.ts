@@ -35,6 +35,8 @@ import { encodeUuid, ProtoWriter } from '../wire/proto-writer';
 import { decodeClientEnvelope } from '../wire/proto-reader';
 import { CLIENT_FRAME_TAG, splitSignedFrame } from '../wire/signature';
 
+/** The seed rule every listed deployment selects today. */
+
 const TENANT_SEED = new Uint8Array(32).fill(1);
 const SESSION_SEED = new Uint8Array(32).fill(2);
 const SESSION_ID = 'e2b6419a-ec4b-4eef-bdfa-802b6f338fc2';

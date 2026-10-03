@@ -12,6 +12,8 @@ import { deriveLayout, replay, stepMultiplierPpm, TOTAL_TILES } from './mines';
 import { mulPpm, SCALE_PPM } from './ints';
 import type { TranscriptAction } from './types';
 
+/** The seed rule every listed deployment selects today. */
+
 interface LayoutVector {
     server_seed: string;
     client_seed: string;

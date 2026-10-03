@@ -10,6 +10,8 @@ import { decimalStringToUnits, unitsToDecimalString } from './ints';
 import { bytesToHex, deriveSeed, hexToBytes } from './seed';
 import { GAME_TYPE, binIndex, derivePath, exactRtp, multipliers, replay, type Risk } from './plinko';
 
+/** The seed rule every listed deployment selects today. */
+
 interface TableVector {
     rows: number;
     risk: Risk;
@@ -62,7 +64,7 @@ describe('plinko:v1 vectors', () => {
 
     it('replays every round vector to the exact path, bin, multiplier, payout', () => {
         for (const rv of vectors.round_vectors) {
-            const seed = deriveSeed(GAME_TYPE, rv.server_seed, rv.client_seed, 0);
+            const seed = deriveSeed(GAME_TYPE, rv.server_seed, rv.client_seed, 0, 0);
 
             expect(bytesToHex(seed)).toBe(rv.seed_hex);
             expect(derivePath(seed, rv.rows)).toEqual(rv.path);

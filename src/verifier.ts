@@ -45,7 +45,7 @@ import {
 import { splitSignedFrame, verifyServerFrameSignature, CLIENT_FRAME_TAG } from './wire/signature';
 import { TRANSCRIPT_DECIMALS } from './verify/assets';
 import { unitsToDecimalString } from './verify/ints';
-import { bytesEqual, bytesToHex, serverSeedCommitment } from './verify/seed';
+import { bytesEqual, bytesToHex, seedRuleForGame, serverSeedCommitment } from './verify/seed';
 import * as crash from './verify/crash';
 import * as hilo from './verify/hilo';
 import * as mines from './verify/mines';
@@ -178,8 +178,11 @@ export type ReceiptsInput =
  *   `verified`     every proof ran and passed.
  *   `attested`     checked, but weakly — the reconstruction was unavailable,
  *                  so only the server's own signed statement was compared.
- *   `inconclusive` you did not look far enough: the scanned range does not
- *                  bracket the round, and widening it may change the answer.
+ *   `inconclusive` this verifier cannot answer as asked: the scanned range
+ *                  does not bracket the round (widening it may change the
+ *                  answer), or the round's rollup is not a listed
+ *                  deployment, or the round's game version names a seed
+ *                  derivation this build does not implement.
  *   `undetermined` cannot tell yet: no transcript on chain and no evidence the
  *                  injector ever drained past this round's outbox row.
  *   `suppressed`   the round is missing from L1 and the injector demonstrably
@@ -251,6 +254,18 @@ export interface VerifyInput {
      * `unavailable` — an absent proof, not a passed one.
      */
     signingDomain: SigningDomain | null;
+    /**
+     * Whether the round's rollup is a deployment `chain/networks.json` lists;
+     * `false` for a hand-typed address. Required, so no caller can forget it.
+     *
+     * The seed rule itself is not an input: each game version names its own
+     * ({@link seedRuleForGame}). The replay — and the crash-tick comparison
+     * in the refusal check, which derives from the same seed — runs ONLY on a
+     * listed deployment and under a rule this verifier implements. Anything
+     * else makes the round `inconclusive`: replaying under the wrong rule
+     * recomputes a different outcome and would accuse an honest server.
+     */
+    deploymentListed: boolean;
     /** Every decoded inbox message the caller gathered (any order, any kinds). */
     messages: InboxMessage[];
     /**
@@ -564,8 +579,18 @@ export function verifyRound(input: VerifyInput): VerificationReport {
     const unknownTags = transcript.actions
         .map((a, i) => ({ index: i, tag: a.tag, actionType: a.actionType }))
         .filter((a) => a.actionType === null);
+    // The seed rule is SELECTED by the round's game version, never a global
+    // default; the replayers resolve it themselves from the game type.
+    const replayRefusal = refuseReplay(input.deploymentListed, transcript.gameType);
 
-    if (!replayer) {
+    if (replayRefusal !== null) {
+        checks.push({
+            id: 'replay',
+            title: 'Round replays to the claimed payout',
+            status: 'unavailable',
+            detail: replayRefusal,
+        });
+    } else if (!replayer) {
         checks.push({
             id: 'replay',
             title: 'Round replays to the claimed payout',
@@ -585,8 +610,8 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         });
     } else {
         // The action's index IS its position in the transcript, so index 0 is
-        // always the place-bet and the engine's seed derivation
-        // (game_type, server_seed, client_seed, action_index) needs nothing
+        // always the place-bet. The seed derivation is keyed by DECISION, which
+        // each replayer counts itself from these actions, so it needs nothing
         // else off the wire.
         const actions: TranscriptAction[] = transcript.actions.map((a, index) => ({
             actionIndex: index,
@@ -613,7 +638,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                 id: 'replay-payout',
                 title: 'Recomputed payout equals the claimed payout',
                 status: payoutMatches ? 'pass' : 'fail',
-                detail: `banked ${replayResult.bankedUnits} + live ${liveUnits} = ${computedPayout} mutez (${tez(computedPayout)} TEZ) vs claimed ${transcript.claimedPayout} (${tez(transcript.claimedPayout)} TEZ), from stake ${transcript.stake} at cumulative ${replayResult.cumulativePpm} ppm. The kernel's rule (libs/smart-rollup/src/games.rs, libs/games/src/partial_cashout.rs): the live position folds per winning step at the asset grain (half-up at ${TRANSCRIPT_DECIMALS} dp), each partial-cashout moves value from live to banked, and the sum is truncated to atomic units; for crash and plinko this collapses to floor(stake × cumulative / 1e6). Derivation inputs are exactly (game_type, server_seed, client_seed, action_index) — there is no operator-controlled nonce, and the action index is the action's position in the transcript.`,
+                detail: `banked ${replayResult.bankedUnits} + live ${liveUnits} = ${computedPayout} mutez (${tez(computedPayout)} TEZ) vs claimed ${transcript.claimedPayout} (${tez(transcript.claimedPayout)} TEZ), from stake ${transcript.stake} at cumulative ${replayResult.cumulativePpm} ppm. The kernel's rule (libs/smart-rollup/src/games.rs, libs/games/src/partial_cashout.rs): the live position folds per winning step at the asset grain (half-up at ${TRANSCRIPT_DECIMALS} dp), each partial-cashout moves value from live to banked, and the sum is truncated to atomic units; for crash and plinko this collapses to floor(stake × cumulative / 1e6). Derivation inputs are exactly (game_type, server_seed, client_seed, decision, chunk) — there is no operator-controlled nonce, and the decision counts the round's drawing steps, so a system step the sequencer inserts cannot move a later draw.`,
             });
             checks.push({
                 id: 'replay-outcome',
@@ -733,8 +758,37 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         references,
         findings,
         scan: input.scan ?? null,
-        verdict: anyFail ? 'failed' : allProofsRan ? 'verified' : attested ? 'attested' : 'incomplete',
+        // A refused replay is `inconclusive`, not `incomplete`: the missing
+        // proof is not the player's to supply, and a verifier that implements
+        // the rule may still answer. A failed proof still wins — none of the
+        // checks that ran depends on the seed rule.
+        verdict: anyFail
+            ? 'failed'
+            : replayRefusal !== null
+              ? 'inconclusive'
+              : allProofsRan
+                ? 'verified'
+                : attested
+                  ? 'attested'
+                  : 'incomplete',
     };
+}
+
+/**
+ * Why the round cannot be replayed, or `null` when it can: its rollup is no
+ * listed deployment, or its game version names no seed rule this build
+ * implements (an unknown game type included).
+ */
+function refuseReplay(deploymentListed: boolean, gameType: string): string | null {
+    if (!deploymentListed) {
+        return 'unknown deployment: the rollup is not listed in chain/networks.json, so the kernel it runs is unknown and the round is not replayed. Choose a listed deployment.';
+    }
+
+    if (seedRuleForGame(gameType) === undefined) {
+        return `derivation not supported: game ${gameType} names no seed derivation this verifier implements`;
+    }
+
+    return null;
 }
 
 
@@ -1080,6 +1134,10 @@ function runReceiptProofs(
         gameType: chainRound?.gameType ?? null,
         serverSeedHex: chainRound?.serverSeedHex ?? null,
         clientSeedHex: chainRound?.clientSeedHex ?? null,
+        // The crash tick is derived only where the replay runs: on an unlisted
+        // rollup the check reports `unavailable` instead of contradicting the
+        // server with a tick the replay refused to derive.
+        deploymentListed: input.deploymentListed,
         // How the round SETTLED, from the chain: a liveness refusal on a round
         // that already ended by a claim is the correct answer, so only the
         // expire shape is eligible to contradict the seed.

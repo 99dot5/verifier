@@ -11,6 +11,8 @@
 // check, and every way a round can fail to verify.
 import * as ed from '@noble/ed25519';
 import { blake2b } from '@noble/hashes/blake2.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { InboxMessage } from './chain/inbox';
 import { supportedGameTypes, verifyRound } from './verifier';
@@ -18,10 +20,11 @@ import * as crash from './verify/crash';
 import * as hilo from './verify/hilo';
 import * as mines from './verify/mines';
 import * as plinko from './verify/plinko';
-import { REJECTION_CHECK_ID } from './verify/rejections';
+import { RACE_BAND_TICKS, REJECTION_CHECK_ID } from './verify/rejections';
 import { unitsToDecimalString } from './verify/ints';
 import { bytesToHex, hexToBytes, serverSeedCommitment } from './verify/seed';
 import type { Replayer } from './verify/types';
+import { vectorsUrl, type VectorGame } from './verify/vectors-path';
 import { actionTypeOf, tagOf } from './wire/action-tags';
 import { decodeExternalMessage } from './wire/messages';
 import { encodeEdpk, sequencerSigningPreimage, type SigningDomain } from './wire/signature';
@@ -37,6 +40,8 @@ import { STAKE_CHECK_ID } from './verify/stake';
 import { computeCommitment } from './receipts/commitment';
 import type { ImportedReceipts } from './receipts/import';
 import type { ReceiptsInput, ScanContext } from './verifier';
+
+/** The seed rule every listed deployment selects today. */
 
 // ── Test-local Borsh writer + frame builder ─────────────────────────────
 
@@ -128,15 +133,43 @@ const STAKE_MUTEZ = 100_000_000n;
 const STAKE_DECIMAL = unitsToDecimalString(STAKE_MUTEZ, 6);
 const STAKE_MONEY = { asset: 'TEZ', value: STAKE_DECIMAL };
 
+/** A named seed scenario from a game's vectors file (`hex_scenarios`). */
+interface HexScenario {
+    name: string;
+    predicate: string;
+    server_seed_hex: string;
+    effective_client_seed_hex: string;
+    /** HiLo scenarios only. */
+    winning_direction_at_1?: 'higher' | 'lower';
+}
+
+/**
+ * Seeds are read from a NAMED scenario, never written here: the vectors
+ * generator re-searches each scenario for its predicate whenever the seed
+ * derivation changes, so this file follows the seed instead of pinning one.
+ */
+function hexScenario(game: VectorGame, name: string): HexScenario {
+    const file: { hex_scenarios?: HexScenario[] } = JSON.parse(readFileSync(fileURLToPath(vectorsUrl(game)), 'utf8'));
+    const scenario = file.hex_scenarios?.find((candidate) => candidate.name === name);
+
+    if (scenario === undefined) {
+        throw new Error(`${game} vectors.json has no hex_scenarios entry named ${name}`);
+    }
+
+    return scenario;
+}
+
 /**
  * `client_seed` on the wire is the blake2b-256 of the player's text, and the
- * engine consumes its lowercase hex — so any 32 bytes make a valid round. The
- * default pair is chosen so the HiLo `higher` below WINS: a losing guess would
- * settle the round and the trailing cashout would be rejected as an action
- * after settlement, which is a different test.
+ * engine consumes its lowercase hex. The default pair is the scenario
+ * `hilo-higher-wins-at-1` (rank of the card at index 1 >= rank at index 0), so
+ * the HiLo `higher` below WINS: a losing guess would settle the round and the
+ * trailing cashout would be rejected as an action after settlement, which is a
+ * different test.
  */
-const CLIENT_SEED = new Uint8Array(32).fill(1);
-const SERVER_SEED = new Uint8Array(32).fill(9);
+const HILO_SCENARIO = hexScenario('hilo', 'hilo-higher-wins-at-1');
+const CLIENT_SEED = hexToBytes(HILO_SCENARIO.effective_client_seed_hex);
+const SERVER_SEED = hexToBytes(HILO_SCENARIO.server_seed_hex);
 
 // ── The player's receipts for this round ────────────────────────────────
 //
@@ -433,12 +466,15 @@ function verify(
         roundId?: string;
         /** The instance to check signatures against; `null` = the shell does not know it. */
         signingDomain?: SigningDomain | null;
+        /** Whether the round's rollup is a listed deployment; `false` = a rollup no entry lists. */
+        deploymentListed?: boolean;
     } = {},
 ) {
     const key = extra.publicKey === undefined ? PUBLIC_KEY : extra.publicKey;
 
     return verifyRound({
         signingDomain: extra.signingDomain === undefined ? DOMAIN : extra.signingDomain,
+        deploymentListed: extra.deploymentListed ?? true,
         // The honest export and a bracketing range are the DEFAULTS, so every
         // pre-existing test still exercises a fully-evidenced round; a test
         // that cares about a missing half says so explicitly.
@@ -830,10 +866,61 @@ describe('verifyRound', () => {
     });
 
     it('fails an unfinished transcript instead of paying the live position', () => {
+        // The `higher` must WIN, or the round would settle as a loss and this
+        // would not be an unfinished transcript at all. The scenario's
+        // predicate guarantees it; restate it so a drifted row fails HERE.
+        const opening = hilo.hiloStep(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), 0);
+        const next = hilo.hiloStep(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), 1);
+
+        expect(next.rankNumeric).toBeGreaterThanOrEqual(opening.rankNumeric);
+        expect(HILO_SCENARIO.winning_direction_at_1).toBe('higher');
+
         const messages = buildRound({ actions: [action('place-bet'), action('higher')] });
         const report = verify(messages);
 
         expect(statusOf(report, 'replay-outcome')).toBe('fail');
+        expect(report.verdict).toBe('failed');
+    });
+
+    it('is inconclusive, and replays nothing, on a rollup no deployment entry lists', () => {
+        // A hand-typed rollup runs a kernel nobody vouched for. Replaying it
+        // could recompute different cards and accuse an honest server, so the
+        // round is refused instead.
+        const report = verify(buildRound(), { deploymentListed: false });
+        const replay = report.checks.find((c) => c.id === 'replay');
+
+        expect(report.verdict).toBe('inconclusive');
+        expect(report.replay).toBeNull();
+        expect(replay?.status).toBe('unavailable');
+        expect(replay?.detail).toContain('unknown deployment');
+        expect(statusOf(report, 'replay-payout')).toBeUndefined();
+        // Every seed-independent proof still ran.
+        expect(statusOf(report, 'signatures')).toBe('pass');
+        expect(statusOf(report, 'commitment-hash')).toBe('pass');
+    });
+
+    it('is inconclusive on a game type that names no seed derivation this build implements', () => {
+        // The seed rule is selected by the round's game version, so a game
+        // this verifier does not know has no rule: the replay is refused,
+        // never run under a guessed one.
+        const report = verify(buildRound({ gameType: 'roulette:v1', claimedPayout: 0n }));
+
+        expect(report.verdict).toBe('inconclusive');
+        expect(report.replay).toBeNull();
+        expect(report.checks.find((c) => c.id === 'replay')?.detail).toBe(
+            'derivation not supported: game roulette:v1 names no seed derivation this verifier implements',
+        );
+    });
+
+    it('still fails an unknown-deployment round whose seed-independent proof fails', () => {
+        // Inconclusive is about the replay alone; a forged frame is still a
+        // forged frame under any seed rule.
+        const report = verify(buildRound(), {
+            deploymentListed: false,
+            publicKey: new Uint8Array(32).fill(7),
+        });
+
+        expect(statusOf(report, 'signatures')).toBe('fail');
         expect(report.verdict).toBe('failed');
     });
 
@@ -1262,7 +1349,13 @@ describe('a refusal the round’s own seed contradicts', () => {
     // `fail` there carries the whole verdict to `failed` through `anyFail` —
     // even though the check is deliberately NOT in `allProofsRan`, so a round
     // with no refusal is unaffected.
-    const CRASH_TICK = crash.crashRound(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED)).crashTick;
+    // Its own seeds, from the crash scenario `crash-mid-curve-53` (predicate
+    // 53 <= crash_tick <= 100) — never the HiLo default pair, whose crash tick
+    // is an accident of a different game's search.
+    const CRASH_SCENARIO = hexScenario('crash', 'crash-mid-curve-53');
+    const CRASH_SERVER_SEED = hexToBytes(CRASH_SCENARIO.server_seed_hex);
+    const CRASH_CLIENT_SEED = hexToBytes(CRASH_SCENARIO.effective_client_seed_hex);
+    const CRASH_TICK = crash.crashRound(bytesToHex(CRASH_SERVER_SEED), bytesToHex(CRASH_CLIENT_SEED)).crashTick;
     const ANCHOR = 1_700_000_000_000n;
     const QUANTUM = 50n;
     const PEER_CASHOUT = '33333333-3333-4333-8333-333333333333';
@@ -1375,6 +1468,8 @@ describe('a refusal the round’s own seed contradicts', () => {
         return verify(
             buildRound({
                 gameType: crash.GAME_TYPE,
+                serverSeed: CRASH_SERVER_SEED,
+                clientSeed: CRASH_CLIENT_SEED,
                 actions: CRASH_ACTIONS,
                 playerCommitment: commitmentOf(CRASH_SHAPE()),
             }),
@@ -1478,6 +1573,8 @@ describe('a refusal the round’s own seed contradicts', () => {
         return verify(
             buildRound({
                 gameType: crash.GAME_TYPE,
+                serverSeed: CRASH_SERVER_SEED,
+                clientSeed: CRASH_CLIENT_SEED,
                 actions: EXPIRE_ACTIONS,
                 playerCommitment: EXPIRE_COMMITMENT,
             }),
@@ -1486,7 +1583,10 @@ describe('a refusal the round’s own seed contradicts', () => {
     }
 
     it('has a crash round with room before the bust, or the cases below are vacuous', () => {
-        expect(CRASH_TICK).toBeGreaterThan(2n);
+        // WELL_BEFORE_CRASH = CRASH_TICK - 10 must clear the race band and
+        // stay a positive tick: 10 + RACE_BAND_TICKS + 1 (13 today).
+        expect(RACE_BAND_TICKS).toBe(2n);
+        expect(CRASH_TICK).toBeGreaterThanOrEqual(10n + RACE_BAND_TICKS + 1n);
     });
 
     it('verifies the crash round itself when no refusal is in the export', () => {

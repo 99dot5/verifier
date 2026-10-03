@@ -83,9 +83,14 @@ walk at a different root.
 ## The three proofs
 
 1. **Payout** — outcome derivation is
-   `blake2b-256("game-seed|<game_type>|<server_seed>|<client_seed>|<i32 LE action_index>")`.
-   The input set is exactly those four values: there is **no
-   operator-controlled nonce**. The transcript of actions is public in the
+   `blake2b-256("99dot5:engine-seed:v1" ‖ len ‖ game_type ‖ len ‖ server_seed ‖
+   len ‖ client_seed ‖ decision u32 LE ‖ chunk u32 LE)`, keyed by the
+   round's decision rather than the action index. The input set is exactly
+   those values: there is **no operator-controlled nonce**. Each game version
+   names its rule (`v1` for every game today, `algorithm.derivation` in its
+   vectors file); the verifier selects it by the round's `game_type`, and the
+   domain is `99dot5:engine-seed:<derivation>`. A round on a rollup the list
+   does not name verifies `inconclusive`. The transcript of actions is public in the
    L1 inbox; replaying it yields a cumulative multiplier in integer ppm, and
    `payout = floor(stake_units × ppm / 10⁶)`.
 2. **Commitment** — the `server_seed`'s hash was published in a `SeedBatch`

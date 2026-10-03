@@ -3,8 +3,8 @@
  * `engine.rs`, pinned against `libs/games/src/crash/v1/testdata/vectors.json`.
  *
  * A multiplier rises from 1.00× and the round busts at a seed-determined
- * `crash_tick`. Everything a player can win on is fixed by the seed at
- * `action_index = 0`: `raw_u64` → `crash_point_ppm` → `crash_tick`. The later
+ * `crash_tick`. Everything a player can win on is fixed by the seed of
+ * decision 0 (the bet): `raw_u64` → `crash_point_ppm` → `crash_tick`. The later
  * actions decide only WHEN the round stops, never what the curve is.
  *
  * The curve is the constant-hazard exponential `m(N) = 2^(N / 100)`, evaluated
@@ -29,7 +29,7 @@
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { divHalfUp, payoutUnits, ppmToMultiplierString } from './ints';
-import { bytesToHex, deriveSeed, rawU64 } from './seed';
+import { SeedStream, bytesToHex, rawU64 } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import { BorshError, BorshReader } from '../wire/borsh';
 
@@ -150,13 +150,14 @@ export interface CrashRound {
 }
 
 /**
- * Derive the round's crash point and tick. The derivation input is exactly
- * `(game_type, server_seed, client_seed, action_index = 0)`; `raw_u64` is the
- * little-endian u64 of the first 8 seed bytes.
+ * Derive the round's crash point and tick. The bet is decision 0, and it
+ * draws exactly 8 bytes from that decision's stream: `raw_u64` is their
+ * little-endian u64. Nothing after the bet draws.
  */
 export function crashRound(serverSeed: string, clientSeed: string): CrashRound {
-    const seed = deriveSeed(GAME_TYPE, serverSeed, clientSeed, 0);
-    const raw = rawU64(seed);
+    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, 0);
+    const raw = rawU64(stream.take(8));
+    const seed = stream.derivedChunks()[0];
     const point = crashPointPpm(raw);
     const tick = crashTick(point);
 
@@ -223,8 +224,8 @@ export function decodeCashoutTick(payload: Uint8Array): bigint {
 
 function roundDetails(round: CrashRound): [string, string][] {
     return [
-        ['derived seed', round.seedHex],
-        ['raw u64 (LE of seed[0..8])', round.rawU64.toString()],
+        ['derived seed (decision 0, chunk 0)', round.seedHex],
+        ['raw u64 (LE of the first 8 stream bytes)', round.rawU64.toString()],
         ['crash point (half_up(995000 × 2^64 / (2^64 − raw)), clamped to [1×, 1000×])', ppmToMultiplierString(round.crashPointPpm)],
         ['crash tick (smallest N with m(N) ≥ crash point, capped at 996)', round.crashTick.toString()],
         ['best cashout available', round.crashTick === 0n

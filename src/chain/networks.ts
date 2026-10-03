@@ -72,6 +72,9 @@ export interface Deployment {
     // from the pools the lineage registered.
     /** `sr1…` rollup address. */
     rollupAddress: string;
+    // No seed derivation either: each game version names its own rule
+    // (`SEED_DERIVATION` in its engine, mirrored by `GAME_SEED_DERIVATIONS`
+    // in verify/seed.ts), so the round's game type selects it.
     originationAdministrator: OriginationAdministrator;
     /** How each value was established — shown to the reader, never parsed. */
     evidence: string[];
@@ -260,6 +263,19 @@ export function deploymentsForTenant(networks: NetworkConfig[], tenantId: string
             .filter((deployment) => deployment.tenantId === tenantId)
             .map((deployment) => ({ network, deployment })),
     );
+}
+
+/**
+ * Whether `rollupAddress` is a deployment the compiled-in list names.
+ *
+ * The rollup field in the UI is editable, so a reader can type a rollup this
+ * file does not list. The kernel it runs is then UNKNOWN, and the verifier
+ * says so rather than replay its rounds: a kernel that is not the one this
+ * build mirrors would replay an honest round to a different outcome and
+ * accuse its server.
+ */
+export function isListedRollup(networks: NetworkConfig[], rollupAddress: string): boolean {
+    return networks.some((network) => network.deployments.some((d) => d.rollupAddress === rollupAddress));
 }
 
 export const DRAND_URLS = ['https://api.drand.sh', 'https://drand.cloudflare.com'];

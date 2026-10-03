@@ -190,8 +190,7 @@ describe('shared example in the vectors files', () => {
 describe('game → seed derivation table', () => {
     // Each engine's SEED_DERIVATION const is written into its vectors file as
     // algorithm.derivation by the generator's mirror table; this table must
-    // name the same rule for every game, hydra included (it has vectors but no
-    // replayer here).
+    // name the same rule for every game.
     const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra'];
 
     it('lists exactly the games that ship vectors', () => {

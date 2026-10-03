@@ -15,7 +15,7 @@ trust this tool exists to remove.
 
 | Path | What it is |
 |---|---|
-| `vectors/*.json` | Golden test vectors for `hilo:v1`, `plinko:v1`, `mines:v1`, `crash:v1`. Each file carries a complete, self-contained `algorithm` spec plus vectors, reproducible by any runtime in exact integer arithmetic (no floats anywhere). These are the SAME files the production Rust engine and the wasm rollup kernel pin against. |
+| `vectors/*.json` | Golden test vectors for `crash:v1`, `hilo:v1`, `plinko:v1`, `mines:v1`, `hydra:v1`, one file per game, each pinning that game's replayer in `src/verify/`. Each file carries a complete, self-contained `algorithm` spec plus vectors, reproducible by any runtime in exact integer arithmetic (no floats anywhere). These are the SAME files the production Rust engine and the wasm rollup kernel pin against. |
 | `src/verify/` | TypeScript implementations of the game algorithms (pure `bigint`), asserted against the vectors by the test suite. |
 | `src/wire/` | Decoder for the sequencer→rollup wire format (Borsh) and Ed25519 signature verification (`ed25519(blake2b-256(payload))`), pinned by a golden message captured from a real on-chain injection. |
 | `src/chain/` | Readers for public chain sources: TzKT (locates `smart_rollup_add_messages` operations), a Tezos archive node RPC (supplies the message bytes), the **administrator lineage walk** (derives the tenant's signing keys from L1), and the deposit lookup that derives the scan's lower bound from L1. |

@@ -48,6 +48,7 @@ import { unitsToDecimalString } from './verify/ints';
 import { bytesEqual, bytesToHex, seedRuleForGame, serverSeedCommitment } from './verify/seed';
 import * as crash from './verify/crash';
 import * as hilo from './verify/hilo';
+import * as hydra from './verify/hydra';
 import * as mines from './verify/mines';
 import * as plinko from './verify/plinko';
 import { ReplayError, type ReplayResult, type Replayer, type TranscriptAction } from './verify/types';
@@ -220,17 +221,15 @@ export interface VerificationReport {
 /**
  * The replayers, by the `game_type` the transcript states.
  *
- * `hydra:v1` is deliberately ABSENT and has no port yet, so a hydra round can
- * never reach `verified`: the payout check reports the game as unsupported,
- * `replay-payout` does not pass, and `allProofsRan` is false. Every other proof
- * — signatures, both commitments, and the action projection, which does have a
- * hydra table — still runs, so a hydra round is checked in every way except
- * the one that recomputes its money. A pre-existing limit, named here so it
- * reads as a gap rather than as a verdict about the round.
+ * Every game version in `GAME_SEED_DERIVATIONS` has one (pinned by
+ * `verifier.test.ts`), so the "not implemented" branch below is reached only
+ * by a game this table has not caught up with. A game without a replayer can
+ * never be `verified`: `replay-payout` does not run, so `allProofsRan` is false.
  */
 const REPLAYERS: Record<string, Replayer> = {
     [crash.GAME_TYPE]: crash.replay,
     [hilo.GAME_TYPE]: hilo.replay,
+    [hydra.GAME_TYPE]: hydra.replay,
     [plinko.GAME_TYPE]: plinko.replay,
     [mines.GAME_TYPE]: mines.replay,
 };

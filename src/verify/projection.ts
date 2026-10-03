@@ -108,7 +108,7 @@ import type { ReceiptFrame } from '../receipts/recompute';
 import type { Check } from '../verifier';
 import { decodeClientEnvelope, type DecodedCommandBody, type RoundEndCause } from '../wire/proto-reader';
 import { CLIENT_FRAME_TAG, splitSignedFrame } from '../wire/signature';
-import { classifyRefusalReason, reasonName, trustRejectionRoundId } from './rejections';
+import { classifyRefusalReason, reasonName, settlingAction, trustRejectionRoundId } from './rejections';
 import * as crash from './crash';
 import { bytesEqual, bytesToHex } from './seed';
 
@@ -187,6 +187,13 @@ export interface ProjectionInput {
     frames: ReceiptFrame[];
     /** `RoundEnded.cause` off the SIGNED frame; null when it states none. */
     endCause: RoundEndCause | null;
+    /**
+     * Index of the action the replay settled the round on, or null when no
+     * replay located it. Decides how the round ended for the suppression
+     * rule: an action after the settle is never read by the kernel, so it
+     * neither settles the round nor answers a command.
+     */
+    settledAtIndex: number | null;
 }
 
 export interface ProjectionReport {
@@ -537,9 +544,13 @@ function suppressionRows(
     const seen = new Set<string>();
     // The system steps a dropped cashout leaves the round to settle on: the
     // deadline sweep's `expire` (manual crash) or an `abandon` (any game).
-    const systemSettle = input.actions.find(
-        (action) => action.actionType === 'expire' || action.actionType === 'abandon',
-    );
+    // Judged on the action that SETTLED the round, never on one a server
+    // appended after it.
+    const settling = settlingAction(input.actions, input.settledAtIndex);
+    const systemSettle =
+        settling !== null && (settling.actionType === 'expire' || settling.actionType === 'abandon')
+            ? settling
+            : undefined;
 
     for (const command of input.commands) {
         const decoded = decodeCommand(input.commands, command.requestId, command);
@@ -563,7 +574,11 @@ function suppressionRows(
         seen.add(command.requestId);
 
         const index = indexByRequest.get(command.requestId);
-        const answered = index !== undefined && input.actions.some((a) => a.index === index && a.actionType === 'cashout');
+        // A cashout after the settle answers nothing: the kernel never reads it.
+        const answered =
+            index !== undefined &&
+            (settling === null || index <= settling.index) &&
+            input.actions.some((a) => a.index === index && a.actionType === 'cashout');
 
         if (answered) {
             continue;

@@ -32,6 +32,12 @@ export interface ReplayResult {
     /** False when the transcript ends without a settling action. */
     settled: boolean;
     /**
+     * Transcript index of the action that settled the round, or null when it
+     * did not settle. Like the kernel, the replay stops there: entries after
+     * it are never read, so they cannot move the payout.
+     */
+    settledAtIndex: number | null;
+    /**
      * The kernel's `u128` payout in the asset's atomic units: `banked + live`
      * after the fold, truncated to the grain. This — not `cumulativePpm` — is
      * what the chain compares against `claimed_payout`.

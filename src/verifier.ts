@@ -60,7 +60,7 @@ import {
     type DecodedMoney,
 } from './wire/proto-reader';
 import { evaluateStakeAgreement, STAKE_CHECK_ID } from './verify/stake';
-import { analyseRejections } from './verify/rejections';
+import { ALWAYS_SETTLING_ACTIONS, analyseRejections } from './verify/rejections';
 import {
     analyseProjection,
     PROJECTION_CHECK_ID,
@@ -597,30 +597,42 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             status: 'unavailable',
             detail: `game ${transcript.gameType} is not implemented in this verifier yet (supported: ${supportedGameTypes().join(', ')})`,
         });
-    } else if (unknownTags.length > 0) {
-        // Mirrors the kernel's `reject-unknown-action-tag`: the message decodes
-        // in full, but the round cannot be replayed under this table version.
-        checks.push({
-            id: 'replay',
-            title: 'Round replays to the claimed payout',
-            status: 'fail',
-            detail: `transcript carries action tag(s) this verifier does not know: ${unknownTags
-                .map((a) => `#${a.index} = 0x${a.tag.toString(16).padStart(2, '0')}`)
-                .join(', ')} — the kernel rejects such a round as reject-unknown-action-tag`,
-        });
     } else {
         // The action's index IS its position in the transcript, so index 0 is
         // always the place-bet. The seed derivation is keyed by DECISION, which
         // each replayer counts itself from these actions, so it needs nothing
         // else off the wire.
-        const actions: TranscriptAction[] = transcript.actions.map((a, index) => ({
+        //
+        // Only the prefix before the first unknown tag is replayed. The kernel
+        // tag-checks an entry only when its walk reaches it and stops at the
+        // first settle, so an unknown tag AFTER the settle is never read.
+        const firstUnknown = unknownTags.length > 0 ? unknownTags[0].index : transcript.actions.length;
+        const actions: TranscriptAction[] = transcript.actions.slice(0, firstUnknown).map((a, index) => ({
             actionIndex: index,
             actionType: a.actionType as string,
             payload: a.payload,
         }));
 
         try {
-            replayResult = replayer(serverSeedHex, clientSeedHex, actions, transcript.stake);
+            // An unknown tag at index 0 leaves nothing to replay; an empty
+            // transcript still goes to the replayer, which refuses it.
+            const replayed =
+                unknownTags.length === 0 || actions.length > 0
+                    ? replayer(serverSeedHex, clientSeedHex, actions, transcript.stake)
+                    : null;
+
+            if (unknownTags.length > 0 && !replayed?.settled) {
+                // Mirrors the kernel's `reject-unknown-action-tag`: the message
+                // decodes in full, but the walk reaches a tag this table
+                // version does not know before the round settles.
+                throw new UnknownActionTags(
+                    `transcript carries action tag(s) this verifier does not know: ${unknownTags
+                        .map((a) => `#${a.index} = 0x${a.tag.toString(16).padStart(2, '0')}`)
+                        .join(', ')} — the kernel rejects such a round as reject-unknown-action-tag`,
+                );
+            }
+
+            replayResult = replayed as ReplayResult;
 
             // The replayer carries the payout itself: for the compounding
             // games it is the banked/live fold (live rounded at the asset
@@ -653,10 +665,17 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                 id: 'replay',
                 title: 'Round replays to the claimed payout',
                 status: 'fail',
-                detail: error instanceof ReplayError ? `transcript rejected: ${error.message}` : String(error),
+                detail:
+                    error instanceof UnknownActionTags
+                        ? error.message
+                        : error instanceof ReplayError
+                          ? `transcript rejected: ${error.message}`
+                          : String(error),
             });
         }
     }
+
+    checks.push(actionsAfterSettle(transcript.actions, replayResult, replayer !== undefined && replayRefusal === null));
 
     // ── The third proof group: the player's own receipts ────────────────
     const receipts = runReceiptProofs(
@@ -672,6 +691,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                 actionType: a.actionType,
                 payload: a.payload,
             })),
+            settledAtIndex: replayResult?.settledAtIndex ?? null,
         },
         checks,
         findings,
@@ -772,6 +792,81 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                   ? 'attested'
                   : 'incomplete',
     };
+}
+
+/** The kernel's `reject-unknown-action-tag`, raised inside the replay block. */
+class UnknownActionTags extends Error {}
+
+export const ACTIONS_AFTER_SETTLE_CHECK_ID = 'actions-after-settle';
+
+const ACTIONS_AFTER_SETTLE_TITLE = 'The transcript ends at the action that settles the round';
+
+/**
+ * The actions-after-settle check. The kernel stops its walk at the first
+ * settle and never reads what follows, so trailing entries cannot move the
+ * payout; it records the round as an `actions-after-settle` discrepancy with
+ * `validated = false`. A `fail`, not a finding: the server published a signed
+ * transcript the chain itself refuses to validate, and a trailing action is
+ * exactly what would let a server dress a suppressed round up as a settled
+ * one (a `cashout` appended after the sweep's `expire`). The replay row still
+ * reports the payout comparison, so the report shows the money was right.
+ *
+ * Located by the replay when one ran. Without one (`replayAttempted` false: no
+ * replayer, or the replay was refused) it falls back to the transcript's
+ * shape, and is `unavailable` when the shape cannot settle the question.
+ */
+function actionsAfterSettle(
+    actions: readonly { actionType: string | null }[],
+    replay: ReplayResult | null,
+    replayAttempted: boolean,
+): Check {
+    const last = actions.length - 1;
+    const row = (status: CheckStatus, detail: string): Check => ({
+        id: ACTIONS_AFTER_SETTLE_CHECK_ID,
+        title: ACTIONS_AFTER_SETTLE_TITLE,
+        status,
+        detail,
+    });
+    const trailingDetail = (settledAt: number, trailing: number, located: string) =>
+        `${located} action ${settledAt} (${actions[settledAt].actionType}) settles the round, and ${trailing} action(s) follow it. ` +
+        'The kernel stops at the first settle and never reads what follows, so the payout was unaffected, but it records the round as an ' +
+        '`actions-after-settle` discrepancy (validated = false). An honest sequencer never produces this: it means a sequencer bug, ' +
+        'or a sequencer padding the signed record.';
+
+    if (replay !== null) {
+        if (replay.settledAtIndex === null) {
+            return row('unavailable', 'the transcript never settles, so there is no settling action to end at (see replay-outcome)');
+        }
+
+        const trailing = last - replay.settledAtIndex;
+
+        if (trailing === 0) {
+            return row('pass', `the replay settles on action ${replay.settledAtIndex}, the transcript's last`);
+        }
+
+        return row('fail', trailingDetail(replay.settledAtIndex, trailing, 'the replay shows that'));
+    }
+
+    if (replayAttempted) {
+        return row('unavailable', 'the round did not replay (see replay), so there is no settling action to locate');
+    }
+
+    const settling = actions.findIndex((a) => a.actionType !== null && ALWAYS_SETTLING_ACTIONS.has(a.actionType));
+
+    if (settling >= 0 && settling < last) {
+        // A lower bound: an earlier losing step may settle the round sooner,
+        // which only adds trailing actions.
+        return row(
+            'fail',
+            trailingDetail(settling, last - settling, 'not replayed, but') +
+                ' The count is a lower bound: an earlier step may have settled the round sooner.',
+        );
+    }
+
+    return row(
+        'unavailable',
+        'the round was not replayed, and its shape alone cannot place the settle: an earlier step may have lost and settled the round before the end',
+    );
 }
 
 /**
@@ -966,6 +1061,12 @@ interface ChainRoundFacts {
      * comparison be satisfied by supplying both halves.
      */
     actions: ProjectionAction[];
+    /**
+     * Where the replay settled the round, or null when no replay located it.
+     * How the round ENDED is the settling action, never the last one: the
+     * kernel does not read an action appended after the settle.
+     */
+    settledAtIndex: number | null;
 }
 
 /**
@@ -1142,6 +1243,7 @@ function runReceiptProofs(
         // that already ended by a claim is the correct answer, so only the
         // expire shape is eligible to contradict the seed.
         actions: chainRound?.actions ?? [],
+        settledAtIndex: chainRound?.settledAtIndex ?? null,
         frames: decoded.frames,
         commands: document.commands,
     });
@@ -1176,6 +1278,7 @@ function runReceiptProofs(
         commands: document.commands,
         frames: decoded.frames,
         endCause: roundEnded.envelope.roundId === roundId ? roundEnded.envelope.roundEndCause : null,
+        settledAtIndex: chainRound?.settledAtIndex ?? null,
     });
 
     checks.push(...projection.checks);

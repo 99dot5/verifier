@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { InboxMessage } from './chain/inbox';
-import { supportedGameTypes, verifyRound } from './verifier';
+import { ACTIONS_AFTER_SETTLE_CHECK_ID, supportedGameTypes, verifyRound } from './verifier';
 import * as crash from './verify/crash';
 import * as hilo from './verify/hilo';
 import * as mines from './verify/mines';
@@ -164,8 +164,8 @@ function hexScenario(game: VectorGame, name: string): HexScenario {
  * engine consumes its lowercase hex. The default pair is the scenario
  * `hilo-higher-wins-at-1` (rank of the card at index 1 >= rank at index 0), so
  * the HiLo `higher` below WINS: a losing guess would settle the round and the
- * trailing cashout would be rejected as an action after settlement, which is a
- * different test.
+ * cashout would trail the settle, which fails the round under the
+ * actions-after-settle check — a different test.
  */
 const HILO_SCENARIO = hexScenario('hilo', 'hilo-higher-wins-at-1');
 const CLIENT_SEED = hexToBytes(HILO_SCENARIO.effective_client_seed_hex);
@@ -863,6 +863,86 @@ describe('verifyRound', () => {
 
         expect(report.verdict).toBe('failed');
         expect(report.checks.find((c) => c.id === 'replay')?.detail).toContain('0x7f');
+    });
+
+    // ── Actions after the settling one ──────────────────────────────────
+    //
+    // The kernel stops at the first settle, never reads what follows, and
+    // records the round as an `actions-after-settle` discrepancy. The verifier
+    // fails the round: the payout is unaffected, but the chain refuses to
+    // validate the transcript, and a trailing action is how a server would
+    // dress a suppressed round up as a settled one.
+
+    it('passes actions-after-settle when the settling action is the last one', () => {
+        const report = verify(buildRound());
+        const check = report.checks.find((c) => c.id === ACTIONS_AFTER_SETTLE_CHECK_ID);
+
+        expect(check?.status).toBe('pass');
+        expect(check?.detail).toContain('the transcript\'s last');
+    });
+
+    it('fails a round with actions after the settle, whose payout still matches', () => {
+        // A system `abandon` after the cashout: no command of the player's is
+        // bound to it, and a system step needs none, so the projection passes
+        // and this check is the only one that sees it.
+        const padded = [...HILO_ACTIONS, action('abandon')];
+        const report = verify(buildRound({ actions: padded, claimedPayout: honestPayout(hilo.GAME_TYPE) }));
+        const detail = report.checks.find((c) => c.id === ACTIONS_AFTER_SETTLE_CHECK_ID)?.detail;
+
+        expect(statusOf(report, ACTIONS_AFTER_SETTLE_CHECK_ID)).toBe('fail');
+        expect(detail).toContain('action 1 (cashout) settles the round, and 1 action(s) follow it');
+        expect(detail).toContain('the payout was unaffected');
+        expect(detail).toContain('An honest sequencer never produces this');
+        expect(statusOf(report, PROJECTION_CHECK_ID)).toBe('pass');
+        // The replay still reports the payout comparison, and it agrees.
+        expect(statusOf(report, 'replay-payout')).toBe('pass');
+        expect(report.replay?.settledAtIndex).toBe(1);
+        expect(report.verdict).toBe('failed');
+    });
+
+    it('never reads an unknown tag after the settle, but still fails the round for it', () => {
+        const padded = [...HILO_ACTIONS, { tag: 0x7f, payload: new Uint8Array([0xde, 0xad]) }];
+        const report = verify(buildRound({ actions: padded, claimedPayout: honestPayout(hilo.GAME_TYPE) }));
+
+        // Not the kernel's reject-unknown-action-tag: the walk never reaches it.
+        expect(statusOf(report, 'replay')).toBeUndefined();
+        expect(statusOf(report, 'replay-payout')).toBe('pass');
+        expect(statusOf(report, ACTIONS_AFTER_SETTLE_CHECK_ID)).toBe('fail');
+        expect(report.verdict).toBe('failed');
+    });
+
+    it('locates the settle from the shape alone for a game with no replayer', () => {
+        // hydra:v1 has no replayer here, but a cashout settles whenever it is
+        // applied, so whatever follows it trails a settle.
+        const gameType = 'hydra:v1';
+        const report = verify(
+            buildRound({
+                gameType,
+                actions: [action('place-bet', new Uint8Array([2])), action('cashout'), action('abandon')],
+                claimedPayout: 0n,
+            }),
+        );
+
+        expect(statusOf(report, 'replay')).toBe('unavailable');
+        expect(statusOf(report, ACTIONS_AFTER_SETTLE_CHECK_ID)).toBe('fail');
+        expect(report.checks.find((c) => c.id === ACTIONS_AFTER_SETTLE_CHECK_ID)?.detail).toContain(
+            'action 1 (cashout) settles the round, and 1 action(s) follow it',
+        );
+        expect(report.verdict).toBe('failed');
+    });
+
+    it('is unavailable for a game with no replayer when the shape cannot place the settle', () => {
+        // The cashout is last, but an earlier attack may have lost and settled
+        // the round first; only a replay could say.
+        const report = verify(
+            buildRound({
+                gameType: 'hydra:v1',
+                actions: [action('place-bet', new Uint8Array([2])), action('physical-attack'), action('cashout')],
+                claimedPayout: 0n,
+            }),
+        );
+
+        expect(statusOf(report, ACTIONS_AFTER_SETTLE_CHECK_ID)).toBe('unavailable');
     });
 
     it('fails an unfinished transcript instead of paying the live position', () => {
@@ -1784,8 +1864,9 @@ describe('a clean round of each remaining replayable game', () => {
 
         it('has two safe tiles, or the round below is a loss and the swap case is vacuous', () => {
             // The swap case needs a SECOND safe tile: substituting a mine
-            // would end the round at the reveal, and the case would fail on
-            // "action after settlement" rather than on the proof it is about.
+            // would end the round at the reveal, leaving the cashout after the
+            // settle, and the case would test that rather than the proof it is
+            // about.
             const layout = mines.deriveLayout(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), MINE_COUNT);
 
             expect(SAFE_TILES.length).toBeGreaterThanOrEqual(2);

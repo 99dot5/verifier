@@ -283,7 +283,10 @@ export function replay(
 
     for (const action of actions.slice(1)) {
         if (settled) {
-            throw new ReplayError(`action after settlement: ${action.actionType}`);
+            // The kernel stops at the first settle and never reads what follows
+            // (libs/smart-rollup/src/games.rs); the verifier's
+            // actions-after-settle check reports any such entries.
+            break;
         }
 
         switch (action.actionType) {
@@ -382,6 +385,9 @@ export function replay(
         cumulativePpm: cumulative,
         outcome,
         settled,
+        // Every settling path pushes its step last, so the final step is the
+        // settling action.
+        settledAtIndex: settled ? steps[steps.length - 1].actionIndex : null,
         // Single decision, no banked/live split: the kernel's fold collapses to
         // one floor division.
         payoutUnits: payoutUnits(stakeUnits, cumulative),

@@ -348,11 +348,28 @@ describe('crash:v1 replay', () => {
 
         rejects([]);
         rejects([cashout(1)]); // no place-bet at index 0
-        rejects(round(null, [cashout(1), cashout(2)])); // a second in-round action
         rejects(round(null, [{ actionIndex: 1, actionType: 'reveal', payload: new Uint8Array() }]));
         rejects(round(null, [{ actionIndex: 1, actionType: 'cashout', payload: new Uint8Array([1, 2, 3]) }]));
         rejects([{ actionIndex: 0, actionType: 'place-bet', payload: new Uint8Array([0x02]) }]);
         rejects([{ actionIndex: 0, actionType: 'place-bet', payload: new Uint8Array([0x00, 0x00]) }]);
+    });
+
+    it('stops at the first settle and never reads what follows, as the kernel does', () => {
+        // A second in-round action trails the settle. It is not a replay
+        // error: the verifier's actions-after-settle check reports it.
+        const rv = MID_CURVE;
+        const honest = replay(rv.server_seed, rv.client_seed, round(null, [cashout(1)]), STAKE_MUTEZ);
+        const padded = replay(
+            rv.server_seed,
+            rv.client_seed,
+            round(null, [cashout(1), { actionIndex: 2, actionType: 'reveal', payload: new Uint8Array([1]) }]),
+            STAKE_MUTEZ,
+        );
+
+        expect(honest.settledAtIndex).toBe(1);
+        expect(padded.settledAtIndex).toBe(1);
+        expect(padded.payoutUnits).toBe(honest.payoutUnits);
+        expect(padded.outcome).toBe(honest.outcome);
     });
 
     it('is registered with the verifier', () => {

@@ -30,7 +30,7 @@
  * ## Two narrowings, because a refusal can be expected rather than suspect
  *
  * 1. **The check is eligible for `fail` only on a round the transcript says
- *    settled by `expire`.** A round whose last action is a `cashout` — a
+ *    settled by `expire`.** A round that settled on a `cashout` — a
  *    manual claim or an auto target — had ALREADY ENDED, and every liveness
  *    refusal that follows is the correct answer to a second command against a
  *    settled round. Nothing about the crash tick can contradict it, because
@@ -306,10 +306,50 @@ export interface RejectionInput {
      * be chosen by whoever is asking.
      */
     actions: readonly TranscriptActionSummary[];
+    /**
+     * Index of the action the replay settled the round on, or null when no
+     * replay located it. Wins over the transcript's shape: actions after the
+     * settle are never read by the kernel, so the LAST action is not how the
+     * round ended when a server appended one.
+     */
+    settledAtIndex: number | null;
     /** Every decoded frame the export carries. */
     frames: ReceiptFrame[];
     /** Every command the export carries, for the trust rule's body lookup. */
     commands: ImportedCommand[];
+}
+
+/**
+ * Actions an engine settles on whenever it applies them, in every game that
+ * uses them. The first of these bounds the settle from above; a losing step
+ * before it may settle earlier, which only a replay can see.
+ */
+export const ALWAYS_SETTLING_ACTIONS: ReadonlySet<string> = new Set(['cashout', 'abandon', 'expire']);
+
+/**
+ * The action that settled the round, as best this build can tell: the replay's
+ * own answer when it ran, else the first always-settling action, else the last
+ * action. Never simply the last one — the kernel stops at the first settle, so
+ * an action a server appends after it must not decide how the round ended.
+ */
+export function settlingAction<A extends TranscriptActionSummary>(
+    actions: readonly A[],
+    settledAtIndex: number | null,
+): A | null {
+    if (settledAtIndex !== null) {
+        const replayed = actions.find((action) => action.index === settledAtIndex);
+
+        if (replayed) {
+            return replayed;
+        }
+    }
+
+    const sorted = [...actions].sort((a, b) => a.index - b.index);
+    const bySettlingType = sorted.find(
+        (action) => action.actionType !== null && ALWAYS_SETTLING_ACTIONS.has(action.actionType),
+    );
+
+    return bySettlingType ?? sorted[sorted.length - 1] ?? null;
 }
 
 export interface RejectionReport {
@@ -347,7 +387,7 @@ export function analyseRejections(input: RejectionInput): RejectionReport {
     }
 
     const anchor = crashAnchor(input);
-    const settled = settlement(input.actions);
+    const settled = settlement(input.actions, input.settledAtIndex);
     const findings: string[] = [];
     const verdicts = rejections.map((rejection) => judge(rejection, input, anchor, settled, findings));
     const lines = verdicts.flatMap((verdict) => (verdict.kind === 'silent' ? [] : [verdict.line]));
@@ -450,8 +490,10 @@ function crashAnchor(input: RejectionInput): Anchor {
  * How the round ENDED, which is what decides whether a liveness refusal can be
  * contradicted at all.
  *
- * The settling action is the last one in the transcript, by index — not by
- * position in the array, because nothing here has re-sorted it.
+ * The settling action is the one `settlingAction` picks — the replay's own
+ * answer first — and NOT the transcript's last action: a server that dropped a
+ * cashout and settled on `expire` could otherwise append a `cashout` after it
+ * and have the refusal read as "already settled on a claim".
  */
 type Settlement =
     /** The deadline sweep's terminal loss: the shape a dropped cashout produces. */
@@ -463,28 +505,22 @@ type Settlement =
     /** No transcript, or a settling tag this build does not know. */
     | { kind: 'unknown' };
 
-function settlement(actions: readonly TranscriptActionSummary[]): Settlement {
-    let last: TranscriptActionSummary | null = null;
+function settlement(actions: readonly TranscriptActionSummary[], settledAtIndex: number | null): Settlement {
+    const settling = settlingAction(actions, settledAtIndex);
 
-    for (const action of actions) {
-        if (last === null || action.index > last.index) {
-            last = action;
-        }
-    }
-
-    if (last === null || last.actionType === null) {
+    if (settling === null || settling.actionType === null) {
         return { kind: 'unknown' };
     }
 
-    if (last.actionType === 'expire') {
-        return { kind: 'expire', index: last.index };
+    if (settling.actionType === 'expire') {
+        return { kind: 'expire', index: settling.index };
     }
 
-    if (last.actionType === 'cashout') {
-        return { kind: 'claim', index: last.index };
+    if (settling.actionType === 'cashout') {
+        return { kind: 'claim', index: settling.index };
     }
 
-    return { kind: 'other', index: last.index, actionType: last.actionType };
+    return { kind: 'other', index: settling.index, actionType: settling.actionType };
 }
 
 function judge(
@@ -545,7 +581,7 @@ function judge(
             kind: 'pass',
             line:
                 `${label} asserts the round was no longer in progress, and the transcript ON CHAIN agrees: the round's ` +
-                `last action is the cashout at index ${settled.index}, so it had ALREADY SETTLED on a claim — a manual ` +
+                `settling action is the cashout at index ${settled.index}, so it had ALREADY SETTLED on a claim — a manual ` +
                 'cashout or a pre-committed auto target — and every later command against it is correctly refused. The ' +
                 `crash tick has nothing to contradict here, because the round stopped before it.${claimCorroboration(input)}`,
         };
@@ -555,7 +591,7 @@ function judge(
         return {
             kind: 'unavailable',
             line:
-                `${label} asserts the round was no longer in progress, and the transcript's last action is ` +
+                `${label} asserts the round was no longer in progress, and the transcript's settling action is ` +
                 `"${settled.actionType}" at index ${settled.index} — neither the deadline sweep's expire (the shape a ` +
                 'dropped cashout produces) nor a claim, so this check has no reading of when the round stopped and ' +
                 'concludes nothing',

@@ -208,6 +208,7 @@ function input(overrides: Partial<RejectionInput> = {}): RejectionInput {
         clientSeedHex: CLIENT_SEED_HEX,
         deploymentListed: true,
         actions: EXPIRE_SETTLED,
+        settledAtIndex: null,
         frames: [accepted(BET, 1, atTick(1n)), roundStarted(), accepted(CASHOUT, 4, atTick(2n))],
         commands: [
             command(BET, 'placeBet'),
@@ -361,8 +362,8 @@ describe('analyseRejections', () => {
     });
 
     describe('a round that had already settled on a claim', () => {
-        // The narrowing that keeps the check honest. A round whose last action
-        // is a `cashout` ENDED before the crash, by the player's own claim or
+        // The narrowing that keeps the check honest. A round that settled on
+        // a `cashout` ENDED before the crash, by the player's own claim or
         // by the target they pre-committed — so every liveness refusal after
         // that is the correct answer to a command against a settled round, and
         // the crash tick has nothing to contradict.
@@ -467,6 +468,38 @@ describe('analyseRejections', () => {
             expect(only(report).status).toBe('unavailable');
             expect(only(report).detail).toContain('no settling action this build can name');
         });
+    });
+
+    describe('a cashout appended after the settle', () => {
+        // The suppression attack the last-action rule invited: drop the
+        // player's cashout, settle on the sweep's expire, then append a
+        // `cashout` after it. The kernel never reads an action after the
+        // settle, so the round ended on the expire, and the refusal must
+        // still be judged against the seed.
+        const PADDED: readonly TranscriptActionSummary[] = [
+            { index: 0, actionType: 'place-bet' },
+            { index: 1, actionType: 'expire' },
+            { index: 2, actionType: 'cashout' },
+        ];
+
+        for (const [label, settledAtIndex] of [
+            ['the replay located the settle', 1],
+            ['no replay ran, so the transcript shape decides', null],
+        ] as const) {
+            it(`is not "already settled on a claim" when ${label}`, () => {
+                const check = only(
+                    analyseRejections(
+                        withRejection(
+                            rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
+                            { actions: PADDED, settledAtIndex },
+                        ),
+                    ),
+                );
+
+                expect(check.detail).not.toContain('ALREADY SETTLED on a claim');
+                expect(check.status).toBe('fail');
+            });
+        }
     });
 
     it('says nothing at all about a ROUND_MODE_AUTO refusal', () => {

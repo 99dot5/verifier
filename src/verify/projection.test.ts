@@ -127,6 +127,7 @@ function base(): ProjectionInput {
         commands: [command(BET, 'placeBet', { game: 'hilo' }), command(SETTLE, 'cashOut', { game: 'hilo' })],
         frames: [],
         endCause: 'player-action',
+        settledAtIndex: null,
     };
 }
 
@@ -640,6 +641,25 @@ describe('a cashout the server never answered', () => {
 
         expect(result.status).toBe('pass');
         expect(result.findings.join(' ')).toContain('did not settle on an expire or a system abandon');
+    });
+
+    it('does not count a cashout appended after the expire as the answer', () => {
+        // The kernel never reads an action after the settle, so a `cashout`
+        // the server binds to the player's command AFTER the sweep's expire
+        // neither ended the round nor answered the command.
+        for (const settledAtIndex of [1, null]) {
+            const result = suppressed({
+                actions: [act(0, 'place-bet', new Uint8Array([0x00])), act(1, 'expire'), act(2, 'cashout', u32(40))],
+                binding: [
+                    { requestId: BET, index: 0 },
+                    { requestId: SETTLE, index: 2 },
+                ],
+                settledAtIndex,
+            });
+
+            expect(result.findings.join(' ')).toContain('the transcript carries no cashout action bound to it');
+            expect(result.findings.join(' ')).toContain('settled on an expire');
+        }
     });
 
     it('is silent when the cashout IS the action at the index it was bound to', () => {

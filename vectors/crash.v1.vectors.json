@@ -2,7 +2,10 @@
   "_comment": "Canonical cross-runtime crash:v1 test vectors. Reproducible by any runtime (native Rust, wasm, TS) from the pinned algorithm documented in libs/games/src/crash/v1/math.rs. All values are integer/ppm; no floating point.",
   "algorithm": {
     "game_type": "crash:v1",
-    "seed_derivation": "raw_u64 = little-endian u64 of bytes[0..8] of derive_seed(game_type='crash:v1', server_seed, client_seed, action_index=0); derive_seed = blake2b-256 of b'game-seed|'+game_type+'|'+server_seed+'|'+client_seed+'|'+action_index.to_le_bytes(i32)",
+    "derivation": "v1",
+    "seed_derivation": "digest(decision, chunk) = blake2b-256 of b'99dot5:engine-seed:v1' (21 bytes, no terminator) || u8 len(game_type) || game_type || u8 len(server_seed) || server_seed || u8 len(client_seed) || client_seed || decision u32 LE || chunk u32 LE. The three text fields are their ASCII bytes as fed to the engine (the 64-hex strings in production) and may not exceed 255 bytes. A decision's randomness is read sequentially from chunk 0, 32 bytes per chunk, at most 4 chunks (128 bytes). preimage_example_hex is the preimage for game_type 'hilo:v1', server_seed '11'*32, client_seed '22'*32, decision 3, chunk 1. crash:v1: the bet is decision 0; raw_u64 = little-endian u64 of stream bytes [0..8]. The cashout and the expire draw nothing",
+    "preimage_example_hex": "3939646f74353a656e67696e652d736565643a76310768696c6f3a7631403131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313140323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232323232320300000001000000",
+    "preimage_example_digest_hex": "e032790ea31b22d5299594aa1de0d461e67cc3b398d5aec5d4685d98684599db",
     "house_edge_ppm": 995000,
     "scale_ppm": 1000000,
     "max_multiplier_cap_ppm": 1000000000,
@@ -12,7 +15,8 @@
     "crash_point_ppm": "clamp( half_up( HOUSE_EDGE_PPM * 2^64 / (2^64 - raw_u64) ), SCALE_PPM, MAX_MULTIPLIER_CAP_PPM ); i128 intermediate",
     "multiplier_ppm": "m(N) = (1 << (N/100)) * FRACTIONAL_POW2_PPM[N%100], with N first clamped to max_round_tick_cap",
     "crash_tick": "smallest N>=0 with m(N) >= crash_point_ppm, clamped to max_round_tick_cap",
-    "rounding": "half-up (midpoint away from zero), mirroring game-engine-core/src/fixed_point.rs"
+    "rounding": "half-up (midpoint away from zero), mirroring game-engine-core/src/fixed_point.rs",
+    "hex_scenarios": "Seeds in the production form: server_seed_hex is 64 lowercase hex chars and the engine's client seed is effective_client_seed_hex = lowercase hex of blake2b-256(client_seed_text) (the client seed is hashed once, at bet time); both hex strings are fed to derive_seed as text. Each entry's server_seed_hex = hex(blake2b-256(b'<name>-<search_index>')), where search_index is the smallest N >= 0 for which the entry's predicate holds"
   },
   "fractional_pow2_ppm": [
     1000000,
@@ -186,50 +190,83 @@
     {
       "server_seed": "server-215",
       "client_seed": "client-seed",
-      "raw_u64": "61899335680881366",
+      "raw_u64": "15790019579579768085",
+      "crash_point_ppm": 6908699,
+      "crash_tick": 279,
+      "max_win_multiplier_ppm": 6868524
+    },
+    {
+      "server_seed": "server-518",
+      "client_seed": "client-seed",
+      "raw_u64": "6455520287144346746",
+      "crash_point_ppm": 1530662,
+      "crash_tick": 62,
+      "max_win_multiplier_ppm": 1526259
+    },
+    {
+      "server_seed": "server-19",
+      "client_seed": "client-seed",
+      "raw_u64": "1701843357072767058",
+      "crash_point_ppm": 1096125,
+      "crash_tick": 14,
+      "max_win_multiplier_ppm": 1094294
+    },
+    {
+      "server_seed": "server-2",
+      "client_seed": "client-seed",
+      "raw_u64": "7332485520252827850",
+      "crash_point_ppm": 1651438,
+      "crash_tick": 73,
+      "max_win_multiplier_ppm": 1647182
+    },
+    {
+      "server_seed": "server-seed",
+      "client_seed": "client-seed",
+      "raw_u64": "3845259786072335932",
+      "crash_point_ppm": 1257030,
+      "crash_tick": 34,
+      "max_win_multiplier_ppm": 1257013
+    },
+    {
+      "server_seed": "alpha",
+      "client_seed": "beta",
+      "raw_u64": "3967304915658202042",
+      "crash_point_ppm": 1267626,
+      "crash_tick": 35,
+      "max_win_multiplier_ppm": 1265757
+    },
+    {
+      "name": "crash-mid-curve",
+      "predicate": "41 <= crash_tick <= 100: cashout 40 and claim 37 win, auto 10/20 win, auto 100 loses",
+      "search_index": 1,
+      "server_seed": "server-1",
+      "client_seed": "client-seed",
+      "raw_u64": "4785365471526879833",
+      "crash_point_ppm": 1343533,
+      "crash_tick": 43,
+      "max_win_multiplier_ppm": 1337928
+    },
+    {
+      "name": "crash-instant-bust",
+      "predicate": "crash_tick == 0",
+      "search_index": 554,
+      "server_seed": "server-554",
+      "client_seed": "client-seed",
+      "raw_u64": "40242779581650100",
       "crash_point_ppm": 1000000,
       "crash_tick": 0,
       "max_win_multiplier_ppm": 0
     },
     {
-      "server_seed": "server-518",
+      "name": "crash-at-cap",
+      "predicate": "crash_tick == 996",
+      "search_index": 18,
+      "server_seed": "server-18",
       "client_seed": "client-seed",
-      "raw_u64": "18440647853355130418",
+      "raw_u64": "18436743177942552015",
       "crash_point_ppm": 1000000000,
       "crash_tick": 996,
       "max_win_multiplier_ppm": 989118976
-    },
-    {
-      "server_seed": "server-19",
-      "client_seed": "client-seed",
-      "raw_u64": "16830449698019999545",
-      "crash_point_ppm": 11355920,
-      "crash_tick": 351,
-      "max_win_multiplier_ppm": 11313712
-    },
-    {
-      "server_seed": "server-2",
-      "client_seed": "client-seed",
-      "raw_u64": "4620528030510754385",
-      "crash_point_ppm": 1327515,
-      "crash_tick": 41,
-      "max_win_multiplier_ppm": 1319508
-    },
-    {
-      "server_seed": "server-seed",
-      "client_seed": "client-seed",
-      "raw_u64": "2382046942429810858",
-      "crash_point_ppm": 1142537,
-      "crash_tick": 20,
-      "max_win_multiplier_ppm": 1140764
-    },
-    {
-      "server_seed": "alpha",
-      "client_seed": "beta",
-      "raw_u64": "13192600769110761654",
-      "crash_point_ppm": 3493340,
-      "crash_tick": 181,
-      "max_win_multiplier_ppm": 3482202
     }
   ],
   "auto_cashout_ppm_vectors": {
@@ -300,7 +337,7 @@
   "transcript_vectors": [
     {
       "name": "manual-claim-below-crash-wins",
-      "server_seed": "server-2",
+      "server_seed": "server-1",
       "client_seed": "client-seed",
       "stake_units": "100000000",
       "actions": [
@@ -312,16 +349,16 @@
         {
           "index": 1,
           "action_type": "cashout",
-          "payload_hex": "28000000"
+          "payload_hex": "2a000000"
         }
       ],
       "expected_outcome": "cashout",
-      "expected_cumulative_ppm": 1319508,
-      "expected_payout_units": "131950800"
+      "expected_cumulative_ppm": 1337928,
+      "expected_payout_units": "133792800"
     },
     {
       "name": "manual-claim-at-crash-tick-loses",
-      "server_seed": "server-2",
+      "server_seed": "server-1",
       "client_seed": "client-seed",
       "stake_units": "100000000",
       "actions": [
@@ -333,7 +370,7 @@
         {
           "index": 1,
           "action_type": "cashout",
-          "payload_hex": "29000000"
+          "payload_hex": "2b000000"
         }
       ],
       "expected_outcome": "lose",
@@ -342,7 +379,7 @@
     },
     {
       "name": "manual-claim-u32-max-loses",
-      "server_seed": "server-2",
+      "server_seed": "server-1",
       "client_seed": "client-seed",
       "stake_units": "100000000",
       "actions": [
@@ -363,7 +400,7 @@
     },
     {
       "name": "manual-claim-zero-wins-at-one-times",
-      "server_seed": "server-2",
+      "server_seed": "server-1",
       "client_seed": "client-seed",
       "stake_units": "100000000",
       "actions": [
@@ -384,7 +421,7 @@
     },
     {
       "name": "manual-expire-loses",
-      "server_seed": "server-2",
+      "server_seed": "server-1",
       "client_seed": "client-seed",
       "stake_units": "100000000",
       "actions": [
@@ -405,7 +442,7 @@
     },
     {
       "name": "auto-target-below-crash-wins-at-target",
-      "server_seed": "server-2",
+      "server_seed": "server-1",
       "client_seed": "client-seed",
       "stake_units": "100000000",
       "actions": [
@@ -426,7 +463,7 @@
     },
     {
       "name": "auto-target-above-crash-loses",
-      "server_seed": "server-2",
+      "server_seed": "server-1",
       "client_seed": "client-seed",
       "stake_units": "100000000",
       "actions": [
@@ -444,6 +481,32 @@
       "expected_outcome": "lose",
       "expected_cumulative_ppm": 0,
       "expected_payout_units": "0"
+    }
+  ],
+  "hex_scenarios": [
+    {
+      "name": "crash-mid-curve-53",
+      "predicate": "53 <= crash_tick <= 100",
+      "search_index": 4,
+      "server_seed_hex": "5d571fb97e93c0e61d8e046ce33e6e727cd663e02dcadb086112c4514a495c0d",
+      "client_seed_text": "client-seed",
+      "effective_client_seed_hex": "11958a7c1ea9673dfa60c4aba171270c6effdd9c1c95c0fcfacf7681e2dae49c",
+      "raw_u64": "7386873517384445123",
+      "crash_point_ppm": 1659559,
+      "crash_tick": 74,
+      "max_win_multiplier_ppm": 1658639
+    },
+    {
+      "name": "crash-instant-bust",
+      "predicate": "crash_tick == 0",
+      "search_index": 194,
+      "server_seed_hex": "1475c96551be37870ea0929cf0c992f7616d64ba2c24107201bbe0d911cca3b2",
+      "client_seed_text": "client-seed",
+      "effective_client_seed_hex": "11958a7c1ea9673dfa60c4aba171270c6effdd9c1c95c0fcfacf7681e2dae49c",
+      "raw_u64": "24742106126093566",
+      "crash_point_ppm": 1000000,
+      "crash_tick": 0,
+      "max_win_multiplier_ppm": 0
     }
   ]
 }

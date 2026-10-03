@@ -23,7 +23,7 @@
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { divHalfUp, mulPpm, ppmToMultiplierString } from './ints';
-import { deriveSeed } from './seed';
+import { SeedStream } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import { abandonStep } from './hilo';
 import {
@@ -55,12 +55,11 @@ export interface Layout {
 }
 
 /**
- * Partial Fisher–Yates over tiles [0..25): draw `i` consumes 4 stream bytes
- * as a little-endian u32; `swap_index = i + ((raw × (25 − i)) >> 32)` (Lemire
- * wide-reduction, unbiased). The stream starts as the seed at action_index 0
- * and extends with the derivation at `action_index = stream_length / 32`
- * whenever a draw would run past the end. Mines = sorted first `mine_count`
- * entries.
+ * Partial Fisher–Yates over tiles [0..25): draw `i` consumes the next 4 bytes
+ * of decision 0's stream (the bet) as a little-endian u32; `swap_index = i +
+ * ((raw × (25 − i)) >> 32)` (Lemire wide-reduction, unbiased). 24 mines read
+ * 96 bytes, inside the stream's 128-byte budget. Reveals draw nothing. Mines =
+ * sorted first `mine_count` entries.
  */
 export function deriveLayout(serverSeed: string, clientSeed: string, mineCount: number): Layout {
     if (!Number.isInteger(mineCount) || mineCount < 1 || mineCount > TOTAL_TILES - 1) {
@@ -68,22 +67,12 @@ export function deriveLayout(serverSeed: string, clientSeed: string, mineCount: 
     }
 
     const tiles = Array.from({ length: TOTAL_TILES }, (_, i) => i);
-    let stream = Array.from(deriveSeed(GAME_TYPE, serverSeed, clientSeed, 0));
-    let offset = 0;
+    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, 0);
     const draws: LayoutDraw[] = [];
 
     for (let i = 0; i < mineCount; i++) {
-        if (offset + 4 > stream.length) {
-            const extensionIndex = Math.floor(stream.length / 32);
-
-            stream = stream.concat(Array.from(deriveSeed(GAME_TYPE, serverSeed, clientSeed, extensionIndex)));
-        }
-
-        const raw =
-            (stream[offset] | (stream[offset + 1] << 8) | (stream[offset + 2] << 16)) +
-            stream[offset + 3] * 0x1000000;
-
-        offset += 4;
+        const bytes = stream.take(4);
+        const raw = (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16)) + bytes[3] * 0x1000000;
 
         const remaining = TOTAL_TILES - i;
         const swapIndex = i + Number((BigInt(raw) * BigInt(remaining)) >> 32n);

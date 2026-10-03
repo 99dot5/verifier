@@ -6,7 +6,7 @@
  * The page only fetches from the chain sources configured below (TzKT + a
  * Tezos archive RPC — both swappable) or verifies messages you paste in.
  */
-import { deploymentsForTenant, NETWORKS, type Deployment, type NetworkConfig } from './chain/networks';
+import { deploymentsForTenant, isListedRollup, NETWORKS, type Deployment, type NetworkConfig } from './chain/networks';
 import { scanRange, type InboxMessage, type ScanProgress } from './chain/inbox';
 import { headLevel } from './chain/inbox';
 import { fetchAdminLineage, keysForTenant, vaultsForPool, type AdminLineage } from './chain/admin-lineage';
@@ -37,9 +37,12 @@ app.innerHTML = `
         </p>
         <ol class="intro">
             <li><strong>The payout was correct.</strong> It re-derives the outcome from
-                <code>(game_type, server_seed, client_seed, action_index)</code> — blake2b-256 over
-                <code>"game-seed|…"</code> — and applies the game’s payout rule in exact integer arithmetic.
-                There is <em>no operator-controlled nonce</em> anywhere in the derivation.</li>
+                <code>(game_type, server_seed, client_seed, decision, chunk)</code> — blake2b-256 over
+                <code>"99dot5:engine-seed:v1"</code> and the length-prefixed fields, keyed by the round’s
+                decision rather than its action index — and applies the game’s payout rule in exact integer
+                arithmetic. There is <em>no operator-controlled nonce</em> anywhere in the derivation. Each
+                game version names its own derivation (<code>v1</code> for every game today); a round on a rollup
+                the list does not name is reported inconclusive, never replayed under a guessed rule.</li>
             <li><strong>The seed was committed before the round.</strong> It finds the on-chain
                 <code>SeedBatch</code> that published the seed’s hash and checks it landed at an L1 level
                 strictly before the round’s message. Without this half, a correct payout could still come
@@ -305,8 +308,8 @@ function applyDeployment(network: NetworkConfig, deployment: Deployment | null):
 
     if (!deployment) {
         networkNote.textContent =
-            `${network.label} has no rounds yet — no rollup is originated on it. That is expected, not an ` +
-            `error; switch networks to verify live rounds.`;
+            `${network.label} lists no deployment — no rollup this verifier can replay is originated on it ` +
+            `yet. That is expected, not an error; switch networks to verify live rounds.`;
     } else {
         const evidence = `Anchor evidence: ${deployment.evidence.join(' ')}`;
 
@@ -861,6 +864,10 @@ function runVerification(
         // is unknown — the signatures check then reports `unavailable` rather
         // than guessing.
         signingDomain: rollupAddress ? { chainId: currentNetwork().chainId, rollupAddress } : null,
+        // Looked up by the rollup actually in the field, so a hand-typed
+        // rollup no entry lists is an unknown deployment and is not replayed.
+        // The seed rule itself comes from the round's game version.
+        deploymentListed: rollupAddress ? isListedRollup(NETWORKS, rollupAddress) : false,
         messages,
         keys,
         receipts,
@@ -879,7 +886,8 @@ function renderReport(report: VerificationReport): void {
     const labels: Record<VerificationReport['verdict'], string> = {
         verified: 'VERIFIED — authentic messages, pre-committed seed, correct payout, and your own commands behind it',
         attested: 'ATTESTED — checked, but weakly: your receipts could not be reconstructed, so only the server’s own signed statement was compared',
-        inconclusive: 'INCONCLUSIVE — the scanned range does not bracket this round; widening it may change the answer',
+        inconclusive:
+            'INCONCLUSIVE — the scanned range does not bracket this round, or its rollup is not a listed deployment (or its game names a seed derivation this verifier does not implement); see the replay row',
         undetermined: 'UNDETERMINED — not on chain yet, and no EndSession for this session is on chain either, so nothing shows the operator moved past this round. Not an accusation; try again later',
         suppressed: 'SUPPRESSED — your receipts are valid, the round is not on chain, and this session’s EndSession is — which is written only after every round of the session settled',
         failed: 'FAILED — at least one check did not hold; see below',

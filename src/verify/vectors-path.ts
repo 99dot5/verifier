@@ -5,7 +5,7 @@
  * so the identical tests pin both trees to the identical bytes.
  */
 
-export type VectorGame = 'hilo' | 'plinko' | 'mines' | 'crash';
+export type VectorGame = 'hilo' | 'plinko' | 'mines' | 'crash' | 'hydra';
 
 export function vectorsUrl(game: VectorGame): URL {
     return new URL(`../../vectors/${game}.v1.vectors.json`, import.meta.url);

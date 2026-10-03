@@ -11,10 +11,13 @@ import { bytesToHex, deriveSeed, hexToBytes, rawU64 } from './seed';
 import { GAME_TYPE, hiloStep, replay } from './hilo';
 import type { TranscriptAction } from './types';
 
+/** The seed rule every listed deployment selects today. */
+
 interface StepVector {
     server_seed: string;
     client_seed: string;
-    action_index: number;
+    /** The decision the card is drawn under: 0 = opening card, k = k-th guess. */
+    decision: number;
     seed_hex: string;
     raw_u64: string;
     deck_index: number;
@@ -54,12 +57,12 @@ const OUTCOME_BY_VECTOR: Record<string, string> = { 'cashed-out': 'cashout', los
 describe('hilo:v1 vectors', () => {
     it('reproduces every step vector (seed, card, probabilities, multipliers)', () => {
         for (const sv of vectors.step_vectors) {
-            const seed = deriveSeed(GAME_TYPE, sv.server_seed, sv.client_seed, sv.action_index);
+            const seed = deriveSeed(GAME_TYPE, sv.server_seed, sv.client_seed, sv.decision, 0);
 
             expect(bytesToHex(seed)).toBe(sv.seed_hex);
             expect(rawU64(seed).toString()).toBe(sv.raw_u64);
 
-            const step = hiloStep(sv.server_seed, sv.client_seed, sv.action_index);
+            const step = hiloStep(sv.server_seed, sv.client_seed, sv.decision);
 
             expect(step.deckIndex).toBe(sv.deck_index);
             expect(step.rank).toBe(sv.card.rank);

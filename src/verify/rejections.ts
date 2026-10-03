@@ -290,6 +290,13 @@ export interface RejectionInput {
     serverSeedHex: string | null;
     clientSeedHex: string | null;
     /**
+     * Whether the round's rollup is a deployment `chain/networks.json` lists.
+     * The crash tick is derived only where the replay runs, so on an unlisted
+     * rollup the check reports `unavailable` rather than contradicting the
+     * server with a tick the replay itself refused to derive.
+     */
+    deploymentListed: boolean;
+    /**
      * The transcript's actions in index order — read ONLY to learn how the
      * round settled, which decides whether a liveness refusal is eligible to
      * fail at all. Empty with no transcript on chain.
@@ -393,6 +400,13 @@ function crashAnchor(input: RejectionInput): Anchor {
 
     if (input.serverSeedHex === null || input.clientSeedHex === null) {
         return { status: 'unavailable', reason: 'the transcript revealed no seed pair to derive the crash tick from' };
+    }
+
+    if (!input.deploymentListed) {
+        return {
+            status: 'unavailable',
+            reason: "the round's rollup is not a listed deployment, so the crash tick is not derived",
+        };
     }
 
     const started = input.frames.find(

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import rawNetworks from './networks.json';
-import { deploymentsForTenant, NETWORKS, parseNetworks } from './networks';
+import { deploymentsForTenant, isListedRollup, NETWORKS, parseNetworks } from './networks';
 
 /** A minimal valid document; each negative test breaks exactly one thing in a copy. */
 function validDocument() {
@@ -74,6 +74,19 @@ describe('deploymentsForTenant', () => {
     });
 });
 
+describe('isListedRollup', () => {
+    it('finds a listed deployment', () => {
+        expect(isListedRollup(parseNetworks(validDocument()), 'sr1D3nG1QgW88iS5owT9gneusBU38K5oHGLS')).toBe(true);
+    });
+
+    it('is false for a rollup no deployment lists — including the retired shadownet rollup', () => {
+        // sr1LVZW8… ran the retired action-index rule and was removed from the
+        // list: its rounds are an unknown deployment, never replayed.
+        expect(isListedRollup(NETWORKS, 'sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL')).toBe(false);
+        expect(isListedRollup(parseNetworks(validDocument()), 'sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL')).toBe(false);
+    });
+});
+
 describe('networks.json', () => {
     it('parses the shipped file', () => {
         expect(parseNetworks(rawNetworks)).toEqual(NETWORKS);
@@ -103,6 +116,8 @@ describe('networks.json', () => {
         ['a non-integer level', (doc) => (doc.networks[0].deployments[0].originationAdministrator.level = 4085587.5), /level/],
         ['an unknown status', (doc) => (doc.networks[0].deployments[0].status = 'paused'), /status/],
         ['a tenant slug outside the grammar', (doc) => (doc.networks[0].deployments[0].tenantId = '99dot5_Shadownet'), /tenantId/],
+        // The seed derivation is named by each game version, not by a deployment.
+        ['a per-deployment derivation', (doc) => Object.assign(doc.networks[0].deployments[0], { derivation: 'v1' }), /unknown field "derivation"/],
         ['empty evidence', (doc) => (doc.networks[0].deployments[0].evidence = []), /evidence/],
         ['a plain-http endpoint', (doc) => (doc.networks[0].tzktApiUrl = 'http://api.shadownet.tzkt.io'), /https/],
         ['a rollup listed twice', (doc) => doc.networks[0].deployments.push({ ...doc.networks[0].deployments[0] }), /listed twice/],

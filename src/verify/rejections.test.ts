@@ -12,13 +12,15 @@
  * against the golden vectors by `crash.test.ts`. A hard-coded tick here would
  * pin this file to itself.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { commandFrame, serverFrame, type ServerFrameSpec } from '../receipts/fixtures';
 import type { ImportedCommand, ImportedFrame } from '../receipts/import';
 import { decodeReceiptFrame, type ReceiptFrame } from '../receipts/recompute';
-import { bytesToHex } from './seed';
 import * as crash from './crash';
 import * as hilo from './hilo';
+import { vectorsUrl } from './vectors-path';
 import {
     RACE_BAND_TICKS,
     REJECTION_CHECK_ID,
@@ -27,6 +29,8 @@ import {
     type RejectionInput,
     type TranscriptActionSummary,
 } from './rejections';
+
+/** The seed rule every listed deployment selects today. */
 
 const SIGNING_SEED = new Uint8Array(32).fill(1);
 const SESSION_SEED = new Uint8Array(32).fill(2);
@@ -40,13 +44,40 @@ const CASHOUT = '22222222-2222-4222-8222-222222222222';
 /** The peer tab's own cashout — the one the server refused. */
 const PEER_CASHOUT = '33333333-3333-4333-8333-333333333333';
 
+/** A named seed scenario from the games vectors file (`hex_scenarios`). */
+interface HexScenario {
+    name: string;
+    predicate: string;
+    server_seed_hex: string;
+    effective_client_seed_hex: string;
+    crash_tick: number;
+}
+
+function crashHexScenario(name: string): HexScenario {
+    const file: { hex_scenarios?: HexScenario[] } = JSON.parse(
+        readFileSync(fileURLToPath(vectorsUrl('crash')), 'utf8'),
+    );
+    const scenario = file.hex_scenarios?.find((candidate) => candidate.name === name);
+
+    if (scenario === undefined) {
+        throw new Error(`crash vectors.json has no hex_scenarios entry named ${name}`);
+    }
+
+    return scenario;
+}
+
 /**
  * A seed pair whose round runs FAR past the race band, so a stamp well before
- * the crash is representable against a positive tick. The tick itself is
- * derived, never stated; the guard test below is what pins the choice.
+ * the crash is representable against a positive tick. The pair comes from the
+ * named scenario `crash-mid-curve-53` (predicate 53 <= crash_tick <= 100), which
+ * the vectors generator re-searches whenever the seed derivation changes. The
+ * tick itself is derived by the verifier's own replayer, never stated; the
+ * guard test below is what pins the choice. The client seed is the 32-byte
+ * HASH the transcript carries, exactly what the verifier hands the replayer.
  */
-const SERVER_SEED_HEX = bytesToHex(new Uint8Array(32).fill(13));
-const CLIENT_SEED_HEX = bytesToHex(new Uint8Array(32).fill(1));
+const SCENARIO = crashHexScenario('crash-mid-curve-53');
+const SERVER_SEED_HEX = SCENARIO.server_seed_hex;
+const CLIENT_SEED_HEX = SCENARIO.effective_client_seed_hex;
 const CRASH_TICK = crash.crashRound(SERVER_SEED_HEX, CLIENT_SEED_HEX).crashTick;
 
 /**
@@ -175,6 +206,7 @@ function input(overrides: Partial<RejectionInput> = {}): RejectionInput {
         gameType: crash.GAME_TYPE,
         serverSeedHex: SERVER_SEED_HEX,
         clientSeedHex: CLIENT_SEED_HEX,
+        deploymentListed: true,
         actions: EXPIRE_SETTLED,
         frames: [accepted(BET, 1, atTick(1n)), roundStarted(), accepted(CASHOUT, 4, atTick(2n))],
         commands: [
@@ -207,6 +239,11 @@ describe('analyseRejections', () => {
         // so every `fail` case would silently become unreachable.
         expect(CRASH_TICK).toBeGreaterThan(RACE_BAND_TICKS);
         expect(WELL_BEFORE_CRASH).toBeGreaterThan(RACE_BAND_TICKS);
+        // WELL_BEFORE_CRASH = CRASH_TICK - 50 must sit after the anchor AND
+        // outside the race band, which the scenario's predicate guarantees.
+        expect(CRASH_TICK).toBeGreaterThanOrEqual(50n + RACE_BAND_TICKS + 1n);
+        // The replayer and the generator agree on the scenario's tick.
+        expect(CRASH_TICK).toBe(BigInt(SCENARIO.crash_tick));
     });
 
     it('pushes no check at all when no refusal names the round', () => {
@@ -329,6 +366,10 @@ describe('analyseRejections', () => {
         // by the target they pre-committed — so every liveness refusal after
         // that is the correct answer to a command against a settled round, and
         // the crash tick has nothing to contradict.
+        //
+        // The fixed stamps below (ticks 60 and 150) are deliberately NOT
+        // derived from the scenario's crash tick: on a claim-settled round the
+        // tick comparison never runs, so these cases hold for any seed.
 
         it('passes a manual round’s second cashout, refused as out of sync', () => {
             // Manufactured scenario (a): cashed out at tick 50, the seed
@@ -673,6 +714,21 @@ describe('analyseRejections', () => {
 
             expect(only(report).status).toBe('unavailable');
             expect(only(report).detail).toContain('no RoundTranscript for this round was found on chain');
+        });
+
+        it('is unavailable, never a fail, when the rollup is not a listed deployment', () => {
+            // The same stamp FAILS on a listed deployment (the case above). On
+            // an unlisted one the replay is refused, so the crash tick is not
+            // derived and a contradiction cannot be claimed.
+            const report = analyseRejections(
+                withRejection(
+                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
+                    { deploymentListed: false },
+                ),
+            );
+
+            expect(only(report).status).toBe('unavailable');
+            expect(only(report).detail).toContain('is not a listed deployment');
         });
 
         it('is unavailable when the signed RoundStarted carries no crash state', () => {

@@ -296,14 +296,31 @@ you chose.
 
 ## The payout proof
 
-Outcome derivation per action is
-`seed = blake2b_256("game-seed|" + game_type + "|" + server_seed + "|" +
-client_seed + "|" + i32_le(action_index))` — the pipes are literal bytes, and
-the input set is exactly those four values: **there is no operator-controlled
-nonce**. Both seeds enter as their 64-character lowercase hex, and
-`action_index` is the action's position in `actions`. Each game's use of the
-seed bytes and its payout rule is specified, with golden vectors, in
-`vectors/*.json` (the `algorithm` block of each file).
+Outcome derivation is keyed by the round's DECISION, not by the action's
+position: each 32-byte chunk is
+
+```
+blake2b_256("99dot5:engine-seed:v1"
+            ‖ u8 len ‖ game_type ‖ u8 len ‖ server_seed ‖ u8 len ‖ client_seed
+            ‖ u32_le(decision) ‖ u32_le(chunk))
+```
+
+and a decision reads its bytes sequentially from chunk 0, at most four chunks
+(128 bytes). The input set is exactly those values: **there is no
+operator-controlled nonce**. Both seeds enter as their 64-character lowercase
+hex. The bet is decision 0, and in HiLo the k-th guess is decision k — a
+system `partial-cashout` takes an action index but draws nothing, so it cannot
+move a later card. Each game's use of the stream and its payout rule is
+specified, with golden vectors, in `vectors/*.json` (the `algorithm` block of
+each file).
+
+Each game version names the rule it replays under: `v1` for every game today,
+the identifier matching the domain `99dot5:engine-seed:v1`, and stated as
+`algorithm.derivation` in each `vectors/*.json`. The verifier selects the rule
+by the round's `game_type`, and the domain is `99dot5:engine-seed:<derivation>`.
+A round on a rollup `networks.json` does not list, or of a game with no
+implemented rule, verifies `inconclusive` rather than being replayed under a
+guessed rule.
 
 The settlement rule at the trust boundary: the rollup replays the transcript
 and credits the engine's `amount_won`, truncated toward zero to the asset's

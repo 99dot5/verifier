@@ -10,6 +10,8 @@ import { TRANSCRIPT_DECIMALS } from './assets';
 import { hiloStep, replay } from './hilo';
 import { ReplayError, type TranscriptAction } from './types';
 
+/** The seed rule every listed deployment selects today. */
+
 /** 100 TEZ in mutez: the stake every replay below is folded from. */
 const STAKE_UNITS = 100_000_000n;
 
@@ -91,11 +93,13 @@ describe('hilo replay with a partial cashout', () => {
     const SERVER = 'server-seed';
     const CLIENT = 'client-seed';
 
-    it('keeps the multiplier chain across the bank and derives the guess at the shifted index', () => {
-        // Direction that wins at action_index 2 (the post-insertion index) for
-        // these seeds, derived from the same step math the replay uses.
+    it('keeps the multiplier chain across the bank, and the bank does not move the next card', () => {
+        // The system partial-cashout takes action index 1 but draws nothing,
+        // so the guess after it is decision 1 — the card it would have been
+        // with no bank at all. The winning direction is derived from that
+        // card, so the case holds for any seed pair.
         const first = hiloStep(SERVER, CLIENT, 0);
-        const drawn = hiloStep(SERVER, CLIENT, 2);
+        const drawn = hiloStep(SERVER, CLIENT, 1);
         const winning = drawn.rankNumeric >= first.rankNumeric ? 'higher' : 'lower';
         const quoted = winning === 'higher' ? first.higherMultiplierPpm : first.lowerMultiplierPpm;
 
@@ -105,6 +109,14 @@ describe('hilo replay with a partial cashout', () => {
             action(2, winning),
             action(3, 'cashout'),
         ], STAKE_UNITS);
+
+        // Discriminating for every seed: the guess step states the decision it
+        // drew under and the card it drew, and both are decision 1's — never
+        // the action index 2 the old rule keyed on.
+        const guess = result.steps[2];
+
+        expect(guess.details).toContainEqual(['decision', '1']);
+        expect(guess.title).toContain(`drew ${drawn.rank} of ${drawn.suit}`);
 
         expect(result.settled).toBe(true);
         expect(result.outcome).toBe('cashout');

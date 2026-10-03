@@ -2,15 +2,15 @@
  * plinko:v1 — integer reimplementation of `libs/games/src/plinko/v1/engine.rs`,
  * pinned against `libs/games/src/plinko/v1/testdata/vectors.json`.
  *
- * The outcome is sealed by the seed at `place-bet` (action_index 0): `rows`
- * uniform bits from the seed choose left/right at each peg, the bin is the
+ * The outcome is sealed by the seed at `place-bet` (decision 0, which draws 2
+ * bytes): `rows` uniform bits from those bytes choose left/right at each peg, the bin is the
  * popcount, and the multiplier is a frozen table lookup. The later `cashout`
  * is a settle trigger only — it cannot change the payout, which is why a
  * deadline-swept round pays identically to a player-collected one.
  */
 import { SCALE_PPM } from './constants';
 import { payoutUnits, ppmToMultiplierString } from './ints';
-import { bytesToHex, deriveSeed } from './seed';
+import { SeedStream, bytesToHex } from './seed';
 import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 
 export const GAME_TYPE = 'plinko:v1';
@@ -62,7 +62,10 @@ export function multipliers(rows: number, risk: Risk): bigint[] {
     return Array.from({ length: rows + 1 }, (_, k) => BigInt(half[Math.min(k, rows - k)]) * 10_000n);
 }
 
-/** `path[i] = bit (i % 8) of seed byte (i / 8)`; 0 = left, 1 = right. */
+/** The bytes the bet draws: 16 bits, enough for the largest board. */
+export const PATH_BYTES = 2;
+
+/** `path[i] = bit (i % 8) of drawn byte (i / 8)`; 0 = left, 1 = right. */
 export function derivePath(seed: Uint8Array, rows: number): number[] {
     return Array.from({ length: rows }, (_, i) => (seed[Math.floor(i / 8)] >> i % 8) & 1);
 }
@@ -144,8 +147,10 @@ export function replay(
         throw new ReplayError(`unsupported plinko config: rows=${rows} risk=${risk}`);
     }
 
-    const seed = deriveSeed(GAME_TYPE, serverSeed, clientSeed, 0);
-    const path = derivePath(seed, rows);
+    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, 0);
+    const drawn = stream.take(PATH_BYTES);
+    const seed = stream.derivedChunks()[0];
+    const path = derivePath(drawn, rows);
     const bin = binIndex(path);
     const multiplierPpm = multipliers(rows, risk)[bin];
     const rtp = exactRtp(rows, risk);
@@ -155,8 +160,9 @@ export function replay(
             actionType: 'place-bet',
             title: `place-bet — rows=${rows} risk=${risk}: bin ${bin} pays ${ppmToMultiplierString(multiplierPpm)}`,
             details: [
-                ['derived seed', bytesToHex(seed)],
-                ['path (0=left, 1=right; bit i%8 of seed byte i/8)', path.join('')],
+                ['derived seed (decision 0, chunk 0)', bytesToHex(seed)],
+                ['drawn bytes (the first 2 of the stream)', bytesToHex(drawn)],
+                ['path (0=left, 1=right; bit i%8 of drawn byte i/8)', path.join('')],
                 ['bin index (popcount)', String(bin)],
                 ['table multiplier', ppmToMultiplierString(multiplierPpm)],
                 ['table exact RTP', rtp.display],

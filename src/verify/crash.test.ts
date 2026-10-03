@@ -373,7 +373,7 @@ describe('crash:v1 replay', () => {
     });
 
     it('is registered with the verifier', () => {
-        expect(supportedGameTypes()).toHaveLength(4);
+        // The full set is pinned against GAME_SEED_DERIVATIONS in verifier.test.ts.
         expect(supportedGameTypes()).toContain(GAME_TYPE);
     });
 });

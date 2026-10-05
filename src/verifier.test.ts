@@ -38,6 +38,7 @@ import {
 } from './receipts/fixtures';
 import { PROJECTION_CHECK_ID } from './verify/projection';
 import { STAKE_CHECK_ID } from './verify/stake';
+import { OPENER_SEED_CHECK_ID, PRE_BET_SEED_CHECK_ID } from './verify/seed-commitment';
 import { computeCommitment } from './receipts/commitment';
 import type { ImportedReceipts } from './receipts/import';
 import type { ReceiptsInput, ScanContext } from './verifier';
@@ -171,6 +172,8 @@ function hexScenario(game: VectorGame, name: string): HexScenario {
 const HILO_SCENARIO = hexScenario('hilo', 'hilo-higher-wins-at-1');
 const CLIENT_SEED = hexToBytes(HILO_SCENARIO.effective_client_seed_hex);
 const SERVER_SEED = hexToBytes(HILO_SCENARIO.server_seed_hex);
+/** The commitment the pool published for `SERVER_SEED` at `SEED_INDEX` — what an honest opener and echo state. */
+const SEED_COMMITMENT = serverSeedCommitment(bytesToHex(SERVER_SEED));
 
 // ── The player's receipts for this round ────────────────────────────────
 //
@@ -207,6 +210,10 @@ function betCommand(
     game: CommandGameSpec = HILO_ARM,
     clientSeed?: string,
     amount: MoneySpec | null = STAKE_MONEY,
+    // The seed commitment the player echoes from the server's promise (ADR
+    // 0025). The honest default is the chain's; `null` writes no echo, the
+    // shape of a client that held no promise when it bet.
+    serverSeedHash: Uint8Array | null = SEED_COMMITMENT,
 ): Uint8Array {
     return commandFrame(SESSION_SEED, {
         requestId: BET_REQUEST,
@@ -214,6 +221,7 @@ function betCommand(
         payloadCase: 'placeBet',
         clientSeed,
         amount: amount ?? undefined,
+        serverSeedHash: serverSeedHash ?? undefined,
         game,
     });
 }
@@ -240,6 +248,12 @@ interface ReceiptShape {
     bet?: Uint8Array;
     /** `RoundStartedEvent.stake`; `null` writes no field (a producer predating it). */
     openerStake?: MoneySpec | null;
+    /**
+     * `RoundStartedEvent.server_seed_commitment` (ADR 0025);
+     * the honest default is the chain's commitment at its index; `null`
+     * models a server omitting the required message.
+     */
+    openerSeed?: { hash: Uint8Array; index: bigint } | null;
     cashOut?: Uint8Array;
     /** `RoundEndedEvent.cause`; the honest default is the player's own action. */
     cause?: 'player-action' | 'system-sweep' | 'transcript-cap';
@@ -260,6 +274,19 @@ function roundEndedSpec(commitment: Uint8Array, shape: ReceiptShape = {}): Serve
             ...(shape.noCause ? {} : { cause: shape.cause ?? ('player-action' as const) }),
         },
     };
+}
+
+/** The opener's seed fields for a shape: the honest default, a stated pair, or none. */
+function openerSeedFields(openerSeed: ReceiptShape['openerSeed']): {
+    serverSeedCommitment?: { hash: Uint8Array; index: bigint };
+} {
+    if (openerSeed === null) {
+        return {};
+    }
+
+    const seed = openerSeed ?? { hash: SEED_COMMITMENT, index: SEED_INDEX };
+
+    return { serverSeedCommitment: seed };
 }
 
 /** The commitment over a shape's two commands — what an honest server states. */
@@ -306,6 +333,7 @@ function buildReceipts(overrides: Partial<ImportedReceipts> = {}, shape: Receipt
                     case: 'roundStarted',
                     roundId: ROUND_ID,
                     stake: shape.openerStake === null ? undefined : (shape.openerStake ?? STAKE_MONEY),
+                    ...openerSeedFields(shape.openerSeed),
                 },
             }),
             frame({
@@ -319,6 +347,11 @@ function buildReceipts(overrides: Partial<ImportedReceipts> = {}, shape: Receipt
         roundEndedFrame: serverFrame(SIGNING_SEED, endedSpec),
         ...overrides,
     };
+}
+
+/** The honest export under `shape`, as the `receipts` input `verifyRound` takes. */
+function receiptsFor(shape: ReceiptShape = {}): ReceiptsInput {
+    return { status: 'ok', receipts: buildReceipts({}, shape) };
 }
 
 /** A range that brackets the round: it starts at the deposit and reaches head. */
@@ -661,6 +694,82 @@ describe('verifyRound', () => {
         expect(statusOf(report, STAKE_CHECK_ID)).toBe('pass');
         // A reader must never mistake the weak comparison for the strong one.
         expect(report.checks.find((c) => c.id === STAKE_CHECK_ID)?.detail).toContain('server agreeing with itself');
+    });
+
+    it('FAILS a round whose opener named a different seed commitment than the chain reveals', () => {
+        // The post-bet swap (ADR 0025): the server opened the round against one
+        // committed seed and settled it against another. Every on-chain proof
+        // replays the swapped seed and passes; only the signed opener sees it.
+        const shape = { openerSeed: { hash: new Uint8Array(32).fill(0x42), index: SEED_INDEX } };
+        const report = verify(buildRound(), { receipts: receiptsFor(shape) });
+
+        expect(report.verdict).toBe('failed');
+        expect(statusOf(report, OPENER_SEED_CHECK_ID)).toBe('fail');
+        expect(report.checks.find((c) => c.id === OPENER_SEED_CHECK_ID)?.detail).toContain('swapped seeds');
+        // The echo still matches the chain, so the pre-bet proof is not what fails.
+        expect(statusOf(report, PRE_BET_SEED_CHECK_ID)).toBe('pass');
+    });
+
+    it('FAILS a round whose opener named the right commitment at the wrong index', () => {
+        const shape = { openerSeed: { hash: SEED_COMMITMENT, index: SEED_INDEX + 1n } };
+        const report = verify(buildRound(), { receipts: receiptsFor(shape) });
+
+        expect(report.verdict).toBe('failed');
+        expect(statusOf(report, OPENER_SEED_CHECK_ID)).toBe('fail');
+    });
+
+    it('FAILS a round settled against a seed other than the one the player echoed', () => {
+        // The #1234 shape made visible: the server promised one seed, the
+        // player signed its hash into the bet, and the transcript reveals a
+        // different seed — chosen with the client seed already in hand.
+        const echoed = new Uint8Array(32).fill(0x24);
+        const shape = {
+            bet: betCommand(HILO_ARM, undefined, STAKE_MONEY, echoed),
+            // The opener agrees with the chain, so only the pre-bet proof fails.
+            openerSeed: { hash: SEED_COMMITMENT, index: SEED_INDEX },
+        };
+        const report = verify(buildRound({ playerCommitment: commitmentOf(shape) }), { receipts: receiptsFor(shape) });
+
+        expect(report.verdict).toBe('failed');
+        expect(statusOf(report, PRE_BET_SEED_CHECK_ID)).toBe('fail');
+        expect(report.checks.find((c) => c.id === PRE_BET_SEED_CHECK_ID)?.detail).toContain(
+            'with the client seed already in hand',
+        );
+        expect(statusOf(report, OPENER_SEED_CHECK_ID)).toBe('pass');
+    });
+
+    it('FAILS when an accepted bet omitted its required promise', () => {
+        // The server must never accept this signed bet.
+        const shape = { bet: betCommand(HILO_ARM, undefined, STAKE_MONEY, null) };
+        const report = verify(buildRound({ playerCommitment: commitmentOf(shape) }), { receipts: receiptsFor(shape) });
+
+        expect(report.verdict).toBe('failed');
+        expect(statusOf(report, PRE_BET_SEED_CHECK_ID)).toBe('fail');
+        expect(report.checks.find((c) => c.id === PRE_BET_SEED_CHECK_ID)?.detail).toContain(
+            'required 32-byte server_seed_hash',
+        );
+        expect(statusOf(report, OPENER_SEED_CHECK_ID)).toBe('pass');
+    });
+
+    it('FAILS when a signed opener omits the required seed commitment', () => {
+        const shape = { openerSeed: null };
+        const report = verify(buildRound(), { receipts: receiptsFor(shape) });
+
+        expect(report.verdict).toBe('failed');
+        expect(statusOf(report, OPENER_SEED_CHECK_ID)).toBe('fail');
+        expect(statusOf(report, PRE_BET_SEED_CHECK_ID)).toBe('pass');
+    });
+
+    it('keeps the opener proof unavailable when the entire opening receipt is missing', () => {
+        const receipts = buildReceipts();
+
+        receipts.frames = receipts.frames.filter((frame) => frame.sequence !== 3n);
+
+        const report = verify(buildRound(), { receipts: { status: 'ok', receipts } });
+
+        expect(statusOf(report, OPENER_SEED_CHECK_ID)).toBe('unavailable');
+        expect(report.verdict).not.toBe('failed');
+        expect(report.verdict).not.toBe('verified');
     });
 
     it('fails when an action payload is tampered with', () => {
@@ -1070,6 +1179,7 @@ describe('verifyRound', () => {
                 requestId: BET_REQUEST,
                 sessionId: SESSION_ID,
                 payloadCase: 'placeBet' as const,
+                serverSeedHash: SEED_COMMITMENT,
             }),
             cashOut: commandFrame(SESSION_SEED, {
                 requestId: CASHOUT_REQUEST,
@@ -1373,7 +1483,7 @@ describe('a cashout the server answered with nothing', () => {
                         sequence: 3,
                         sessionId: SESSION_ID,
                         relatedRequestId: BET_REQUEST,
-                        payload: { case: 'roundStarted', roundId: ROUND_ID },
+                        payload: { case: 'roundStarted', roundId: ROUND_ID, ...openerSeedFields(undefined) },
                     }),
                     frame(ENDED_SPEC),
                 ],
@@ -1423,6 +1533,9 @@ describe('a refusal the round’s own seed contradicts', () => {
     const CRASH_SCENARIO = hexScenario('crash', 'crash-mid-curve-53');
     const CRASH_SERVER_SEED = hexToBytes(CRASH_SCENARIO.server_seed_hex);
     const CRASH_CLIENT_SEED = hexToBytes(CRASH_SCENARIO.effective_client_seed_hex);
+    /** The commitment of THIS block's seed — what its honest opener and echoes state. */
+    const CRASH_SEED_COMMITMENT = serverSeedCommitment(bytesToHex(CRASH_SERVER_SEED));
+    const CRASH_OPENER_SEED = { hash: CRASH_SEED_COMMITMENT, index: SEED_INDEX };
     const CRASH_TICK = crash.crashRound(bytesToHex(CRASH_SERVER_SEED), bytesToHex(CRASH_CLIENT_SEED)).crashTick;
     const ANCHOR = 1_700_000_000_000n;
     const QUANTUM = 50n;
@@ -1460,8 +1573,9 @@ describe('a refusal the round’s own seed contradicts', () => {
      * the fourth proof is what compares them.
      */
     const CRASH_SHAPE = () => ({
-        bet: betCommand({ game: 'crash' }),
+        bet: betCommand({ game: 'crash' }, undefined, STAKE_MONEY, CRASH_SEED_COMMITMENT),
         cashOut: cashOutCommand({ game: 'crash', tick: CASHOUT_TICK }),
+        openerSeed: CRASH_OPENER_SEED,
     });
 
     function receiptsWithRefusal(stampedAtTick: bigint): ReceiptsInput {
@@ -1478,6 +1592,7 @@ describe('a refusal the round’s own seed contradicts', () => {
                               case: 'roundStarted',
                               roundId: ROUND_ID,
                               crashState: { tickQuantumMs: QUANTUM, serverAnchorUnixMs: ANCHOR },
+                              ...openerSeedFields(CRASH_OPENER_SEED),
                           },
                       }),
                   }
@@ -1555,7 +1670,7 @@ describe('a refusal the round’s own seed contradicts', () => {
     // cashout-settled round above becomes the case that must NOT fail.
 
     const EXPIRE_ACTIONS = [action('place-bet', MANUAL_BET), action('expire')];
-    const EXPIRE_BET = betCommand({ game: 'crash' });
+    const EXPIRE_BET = betCommand({ game: 'crash' }, undefined, STAKE_MONEY, CRASH_SEED_COMMITMENT);
     const EXPIRE_COMMITMENT = computeCommitment([EXPIRE_BET]);
 
     function expireReceipts(stampedAtTick: bigint): ReceiptsInput {
@@ -1627,6 +1742,7 @@ describe('a refusal the round’s own seed contradicts', () => {
                             case: 'roundStarted',
                             roundId: ROUND_ID,
                             crashState: { tickQuantumMs: QUANTUM, serverAnchorUnixMs: ANCHOR },
+                            ...openerSeedFields(CRASH_OPENER_SEED),
                         },
                     }),
                     frame(endedSpec),
@@ -1812,7 +1928,7 @@ describe('a clean round of each remaining replayable game', () => {
                         sequence: 3,
                         sessionId: SESSION_ID,
                         relatedRequestId: BET_REQUEST,
-                        payload: { case: 'roundStarted', roundId: ROUND_ID },
+                        payload: { case: 'roundStarted', roundId: ROUND_ID, ...openerSeedFields(undefined) },
                     }),
                     frameOf({
                         sequence: 4,
@@ -1978,7 +2094,7 @@ describe('a clean round of each remaining replayable game', () => {
                         sequence: 3,
                         sessionId: SESSION_ID,
                         relatedRequestId: BET_REQUEST,
-                        payload: { case: 'roundStarted', roundId: ROUND_ID },
+                        payload: { case: 'roundStarted', roundId: ROUND_ID, ...openerSeedFields(undefined) },
                     }),
                     frameOf({
                         sequence: 4,
@@ -2132,7 +2248,7 @@ describe('a clean round of each remaining replayable game', () => {
                                 sequence: 3,
                                 sessionId: SESSION_ID,
                                 relatedRequestId: BET_REQUEST,
-                                payload: { case: 'roundStarted', roundId: ROUND_ID },
+                                payload: { case: 'roundStarted', roundId: ROUND_ID, ...openerSeedFields(undefined) },
                             }),
                             frameOf(endedSpec),
                         ],

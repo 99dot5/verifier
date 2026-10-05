@@ -116,6 +116,49 @@ describe('server frame signatures', () => {
 });
 
 describe('proto-reader', () => {
+    it.each([0n, 137n])('decodes current and next commitments independently at index %s', (index) => {
+        const current = { index, hash: new Uint8Array(32).fill(0xa1) };
+        const next = { index: index + 1n, hash: new Uint8Array(32).fill(0xb2) };
+        const frame = serverFrame(TENANT_SEED, {
+            sequence: 3,
+            sessionId: SESSION_ID,
+            relatedRequestId: BET_REQUEST,
+            payload: {
+                case: 'roundStarted',
+                roundId: ROUND_ID,
+                serverSeedCommitment: current,
+                nextServerSeedCommitment: next,
+            },
+        });
+
+        expect(decodeServerEnvelope(splitSignedFrame(frame).body)).toMatchObject({
+            roundStartedServerSeedCommitment: current,
+            roundStartedNextServerSeedCommitment: next,
+        });
+    });
+
+    it('recognizes explicit promise commands and replies as known non-round payloads', () => {
+        const command = new ProtoWriter().bytes(17, new Uint8Array()).finish();
+        const reply = new ProtoWriter().bytes(22, new Uint8Array()).finish();
+        expect(decodeClientEnvelope(command).payloadCase).toBe('requestServerSeedPromise');
+        expect(decodeServerEnvelope(reply).payloadCase).toBe('serverSeedPromised');
+    });
+
+    it('distinguishes an absent current commitment from a promise for the next bet', () => {
+        const next = { index: 1n, hash: new Uint8Array(32).fill(0xb2) };
+        const frame = serverFrame(TENANT_SEED, {
+            sequence: 3,
+            sessionId: SESSION_ID,
+            relatedRequestId: BET_REQUEST,
+            payload: { case: 'roundStarted', roundId: ROUND_ID, nextServerSeedCommitment: next },
+        });
+
+        expect(decodeServerEnvelope(splitSignedFrame(frame).body)).toMatchObject({
+            roundStartedServerSeedCommitment: null,
+            roundStartedNextServerSeedCommitment: next,
+        });
+    });
+
     it('decodes every field the receipt proofs read', () => {
         const commitment = new Uint8Array(32).fill(0xab);
         const frames: ServerFrameSpec[] = [
@@ -189,6 +232,7 @@ describe('proto-reader', () => {
             sessionId: SESSION_ID,
             payloadCase: 'placeBet',
             placeBetClientSeed: null,
+            placeBetServerSeedHash: null,
             // This fixture writes no `amount`, which is the shape of a
             // producer predating the stake cross-check. Null, not zero: the
             // comparison reports "no signed stake to compare" rather than
@@ -981,6 +1025,18 @@ describe('receipts export fixture', () => {
             expect(verifyServerFrameSignature(split.signature, split.body, tenantKey)).toBe(true);
             expect(decoded.sequence.toString()).toBe(expected.sequence);
             expect(decoded.payloadCase).toBe(expected.payloadCase);
+            if (decoded.payloadCase === 'roundStarted') {
+                // These signed bytes come from the generated protobuf encoder
+                // in casino-client, independently of this reader's fixtures.
+                expect(decoded.roundStartedServerSeedCommitment).toEqual({
+                    index: 137n,
+                    hash: new Uint8Array(32).fill(0x5d),
+                });
+                expect(decoded.roundStartedNextServerSeedCommitment).toEqual({
+                    index: 138n,
+                    hash: new Uint8Array(32).fill(0x6e),
+                });
+            }
             expect(decoded.relatedRequestId).toBe(expected.relatedRequestId);
             expect(decoded.roundId).toBe(expected.roundIdHex);
             expect(decoded.actionIndex).toBe(expected.actionIndex);

@@ -43,6 +43,11 @@ const REJECTED_RECEIVED_AT_UNIX_MS = 4;
 // RoundStartedEvent.game_state, crash arm; crash.v1.State
 const ROUND_STARTED_CRASH_STATE = 11;
 const ROUND_STARTED_STAKE = 2;
+const ROUND_STARTED_SERVER_SEED_COMMITMENT = 4;
+const ROUND_STARTED_NEXT_SERVER_SEED_COMMITMENT = 5;
+// casino.v1.SeedCommitment
+const SEED_COMMITMENT_INDEX = 1;
+const SEED_COMMITMENT_HASH = 2;
 const CRASH_STATE_TICK_QUANTUM_MS = 4;
 const CRASH_STATE_SERVER_ANCHOR_UNIX_MS = 6;
 
@@ -65,11 +70,13 @@ const CLIENT_PAYLOAD_FIELDS = {
     resumeSession: 14,
     endSession: 15,
     timeSync: 16,
+    requestServerSeedPromise: 17,
 } as const;
 
 // PlaceBetCommand
 const PLACE_BET_AMOUNT = 1;
 const PLACE_BET_CLIENT_SEED = 2;
+const PLACE_BET_SERVER_SEED_HASH = 3;
 
 // CashOutCommand / PlayerActionCommand
 const COMMAND_ROUND_ID = 1;
@@ -138,6 +145,24 @@ function money(spec: MoneySpec): Uint8Array {
         .finish();
 }
 
+/** A `casino.v1.SeedCommitment` to write: the promise for a session's next bet. */
+export interface SeedCommitmentSpec {
+    index: number | bigint;
+    hash: Uint8Array;
+}
+
+function seedCommitment(spec: SeedCommitmentSpec): Uint8Array {
+    const writer = new ProtoWriter();
+
+    if (BigInt(spec.index) !== 0n) {
+        writer.varint(SEED_COMMITMENT_INDEX, spec.index);
+    }
+
+    writer.bytes(SEED_COMMITMENT_HASH, spec.hash);
+
+    return writer.finish();
+}
+
 export type ServerPayloadSpec =
     | { case: 'commandAccepted'; receivedAtUnixMs?: number | bigint }
     | {
@@ -149,7 +174,19 @@ export type ServerPayloadSpec =
           receivedAtUnixMs?: number | bigint;
       }
     | { case: 'unknownPayload'; roundId: string }
-    | { case: 'roundStarted'; roundId: string; crashState?: CrashStateSpec; stake?: MoneySpec }
+    | {
+          case: 'roundStarted';
+          roundId: string;
+          crashState?: CrashStateSpec;
+          stake?: MoneySpec;
+          /**
+           * `RoundStartedEvent.server_seed_commitment` (4) — the seed THIS
+           * round is settled against (ADR 0025). Omitted writes no message.
+           */
+          serverSeedCommitment?: SeedCommitmentSpec;
+          /** `RoundStartedEvent.next_server_seed_commitment` (5). */
+          nextServerSeedCommitment?: SeedCommitmentSpec;
+      }
     | { case: 'roundUpdated'; roundId: string; actionIndex: number; origin?: keyof typeof ORIGIN_VALUES }
     | {
           case: 'roundEnded';
@@ -235,6 +272,14 @@ export function serverFrame(seed: Uint8Array, spec: ServerFrameSpec): Uint8Array
                 started.bytes(ROUND_STARTED_STAKE, money(spec.payload.stake));
             }
 
+            if (spec.payload.serverSeedCommitment) {
+                started.bytes(ROUND_STARTED_SERVER_SEED_COMMITMENT, seedCommitment(spec.payload.serverSeedCommitment));
+            }
+
+            if (spec.payload.nextServerSeedCommitment) {
+                started.bytes(ROUND_STARTED_NEXT_SERVER_SEED_COMMITMENT, seedCommitment(spec.payload.nextServerSeedCommitment));
+            }
+
             if (spec.payload.crashState) {
                 const state = new ProtoWriter();
 
@@ -311,6 +356,12 @@ export interface CommandFrameSpec {
     payloadCase: keyof typeof CLIENT_PAYLOAD_FIELDS;
     /** `PlaceBetCommand.client_seed` text; only meaningful for `placeBet`. */
     clientSeed?: string;
+    /**
+     * `PlaceBetCommand.server_seed_hash` (3) — the seed commitment the player
+     * echoed from the server's promise (ADR 0025); only meaningful for
+     * `placeBet`. Omitted writes no field: a client that held no promise.
+     */
+    serverSeedHash?: Uint8Array;
     /**
      * `PlaceBetCommand.amount` — the stake the PLAYER signs; only meaningful
      * for `placeBet`. Omitted writes no field, which is the shape of a
@@ -392,6 +443,10 @@ function commandPayload(spec: CommandFrameSpec): Uint8Array {
 
         if (spec.clientSeed !== undefined) {
             writer.bytes(PLACE_BET_CLIENT_SEED, new TextEncoder().encode(spec.clientSeed));
+        }
+
+        if (spec.serverSeedHash !== undefined) {
+            writer.bytes(PLACE_BET_SERVER_SEED_HASH, spec.serverSeedHash);
         }
     } else if (spec.payloadCase === 'cashOut' || spec.payloadCase === 'playerAction') {
         if (spec.roundId) {

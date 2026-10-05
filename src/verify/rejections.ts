@@ -146,6 +146,7 @@ const REASON_INVALID_PAYLOAD = 9;
 const REASON_UNSUPPORTED_GAME = 10;
 const REASON_ROUND_MODE_AUTO = 21;
 const REASON_CONCURRENT_ROUND_LIMIT = 22;
+const REASON_SEED_COMMITMENT_STALE = 23;
 
 /**
  * The codes that ASSERT the round was not settleable when the command landed
@@ -182,6 +183,12 @@ const LIVENESS_REASONS: ReadonlySet<number> = new Set([REASON_ROUND_CLOSED, REAS
  * meaningful. What it asserts is also checkable by the player rather than a
  * claim about hidden state: they are holding the bet they already placed.
  *
+ * `SEED_COMMITMENT_STALE` joins it on the same two grounds: the sequencer
+ * emits it from the PlaceBet gate alone, before any seed is claimed, so it can
+ * never answer a `CashOut`; and what it asserts — that the `server_seed_hash`
+ * the player echoed is not the promise the session currently holds (ADR 0025)
+ * — the player can check against the promise frame their own receipts hold.
+ *
  * Everything not listed here and not a liveness or mode code is
  * `uninformative` — `DUPLICATE_COMMAND`, `RATE_LIMITED`, `INTERNAL_ERROR`,
  * `SESSION_NOT_ACTIVE`, the pool/tenant lifecycle codes, `UNSPECIFIED`, and
@@ -194,6 +201,7 @@ const COMMAND_VALIDITY_REASONS: ReadonlySet<number> = new Set([
     REASON_INVALID_PAYLOAD,
     REASON_UNSUPPORTED_GAME,
     REASON_CONCURRENT_ROUND_LIMIT,
+    REASON_SEED_COMMITMENT_STALE,
 ]);
 
 /**
@@ -255,6 +263,8 @@ const REASON_NAMES: Record<number, string> = {
     20: 'STAKE_BELOW_MINIMUM',
     21: 'ROUND_MODE_AUTO',
     22: 'CONCURRENT_ROUND_LIMIT',
+    23: 'SEED_COMMITMENT_STALE',
+    24: 'SEED_POOL_EXHAUSTED',
 };
 
 /** Exported for the same reason `classifyRefusalReason` is: one vocabulary. */

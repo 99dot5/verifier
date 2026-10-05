@@ -61,6 +61,13 @@ import {
     type DecodedMoney,
 } from './wire/proto-reader';
 import { evaluateStakeAgreement, STAKE_CHECK_ID } from './verify/stake';
+import {
+    evaluateOpenerSeedBinding,
+    evaluatePreBetSeedCommitment,
+    OPENER_SEED_CHECK_ID,
+    type OpenerSeedStatement,
+    PRE_BET_SEED_CHECK_ID,
+} from './verify/seed-commitment';
 import { ALWAYS_SETTLING_ACTIONS, analyseRejections } from './verify/rejections';
 import {
     analyseProjection,
@@ -712,6 +719,38 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         detail: stakeVerdict.detail,
     });
 
+    // The seed-commitment proofs (ADR 0025). The chain's commitment half above
+    // proves the revealed seed was committed EARLY; these two prove it was the
+    // seed the server named before the round opened (opener binding) and
+    // before it saw the player's bet at all (the player-signed echo). Pushed
+    // with stable ids even when they cannot run, like the stake check.
+    const revealedCommitment = serverSeedCommitment(serverSeedHex);
+    const openerSeed = evaluateOpenerSeedBinding(
+        revealedCommitment,
+        transcript.serverSeedIndex,
+        openerSeedFromReceipts(input, roundId),
+    );
+
+    checks.push({
+        id: OPENER_SEED_CHECK_ID,
+        title: 'The opening frame named the seed commitment the chain reveals',
+        status: openerSeed.status,
+        detail: openerSeed.detail,
+    });
+
+    const preBetSeed = evaluatePreBetSeedCommitment(
+        revealedCommitment,
+        transcript.serverSeedIndex,
+        placeBetFromReceipts(input, roundId)?.decoded.placeBetServerSeedHash,
+    );
+
+    checks.push({
+        id: PRE_BET_SEED_CHECK_ID,
+        title: 'The server committed to this seed before it saw the bet',
+        status: preBetSeed.status,
+        detail: preBetSeed.detail,
+    });
+
     const anyFail = checks.some((c) => c.status === 'fail');
     // "verified" requires every proof to have actually run and passed. The
     // payout and commitment halves are the substance, but the SIGNATURE check
@@ -756,6 +795,16 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             // decodable command bodies, and a peer-tab round — which has
             // neither — is already `attested` rather than `verified`.
             STAKE_CHECK_ID,
+            // The seed-commitment proofs JOIN the list (ADR 0025). Without the
+            // player-signed echo nothing shows the server chose the seed
+            // before it saw the client seed — which is the whole of #1234 —
+            // and without the opener binding a post-bet seed swap replays
+            // clean. A round whose bet echoed no promise (the client held
+            // none when it bet) degrades to `incomplete`, stated rather than
+            // worked around: the shipped client waits for a promise before it
+            // bets, so an honest round from it carries the echo.
+            OPENER_SEED_CHECK_ID,
+            PRE_BET_SEED_CHECK_ID,
         ] as const
     ).every((id) => checks.find((c) => c.id === id)?.status === 'pass');
 
@@ -932,6 +981,34 @@ function openerStakeFromReceipts(input: VerifyInput, roundId: string): DecodedMo
         } catch {
             // An undecodable frame is the authenticity proof's business, not
             // this lookup's; skip it and let that check speak.
+            continue;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * The seed statement off the round's server-signed `RoundStarted` in the
+ * receipts, or null when there is none to read (same gaps as
+ * {@link openerStakeFromReceipts}: no receipts, no opener in the export, an
+ * undecodable frame). A present opener with a null commitment is retained
+ * as a statement, so the proof reports the missing required field as a failure.
+ */
+function openerSeedFromReceipts(input: VerifyInput, roundId: string): OpenerSeedStatement | null {
+    if (input.receipts?.status !== 'ok') {
+        return null;
+    }
+
+    for (const stored of input.receipts.receipts.frames) {
+        try {
+            const split = splitSignedFrame(stored.frame);
+            const decoded = decodeServerEnvelope(split.body);
+
+            if (decoded.payloadCase === 'roundStarted' && decoded.roundId === roundId) {
+                return { commitment: decoded.roundStartedServerSeedCommitment };
+            }
+        } catch {
             continue;
         }
     }

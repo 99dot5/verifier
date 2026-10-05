@@ -221,6 +221,7 @@ const SERVER_PAYLOAD_CASES: Record<number, ServerPayloadCase> = {
     19: 'sessionCreated',
     20: 'sessionResumed',
     21: 'timeSync',
+    22: 'serverSeedPromised',
 };
 
 export type ServerPayloadCase =
@@ -234,6 +235,7 @@ export type ServerPayloadCase =
     | 'sessionEnding'
     | 'sessionCreated'
     | 'sessionResumed'
+    | 'serverSeedPromised'
     | 'timeSync';
 
 /** `casino.v1.StepOrigin`, the author of the step a `RoundUpdated` reports. */
@@ -378,6 +380,18 @@ export interface DecodedServerEnvelope {
      */
     roundStartedStake: DecodedMoney | null;
     /**
+     * `RoundStartedEvent.server_seed_commitment` (4) — the SERVER-SIGNED commitment
+     * of the seed this round is settled against (ADR 0025), null on every
+     * other payload and on an opener that states none. A present commitment
+     * with index zero is distinct from an absent message.
+     */
+    roundStartedServerSeedCommitment: { index: bigint; hash: Uint8Array } | null;
+    /**
+     * `RoundStartedEvent.next_server_seed_commitment` (5) — the promise for the
+     * session's NEXT bet, null when the opener carries none.
+     */
+    roundStartedNextServerSeedCommitment: { index: bigint; hash: Uint8Array } | null;
+    /**
      * `RoundEnded.cause` (field 4), null when the frame states none.
      *
      * Null is NOT a default: the field is `optional`, so a producer that never
@@ -415,6 +429,11 @@ const ROUND_STARTED_CRASH_STATE = 11;
  * gated on the payload case AND on the wire type, never on the number alone.
  */
 const ROUND_STARTED_STAKE = 2;
+const ROUND_STARTED_SERVER_SEED_COMMITMENT = 4;
+const ROUND_STARTED_NEXT_SERVER_SEED_COMMITMENT = 5;
+// casino.v1.SeedCommitment
+const SEED_COMMITMENT_INDEX = 1;
+const SEED_COMMITMENT_HASH = 2;
 const MONEY_ASSET = 1;
 const MONEY_VALUE = 2;
 
@@ -437,6 +456,8 @@ export function decodeServerEnvelope(body: Uint8Array): DecodedServerEnvelope {
         receivedAtUnixMs: null,
         crashState: null,
         roundStartedStake: null,
+        roundStartedServerSeedCommitment: null,
+        roundStartedNextServerSeedCommitment: null,
         roundEndCause: null,
     };
 
@@ -489,6 +510,22 @@ export function decodeServerEnvelope(body: Uint8Array): DecodedServerEnvelope {
     return out;
 }
 
+/** Decode a `casino.v1.SeedCommitment`; an absent index is index 0. */
+function readSeedCommitment(bytes: Uint8Array): { index: bigint; hash: Uint8Array } {
+    let index = 0n;
+    let hash = new Uint8Array(0);
+
+    forEachField(bytes, (field) => {
+        if (field.number === SEED_COMMITMENT_INDEX && field.wireType === WIRE_VARINT) {
+            index = field.value;
+        } else if (field.number === SEED_COMMITMENT_HASH && field.wireType === WIRE_LENGTH_DELIMITED) {
+            hash = field.bytes.slice();
+        }
+    });
+
+    return { index, hash };
+}
+
 function readRoundBearingEvent(
     bytes: Uint8Array,
     out: DecodedServerEnvelope,
@@ -522,6 +559,22 @@ function readRoundBearingEvent(
             out.roundStartedStake = readMoney(field.bytes);
 
             return;
+        }
+
+        // Commitment fields belong only to the opener, even where another
+        // round event uses the same field numbers.
+        if (payloadCase === 'roundStarted') {
+            if (field.number === ROUND_STARTED_SERVER_SEED_COMMITMENT && field.wireType === WIRE_LENGTH_DELIMITED) {
+                out.roundStartedServerSeedCommitment = readSeedCommitment(field.bytes);
+
+                return;
+            }
+
+            if (field.number === ROUND_STARTED_NEXT_SERVER_SEED_COMMITMENT && field.wireType === WIRE_LENGTH_DELIMITED) {
+                out.roundStartedNextServerSeedCommitment = readSeedCommitment(field.bytes);
+
+                return;
+            }
         }
 
         if (payloadCase === 'roundUpdated') {
@@ -653,6 +706,7 @@ const CLIENT_PAYLOAD_CASES: Record<number, ClientPayloadCase> = {
     14: 'resumeSession',
     15: 'endSession',
     16: 'timeSync',
+    17: 'requestServerSeedPromise',
 };
 
 export type ClientPayloadCase =
@@ -660,6 +714,7 @@ export type ClientPayloadCase =
     | 'placeBet'
     | 'playerAction'
     | 'cashOut'
+    | 'requestServerSeedPromise'
     | 'resumeSession'
     | 'endSession'
     | 'timeSync';
@@ -677,6 +732,17 @@ export interface DecodedClientEnvelope {
      * is a place a normalisation could hide.
      */
     placeBetClientSeed: Uint8Array | null;
+    /**
+     * `PlaceBetCommand.server_seed_hash` (3) — the seed commitment the PLAYER
+     * echoed from the server's promise, under their own signature (ADR 0025);
+     * null on every other arm and on a `PlaceBet` that echoed none.
+     *
+     * The pre-bet proof's whole input. A client can only echo a hash it was
+     * told, so a signed echo that equals the commitment of the seed the chain
+     * reveals proves the server named that seed BEFORE it received this
+     * command — and with it, the client seed.
+     */
+    placeBetServerSeedHash: Uint8Array | null;
     /**
      * `PlaceBetCommand.amount` (1) — the stake the PLAYER signed, null on
      * every other arm and on a `PlaceBet` carrying none.
@@ -753,6 +819,7 @@ export type DecodedCommandBody =
 // casino.v1.PlaceBetCommand
 const PLACE_BET_AMOUNT = 1;
 const PLACE_BET_CLIENT_SEED = 2;
+const PLACE_BET_SERVER_SEED_HASH = 3;
 
 /**
  * The per-game arms of the three command messages.
@@ -884,7 +951,11 @@ function decodePlaceBetBody(bytes: Uint8Array): DecodedCommandBody {
         const game = PLACE_BET_ARMS[field.number];
 
         if (!game) {
-            if (field.number !== PLACE_BET_CLIENT_SEED && field.number !== 1) {
+            if (
+                field.number !== PLACE_BET_CLIENT_SEED &&
+                field.number !== PLACE_BET_AMOUNT &&
+                field.number !== PLACE_BET_SERVER_SEED_HASH
+            ) {
                 body = {
                     case: 'unrecognised',
                     description: `a PlaceBet game_data arm this build has no rule for (field ${field.number})`,
@@ -1047,6 +1118,7 @@ export function decodeClientEnvelope(body: Uint8Array): DecodedClientEnvelope {
         sessionId: null,
         payloadCase: null,
         placeBetClientSeed: null,
+        placeBetServerSeedHash: null,
         placeBetAmount: null,
         commandRoundId: null,
         commandBody: null,
@@ -1069,6 +1141,11 @@ export function decodeClientEnvelope(body: Uint8Array): DecodedClientEnvelope {
                             out.placeBetClientSeed = inner.bytes.slice();
                         } else if (inner.number === PLACE_BET_AMOUNT && inner.wireType === WIRE_LENGTH_DELIMITED) {
                             out.placeBetAmount = readMoney(inner.bytes);
+                        } else if (
+                            inner.number === PLACE_BET_SERVER_SEED_HASH &&
+                            inner.wireType === WIRE_LENGTH_DELIMITED
+                        ) {
+                            out.placeBetServerSeedHash = inner.bytes.slice();
                         }
                     });
                     out.commandBody = decodePlaceBetBody(field.bytes);

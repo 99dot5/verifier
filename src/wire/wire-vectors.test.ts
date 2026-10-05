@@ -403,6 +403,9 @@ describe('really-signed frames (#954)', () => {
         const onWire = decoded.message.hashes.map(bytesToHex);
 
         expect(onWire).toEqual(batch.fields.hashes_hex);
+        // The chain hash rides as 32 raw bytes, never as its hex text.
+        expect(decoded.message.drandChainHash).toHaveLength(32);
+        expect(bytesToHex(decoded.message.drandChainHash)).toBe(batch.fields.drand_chain_hash_hex);
 
         for (const { seed_hex, commitment_hex } of vectors.server_seed_commitment) {
             expect(onWire).toContain(commitment_hex);

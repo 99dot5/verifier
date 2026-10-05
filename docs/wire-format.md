@@ -98,7 +98,7 @@ domain costs zero wire bytes and left the V1 layout untouched.
     start_index:      u64            -- pool-scoped seed index of hashes[0]
     hashes:           Vec<[u8; 32]>  -- blake2b-256 commitments, one per seed
     drand_round:      u64
-    drand_chain_hash: String         -- 64-char hex, ASCII
+    drand_chain_hash: [u8; 32]       -- raw chain hash bytes (render as lowercase hex)
 }
 
 0x01 RoundTranscript {
@@ -274,7 +274,7 @@ What makes a round provably fair, from inbox data alone:
    batch it is verified against.
 5. **Not independently verifiable:** how the seed itself was derived. It comes
    from `blake2b_256(b"server-seed" ‖ batch_salt ‖ drand_round_le8 ‖
-   drand_randomness ‖ ascii(drand_chain_hash) ‖ i_le8)`, but `batch_salt` is
+   drand_randomness ‖ drand_chain_hash ‖ i_le8)` (the chain hash as its 32 raw bytes), but `batch_salt` is
    private and is never published, so the batch-level derivation cannot be
    re-run by a third party. A `SeedBatchReveal` message once existed to publish
    it; it was never produced or handled and has been removed (its precondition

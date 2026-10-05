@@ -66,7 +66,8 @@ export type SequencerMessage =
           startIndex: bigint;
           hashes: Uint8Array[];
           drandRound: bigint;
-          drandChainHash: string;
+          /** The drand chain hash, as the 32 raw bytes the wire carries. */
+          drandChainHash: Uint8Array;
       }
     | RoundTranscriptMessage
     | {
@@ -136,7 +137,7 @@ export function decodeExternalMessage(bytes: Uint8Array): DecodedEnvelope | null
                 startIndex,
                 hashes,
                 drandRound: reader.u64(),
-                drandChainHash: reader.string(),
+                drandChainHash: reader.fixedBytes(32),
             };
             break;
         }

@@ -22,6 +22,7 @@ import {
 import { decodeExternalMessage } from './wire/messages';
 import { hexToBytes } from './verify/seed';
 import { importReceipts } from './receipts/import';
+import { readReceiptsHandoff } from './receipts/handoff';
 import { decodeReceiptFrame } from './receipts/recompute';
 import { locateSessionDeposit } from './chain/deposit';
 
@@ -460,6 +461,35 @@ receiptsFileInput.addEventListener('change', async () => {
     // fires `change` again.
     receiptsFileInput.value = '';
 });
+
+/**
+ * Receipts handed over by a game's "Verify this round" (ADR 0026 §2.3): the
+ * export rides in the URL fragment, which no server ever sees. Loaded exactly
+ * as a picked file is — same box, same import, same scope adoption — and the
+ * fragment is then dropped from the address bar so a reload or a copied link
+ * does not carry the player's receipts along.
+ */
+async function adoptHandedOverReceipts(): Promise<void> {
+    let text: string | null;
+
+    try {
+        text = await readReceiptsHandoff(window.location.hash);
+    } catch (error) {
+        receiptsStatus.textContent = `receipts from the game could not be read: ${(error as Error).message}`;
+
+        return;
+    }
+
+    if (text === null) {
+        return;
+    }
+
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    receiptsTextarea.value = text;
+    adoptReceiptsScope('loaded from the game — read in this page, never uploaded. Press “Fetch from chain & verify”.');
+}
+
+void adoptHandedOverReceipts();
 
 /** Parse whatever is in the receipts box; an empty box is `absent`, not an error. */
 function readReceipts(): ReceiptsInput {

@@ -147,6 +147,7 @@ const REASON_UNSUPPORTED_GAME = 10;
 const REASON_ROUND_MODE_AUTO = 21;
 const REASON_CONCURRENT_ROUND_LIMIT = 22;
 const REASON_SEED_COMMITMENT_STALE = 23;
+const REASON_CYCLE_TOO_SHORT = 25;
 
 /**
  * The codes that ASSERT the round was not settleable when the command landed
@@ -189,6 +190,13 @@ const LIVENESS_REASONS: ReadonlySet<number> = new Set([REASON_ROUND_CLOSED, REAS
  * the player echoed is not the promise the session currently holds (ADR 0025)
  * — the player can check against the promise frame their own receipts hold.
  *
+ * `CYCLE_TOO_SHORT` (#1378) joins on the first ground: the sequencer emits it
+ * from the PlaceBet gate alone, in a `regulated` pool, before any seed is
+ * claimed, so it can never answer a `CashOut`. What it asserts — that the
+ * session's previous round of the game started inside the minimum cycle the
+ * `Welcome` stated — the player can check against the `RoundStarted` frames
+ * their own receipts hold.
+ *
  * Everything not listed here and not a liveness or mode code is
  * `uninformative` — `DUPLICATE_COMMAND`, `RATE_LIMITED`, `INTERNAL_ERROR`,
  * `SESSION_NOT_ACTIVE`, the pool/tenant lifecycle codes, `UNSPECIFIED`, and
@@ -202,6 +210,7 @@ const COMMAND_VALIDITY_REASONS: ReadonlySet<number> = new Set([
     REASON_UNSUPPORTED_GAME,
     REASON_CONCURRENT_ROUND_LIMIT,
     REASON_SEED_COMMITMENT_STALE,
+    REASON_CYCLE_TOO_SHORT,
 ]);
 
 /**
@@ -265,6 +274,7 @@ const REASON_NAMES: Record<number, string> = {
     22: 'CONCURRENT_ROUND_LIMIT',
     23: 'SEED_COMMITMENT_STALE',
     24: 'SEED_POOL_EXHAUSTED',
+    25: 'CYCLE_TOO_SHORT',
 };
 
 /** Exported for the same reason `classifyRefusalReason` is: one vocabulary. */

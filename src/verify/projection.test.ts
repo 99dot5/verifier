@@ -75,6 +75,11 @@ function act(index: number, actionType: string | null, payload: Uint8Array = new
     return { index, actionType, payload };
 }
 
+/** A hydra bet's gear as signed: PROTO tiers (legendary weapon, cloth armour, rare sprite). */
+const HYDRA_GEAR = { weapon: 3, armour: 1, sprite: 2 };
+/** The same bet for hero 2 as the transcript carries it: `borsh(Config)`, engine tiers 0-based. */
+const HYDRA_BET_PAYLOAD = new Uint8Array([2, 2, 0, 1]);
+
 function u32(value: number): Uint8Array {
     const bytes = new Uint8Array(4);
 
@@ -213,14 +218,14 @@ describe('a clean round of each game', () => {
         // does work down with it.
         const result = run({
             gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', new Uint8Array([2])), act(1, 'physical-attack'), act(2, 'cashout')],
+            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, 'physical-attack'), act(2, 'cashout')],
             binding: [
                 { requestId: BET, index: 0 },
                 { requestId: MOVE, index: 1 },
                 { requestId: SETTLE, index: 2 },
             ],
             commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2 }),
+                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
                 command(MOVE, 'playerAction', { game: 'hydra', action: 'physical-attack' }),
                 command(SETTLE, 'cashOut', { game: 'hydra' }),
             ],
@@ -306,15 +311,38 @@ describe('a rewritten action', () => {
     it('fails when the hydra hero was rewritten', () => {
         const result = run({
             gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', new Uint8Array([5])), act(1, 'cashout')],
+            actions: [act(0, 'place-bet', new Uint8Array([5, 2, 0, 1])), act(1, 'cashout')],
             commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2 }),
+                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
                 command(SETTLE, 'cashOut', { game: 'hydra' }),
             ],
         });
 
         expect(result.status).toBe('fail');
         expect(result.detail).toContain('hero = 2');
+    });
+
+    it('fails when the hydra gear was rewritten', () => {
+        const result = run({
+            gameType: 'hydra:v1',
+            // Signed legendary/cloth/rare; the transcript says common/plate/rare.
+            actions: [act(0, 'place-bet', new Uint8Array([2, 0, 2, 1])), act(1, 'cashout')],
+            commands: [
+                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
+                command(SETTLE, 'cashOut', { game: 'hydra' }),
+            ],
+        });
+
+        expect(result.status).toBe('fail');
+        expect(result.detail).toContain('weapon: 2, armour: 0, sprite: 1');
+    });
+
+    it('cannot derive a hydra bet that names no gear tier', () => {
+        const body = decodeClientEnvelope(
+            splitSignedFrame(command(BET, 'placeBet', { game: 'hydra', hero: 2 }).frame).body,
+        ).commandBody;
+
+        expect(body).toEqual({ case: 'placeBet', game: 'hydra', hero: 2, weapon: null, armour: null, sprite: null });
     });
 
     it('fails when a crash auto target became a different tick', () => {
@@ -356,14 +384,14 @@ describe('hydra fight and physical_attack', () => {
     function hydraRound(arm: 'fight' | 'physical-attack') {
         return run({
             gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', new Uint8Array([2])), act(1, 'physical-attack'), act(2, 'cashout')],
+            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, 'physical-attack'), act(2, 'cashout')],
             binding: [
                 { requestId: BET, index: 0 },
                 { requestId: MOVE, index: 1 },
                 { requestId: SETTLE, index: 2 },
             ],
             commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2 }),
+                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
                 command(MOVE, 'playerAction', { game: 'hydra', action: arm }),
                 command(SETTLE, 'cashOut', { game: 'hydra' }),
             ],
@@ -384,14 +412,14 @@ describe('hydra fight and physical_attack', () => {
     it('still fails a magic attack written as a physical one', () => {
         const result = run({
             gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', new Uint8Array([2])), act(1, 'physical-attack'), act(2, 'cashout')],
+            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, 'physical-attack'), act(2, 'cashout')],
             binding: [
                 { requestId: BET, index: 0 },
                 { requestId: MOVE, index: 1 },
                 { requestId: SETTLE, index: 2 },
             ],
             commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2 }),
+                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
                 command(MOVE, 'playerAction', { game: 'hydra', action: 'magic-attack' }),
                 command(SETTLE, 'cashOut', { game: 'hydra' }),
             ],
@@ -838,14 +866,14 @@ describe('a PlayerAction whose kind oneof carries two arms', () => {
     function hydraRound(middle: string, overrides: Partial<ProjectionInput> = {}) {
         return run({
             gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', new Uint8Array([2])), act(1, middle), act(2, 'cashout')],
+            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, middle), act(2, 'cashout')],
             binding: [
                 { requestId: BET, index: 0 },
                 { requestId: MOVE, index: 1 },
                 { requestId: SETTLE, index: 2 },
             ],
             commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2 }),
+                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
                 twoArmHydraAction(MOVE),
                 command(SETTLE, 'cashOut', { game: 'hydra' }),
             ],

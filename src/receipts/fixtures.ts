@@ -99,6 +99,9 @@ const PLINKO_RISK = 2;
 const MINES_MINE_COUNT = 1;
 const MINES_REVEAL_TILE_INDEX = 1;
 const HYDRA_HERO = 1;
+const HYDRA_WEAPON = 2;
+const HYDRA_ARMOUR = 3;
+const HYDRA_SPRITE = 4;
 
 /** `PlayerAction.kind` arm numbers, per game. */
 const ACTION_KIND_FIELDS: Record<string, number> = {
@@ -404,6 +407,10 @@ export interface CommandGameSpec {
     mineCount?: number;
     /** hydra `PlaceBet.hero`. */
     hero?: number;
+    /** hydra `PlaceBet` gear tiers, PROTO enum numbers (1-based; omitted ⇒ absent). */
+    weapon?: number;
+    armour?: number;
+    sprite?: number;
     /** `PlayerAction.kind` arm name. */
     action?: keyof typeof ACTION_KIND_FIELDS;
     /** mines `Reveal.tile_index`. */
@@ -506,8 +513,20 @@ function gameArm(payloadCase: 'placeBet' | 'cashOut' | 'playerAction', game: Com
             arm.varint(MINES_MINE_COUNT, game.mineCount);
         }
 
-        if (game.game === 'hydra' && game.hero) {
-            arm.varint(HYDRA_HERO, game.hero);
+        if (game.game === 'hydra') {
+            if (game.hero) {
+                arm.varint(HYDRA_HERO, game.hero);
+            }
+
+            for (const [field, tier] of [
+                [HYDRA_WEAPON, game.weapon],
+                [HYDRA_ARMOUR, game.armour],
+                [HYDRA_SPRITE, game.sprite],
+            ] as const) {
+                if (tier) {
+                    arm.varint(field, tier);
+                }
+            }
         }
 
         return arm.finish();

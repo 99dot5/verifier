@@ -47,6 +47,8 @@ export const TOTAL_STAGES = 12;
 
 const MIN_DEATH_PPM = 10_000n;
 const MAX_DEATH_PPM = 900_000n;
+/** `MIN_ATTACK_DEATH_PPM`: the whole-attack floor after health shielding (#1381). */
+const MIN_ATTACK_DEATH_PPM = 15_000n;
 const ATK_REDUCTION_PER_POINT = 8_000n;
 const MATK_REDUCTION_PER_POINT = 10_000n;
 const DEF_REDUCTION_PER_POINT = 8_000n;
@@ -182,7 +184,7 @@ function singleHitDeathPpm(attack: AttackType, offensive: bigint, stage: number)
     return clamp(adjusted - offensive * perPoint, MIN_DEATH_PPM, MAX_DEATH_PPM);
 }
 
-/** `single^health` folded with `mul_ppm`, clamped to [1, 999 999]. Dies iff fight roll < this. */
+/** `single^health` folded with `mul_ppm`, clamped to [MIN_ATTACK_DEATH_PPM, 999 999]. Dies iff fight roll < this. */
 export function deathProbabilityPpm(attack: AttackType, offensive: bigint, stage: number, health: number): bigint {
     if (stage >= TOTAL_STAGES || health === 0) {
         throw new ReplayError(`no death probability at stage ${stage} with ${health} HP`);
@@ -195,7 +197,7 @@ export function deathProbabilityPpm(attack: AttackType, offensive: bigint, stage
         effective = mulPpm(effective, single);
     }
 
-    return clamp(effective, 1n, SCALE_PPM - 1n);
+    return clamp(effective, MIN_ATTACK_DEATH_PPM, SCALE_PPM - 1n);
 }
 
 /** A surviving attack wounds iff `health > 1 && death <= roll < this`. */

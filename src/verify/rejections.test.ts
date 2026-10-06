@@ -864,6 +864,7 @@ describe('classifyRefusalReason', () => {
         [22, 'CONCURRENT_ROUND_LIMIT', 'command-validity'],
         [23, 'SEED_COMMITMENT_STALE', 'command-validity'],
         [24, 'SEED_POOL_EXHAUSTED', 'uninformative'],
+        [25, 'CYCLE_TOO_SHORT', 'command-validity'],
     ];
 
     it.each(EXPECTED)('classifies %i (%s) as %s', (code, _name, expected) => {

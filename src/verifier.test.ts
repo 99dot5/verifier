@@ -1010,7 +1010,7 @@ describe('verifyRound', () => {
         const report = verify(
             buildRound({
                 gameType: hydra.GAME_TYPE,
-                actions: [action('place-bet', new Uint8Array([2])), action('cashout'), action('abandon')],
+                actions: [action('place-bet', new Uint8Array([2, 0, 0, 0])), action('cashout'), action('abandon')],
                 claimedPayout: 0n,
             }),
             { deploymentListed: false },
@@ -1031,7 +1031,7 @@ describe('verifyRound', () => {
         const report = verify(
             buildRound({
                 gameType: hydra.GAME_TYPE,
-                actions: [action('place-bet', new Uint8Array([2])), action('physical-attack'), action('cashout')],
+                actions: [action('place-bet', new Uint8Array([2, 0, 0, 0])), action('physical-attack'), action('cashout')],
                 claimedPayout: 0n,
             }),
             { deploymentListed: false },
@@ -2035,15 +2035,15 @@ describe('a clean round of each remaining replayable game', () => {
          * settle at the attack and leave the cashout trailing the settle.
          */
         const HERO = hydra.HEROES.findIndex((_, hero) => {
-            const result = replayHydra([action('place-bet', new Uint8Array([hero])), action('physical-attack')]);
+            const result = replayHydra([action('place-bet', new Uint8Array([hero, 0, 0, 0])), action('physical-attack')]);
 
             return !result.settled;
         });
 
         /** bet → one surviving physical attack → cashout: three actions, three commands. */
-        const ACTIONS = [action('place-bet', new Uint8Array([HERO])), action('physical-attack'), action('cashout')];
+        const ACTIONS = [action('place-bet', new Uint8Array([HERO, 0, 0, 0])), action('physical-attack'), action('cashout')];
 
-        const BET = betCommand({ game: 'hydra', hero: HERO });
+        const BET = betCommand({ game: 'hydra', hero: HERO, weapon: 1, armour: 1, sprite: 1 });
         const ATTACK = commandFrame(SESSION_SEED, {
             requestId: ATTACK_REQUEST,
             sessionId: SESSION_ID,

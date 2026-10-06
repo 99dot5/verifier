@@ -38,11 +38,8 @@ interface RoundStep {
     action: string;
     payload_borsh_hex: string;
     gear?: {
-        weapon_roll_ppm: number;
         weapon: string;
-        armour_roll_ppm: number;
         armour: string;
-        sprite_roll_ppm: number;
         sprite: string;
     };
     fight?: Fight;
@@ -59,6 +56,9 @@ interface RoundVector {
     server_seed: string;
     client_seed: string;
     hero: number;
+    weapon: number;
+    armour: number;
+    sprite: number;
     stake: string;
     steps: RoundStep[];
     final: { outcome: string; cumulative_multiplier_ppm: number; payout: string };
@@ -164,9 +164,11 @@ describe('hydra:v1 vectors', () => {
                 expect(replayed.cumulativePpm).toBe(BigInt(s.cumulative_multiplier_ppm));
 
                 if (s.gear !== undefined) {
-                    const gear = hydraRolls(rv.server_seed, rv.client_seed, 0, 3).map((r) => Number(r.ppm));
-
-                    expect(gear).toEqual([s.gear.weapon_roll_ppm, s.gear.armour_roll_ppm, s.gear.sprite_roll_ppm]);
+                    expect([WEAPONS[rv.weapon].name, ARMOURS[rv.armour].name, SPRITES[rv.sprite].name]).toEqual([
+                        s.gear.weapon,
+                        s.gear.armour,
+                        s.gear.sprite,
+                    ]);
                     expect(replayed.title).toContain(
                         `${HEROES[rv.hero].name} with ${s.gear.weapon} weapon, ${s.gear.armour} armour, ${s.gear.sprite} sprite`,
                     );
@@ -224,13 +226,13 @@ describe('hydra:v1 transcript rules', () => {
 
     it('free potions and mana do not move any later roll either', () => {
         // The full clear interleaves potions/mana between attacks; its fight
-        // decisions are exactly 1..n, one per attack.
+        // decisions are exactly 0..n-1, one per attack (the bet draws nothing).
         const result = replayVector(clearRound);
         const decisions = result.steps
             .filter((s) => s.actionType.endsWith('-attack'))
             .map((s) => Object.fromEntries(s.details).decision);
 
-        expect(decisions).toEqual(decisions.map((_, i) => String(i + 1)));
+        expect(decisions).toEqual(decisions.map((_, i) => String(i)));
     });
 
     it('abandon before the first attack pays the stake, outcome lose', () => {
@@ -270,7 +272,8 @@ describe('hydra:v1 transcript rules', () => {
     });
 
     describe('rejects what the engine rejects', () => {
-        const knight = new Uint8Array([1]);
+        /** Knight on common/cloth/common: `borsh(Config)`, four bytes. */
+        const knight = new Uint8Array([1, 0, 0, 0]);
         const seeds = [bankRound.server_seed, bankRound.client_seed] as const;
         const run = (actions: TranscriptAction[]) => () => replay(...seeds, actions, 100_000_000n);
         const firstAttack = actionsOf(bankRound).slice(0, 2);
@@ -278,9 +281,13 @@ describe('hydra:v1 transcript rules', () => {
         it.each([
             ['an empty transcript', []],
             ['a transcript not opening with place-bet', [action(0, 'physical-attack')]],
-            ['an empty hero payload', [action(0, 'place-bet')]],
-            ['a two-byte hero payload', [action(0, 'place-bet', new Uint8Array([1, 0]))]],
-            ['an unknown hero', [action(0, 'place-bet', new Uint8Array([6]))]],
+            ['an empty config payload', [action(0, 'place-bet')]],
+            ['a hero-only payload (the pre-gear layout)', [action(0, 'place-bet', new Uint8Array([1]))]],
+            ['a five-byte config payload', [action(0, 'place-bet', new Uint8Array([1, 0, 0, 0, 0]))]],
+            ['an unknown hero', [action(0, 'place-bet', new Uint8Array([6, 0, 0, 0]))]],
+            ['an unknown weapon tier', [action(0, 'place-bet', new Uint8Array([1, 3, 0, 0]))]],
+            ['an unknown armour tier', [action(0, 'place-bet', new Uint8Array([1, 0, 3, 0]))]],
+            ['an unknown sprite tier', [action(0, 'place-bet', new Uint8Array([1, 0, 0, 3]))]],
             ['a second place-bet', [action(0, 'place-bet', knight), action(1, 'place-bet', knight)]],
             ['a cashout before the first attack', [action(0, 'place-bet', knight), action(1, 'cashout')]],
             ['a potion before the first attack', [action(0, 'place-bet', knight), action(1, 'drink-potion')]],
@@ -293,10 +300,14 @@ describe('hydra:v1 transcript rules', () => {
             expect(run(actions)).toThrow(ReplayError);
         });
 
+        it('accepts the fixture bet itself, so each refusal above is its own', () => {
+            expect(run([action(0, 'place-bet', knight)])).not.toThrow();
+        });
+
         it('a magic attack with no mana left', () => {
             // Hercules has 1 MP: the first magic attack spends it. Find a seed
             // pair where it survives, so the second one meets an empty pool.
-            const hercules = new Uint8Array([0]);
+            const hercules = new Uint8Array([0, 0, 0, 0]);
             const magic = [action(0, 'place-bet', hercules), action(1, 'magic-attack')];
             const survivor = Array.from({ length: 200 }, (_, n) => `server-${n}`).find(
                 (server) => !replay(server, 'client-seed', magic, 100_000_000n).settled,

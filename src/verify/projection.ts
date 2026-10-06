@@ -707,7 +707,7 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
                         how: `borsh(mines::Config { mine_count: ${body.mineCount} })`,
                     };
                 case 'hydra':
-                    return hydraPlaceBetExpectation(body.hero);
+                    return hydraPlaceBetExpectation(body);
             }
 
             break;
@@ -862,19 +862,42 @@ function plinkoPlaceBetExpectation(rows: number, risk: number): Expectation {
     };
 }
 
-function hydraPlaceBetExpectation(hero: number): Expectation {
-    if (hero > 0xff) {
+function hydraPlaceBetExpectation(body: {
+    hero: number;
+    weapon: number | null;
+    armour: number | null;
+    sprite: number | null;
+}): Expectation {
+    if (body.hero > 0xff) {
         return {
             ok: false,
-            reason: `the hydra PlaceBet you signed carries hero = ${hero}, which does not fit the u8 the engine config stores, so what the sequencer would have written is not derivable`,
+            reason: `the hydra PlaceBet you signed carries hero = ${body.hero}, which does not fit the u8 the engine config stores, so what the sequencer would have written is not derivable`,
         };
+    }
+
+    // The proto tiers are 1-based behind UNSPECIFIED = 0; the engine's are 0-based.
+    const tiers: number[] = [];
+
+    for (const [slot, wire] of [
+        ['weapon', body.weapon],
+        ['armour', body.armour],
+        ['sprite', body.sprite],
+    ] as const) {
+        if (wire === null || wire < 1 || wire > 0x100) {
+            return {
+                ok: false,
+                reason: `the hydra PlaceBet you signed carries no usable ${slot} tier (${wire ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
+            };
+        }
+
+        tiers.push(wire - 1);
     }
 
     return {
         ok: true,
         actionTypes: ['place-bet'],
-        payload: new Uint8Array([hero]),
-        how: `borsh(hydra::Config { hero: ${hero} }) — a single u8`,
+        payload: new Uint8Array([body.hero, ...tiers]),
+        how: `borsh(hydra::Config { hero: ${body.hero}, weapon: ${tiers[0]}, armour: ${tiers[1]}, sprite: ${tiers[2]} }) — four u8s, each proto tier minus one`,
     };
 }
 

@@ -801,7 +801,11 @@ export type DecodedCommandBody =
     /** `plinko.v1.PlaceBet` — `risk` is the PROTO enum number, not the Borsh tag. */
     | { case: 'placeBet'; game: 'plinko'; rows: number; risk: number }
     | { case: 'placeBet'; game: 'mines'; mineCount: number }
-    | { case: 'placeBet'; game: 'hydra'; hero: number }
+    /**
+     * `hydra.v1.PlaceBet`. The gear tiers are the PROTO enum numbers (1-based,
+     * `UNSPECIFIED = 0`), `null` when absent — which the sequencer refuses.
+     */
+    | { case: 'placeBet'; game: 'hydra'; hero: number; weapon: number | null; armour: number | null; sprite: number | null }
     | { case: 'playerAction'; game: 'hilo'; arm: 'higher' | 'lower' }
     /** `mines.v1.Reveal.tile_index` is `optional`: absent is a real absence. */
     | { case: 'playerAction'; game: 'mines'; arm: 'reveal'; tileIndex: number | null }
@@ -865,6 +869,9 @@ const MINES_REVEAL_TILE_INDEX = 1;
 
 // hydra.v1.PlaceBet
 const HYDRA_HERO = 1;
+const HYDRA_WEAPON = 2;
+const HYDRA_ARMOUR = 3;
+const HYDRA_SPRITE = 4;
 
 /** `hilo.v1.PlayerAction.kind`. */
 const HILO_ACTION_ARMS: Record<number, 'higher' | 'lower'> = { 1: 'higher', 2: 'lower' };
@@ -997,7 +1004,14 @@ function decodePlaceBetBody(bytes: Uint8Array): DecodedCommandBody {
             case 'hydra':
                 // `hero` is a bare `uint32` and hero 0 is a legal selection, so
                 // absent means 0 here — unlike the `optional` scalars above.
-                body = { case: 'placeBet', game: 'hydra', hero: varintField(field.bytes, HYDRA_HERO) ?? 0 };
+                body = {
+                    case: 'placeBet',
+                    game: 'hydra',
+                    hero: varintField(field.bytes, HYDRA_HERO) ?? 0,
+                    weapon: varintField(field.bytes, HYDRA_WEAPON),
+                    armour: varintField(field.bytes, HYDRA_ARMOUR),
+                    sprite: varintField(field.bytes, HYDRA_SPRITE),
+                };
                 return;
         }
     });

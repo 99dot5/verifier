@@ -2,11 +2,12 @@
  * hydra:v1 — integer reimplementation of `libs/games/src/hydra/v1/engine.rs` +
  * `math.rs`, pinned against `libs/games/src/hydra/v1/testdata/vectors.json`.
  *
- * The player picks a hero (the place-bet payload, `borsh(Config { hero: u8 })`),
- * and the bet — decision 0 — draws weapon, armour and sprite as three
- * little-endian `u64` rolls (24 bytes). Each attack, physical or magic, is the
- * next decision and draws the fight roll from bytes [0..8) and the damage roll
- * from [8..16) — both, even when the fight is fatal. A roll is the raw `u64`
+ * The player picks a hero and a tier for each gear slot (the place-bet
+ * payload, `borsh(Config { hero, weapon, armour, sprite })`, four `u8`s), so
+ * the bet draws nothing and, under the decision law, leaves the counter at 0.
+ * Each attack, physical or magic, is the next decision, starting at 0, and
+ * draws the fight roll from bytes [0..8) and the damage roll from [8..16) —
+ * both, even when the fight is fatal. A roll is the raw `u64`
  * reduced onto [0, 1e6) by Lemire's wide multiply, `(raw × 1e6) >> 64`.
  *
  * `drink-potion`, `drink-mana`, `cashout`, `partial-cashout` and `abandon`
@@ -53,8 +54,6 @@ const BASE_DEATH_START_PPM = 200_000n;
 const BASE_DEATH_STEP_PPM = 63_636n;
 const MISS_THRESHOLD_PPM = 100_000n;
 const CRIT_THRESHOLD_PPM = 850_000n;
-/** Equipment draw: < 600 000 → tier 0, < 900 000 → tier 1, else tier 2 (all three slots). */
-const TIER_THRESHOLDS_PPM = [600_000n, 900_000n] as const;
 
 export type AttackType = 'physical' | 'magic';
 
@@ -138,15 +137,6 @@ export function hydraRolls(serverSeed: string, clientSeed: string, decision: num
     });
 }
 
-/** Map a gear roll to tier 0/1/2. */
-export function tierFromRoll(rollPpm: bigint): number {
-    if (rollPpm < TIER_THRESHOLDS_PPM[0]) {
-        return 0;
-    }
-
-    return rollPpm < TIER_THRESHOLDS_PPM[1] ? 1 : 2;
-}
-
 /** 0 (miss), 1 (hit) or 2 (crit). */
 export function damageFromRoll(rollPpm: bigint): number {
     if (rollPpm < MISS_THRESHOLD_PPM) {
@@ -222,19 +212,39 @@ export function stepMultiplierPpm(attack: AttackType, offensive: bigint, stage: 
     return mulPpm(divHalfUp(SCALE_PPM * SCALE_PPM, survival), HOUSE_EDGE_PPM);
 }
 
-/** Borsh `Config { hero: u8 }`: exactly one byte, a known hero. */
-export function decodeConfig(payload: Uint8Array): number {
-    if (payload.length !== 1) {
-        throw new ReplayError(`hydra place-bet payload must be 1 byte, got ${payload.length}`);
+export interface HydraConfig {
+    hero: number;
+    weapon: number;
+    armour: number;
+    sprite: number;
+}
+
+/**
+ * Borsh `Config { hero, weapon, armour, sprite }`: exactly four bytes, a known
+ * hero and a known tier in each slot — the engine's `validate_config`.
+ */
+export function decodeConfig(payload: Uint8Array): HydraConfig {
+    if (payload.length !== 4) {
+        throw new ReplayError(`hydra place-bet payload must be 4 bytes, got ${payload.length}`);
     }
 
-    const hero = payload[0];
+    const [hero, weapon, armour, sprite] = payload;
 
     if (hero >= HEROES.length) {
         throw new ReplayError(`invalid hydra hero ${hero}`);
     }
 
-    return hero;
+    for (const [slot, tier, tiers] of [
+        ['weapon', weapon, WEAPONS.length],
+        ['armour', armour, ARMOURS.length],
+        ['sprite', sprite, SPRITES.length],
+    ] as const) {
+        if (tier >= tiers) {
+            throw new ReplayError(`invalid hydra ${slot} tier ${tier}`);
+        }
+    }
+
+    return { hero, weapon, armour, sprite };
 }
 
 function ensureEmpty(action: TranscriptAction): void {
@@ -255,7 +265,7 @@ interface HydraState {
     monster: number;
     monsterHp: number;
     totalAttacks: number;
-    /** The decision the next attack draws under: 1 after the bet, +1 per attack. */
+    /** The decision the next attack draws under: 0 after the bet, +1 per attack. */
     decision: number;
 }
 
@@ -270,14 +280,10 @@ export function replay(
         throw new ReplayError('hydra transcript must start with place-bet');
     }
 
-    const hero = decodeConfig(actions[0].payload);
-    const gear = hydraRolls(serverSeed, clientSeed, 0, 3);
-    const heroStats = HEROES[hero];
+    const config = decodeConfig(actions[0].payload);
+    const heroStats = HEROES[config.hero];
     const s: HydraState = {
-        hero,
-        weapon: tierFromRoll(gear[0].ppm),
-        armour: tierFromRoll(gear[1].ppm),
-        sprite: tierFromRoll(gear[2].ppm),
+        ...config,
         maxHealth: heroStats.hp,
         health: heroStats.hp,
         maxMana: heroStats.mp,
@@ -285,7 +291,7 @@ export function replay(
         monster: 0,
         monsterHp: MONSTER_HP[0],
         totalAttacks: 0,
-        decision: 1,
+        decision: 0,
     };
     const stats = effectiveStats(s.hero, s.weapon, s.armour, s.sprite);
     const steps: StepWorking[] = [
@@ -294,13 +300,7 @@ export function replay(
             actionType: 'place-bet',
             title: `place-bet — ${heroStats.name} with ${WEAPONS[s.weapon].name} weapon, ${ARMOURS[s.armour].name} armour, ${SPRITES[s.sprite].name} sprite`,
             details: [
-                ['decision', '0'],
-                ...gear.map(
-                    (roll, i): [string, string] => [
-                        `${['weapon', 'armour', 'sprite'][i]} roll (bytes [${i * 8}..${i * 8 + 8}), (raw × 1e6) >> 64)`,
-                        `${roll.raw} → ${roll.ppm} ppm → tier ${tierFromRoll(roll.ppm)}`,
-                    ],
-                ),
+                ['gear', 'chosen by the player on the bet; the bet draws nothing'],
                 ['effective stats', `ATK ${stats.atk}, DEF ${stats.def}, MATK ${stats.matk}, MDEF ${stats.mdef}`],
                 ['HP / MP', `${s.health} / ${s.mana}`],
             ],

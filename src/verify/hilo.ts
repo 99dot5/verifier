@@ -31,7 +31,7 @@
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { mulPpm, ppmToMultiplierString, toPpmRatio } from './ints';
 import { SeedStream, bytesToHex, rawU64 } from './seed';
-import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import {
     ZERO_BANKED,
     addBanked,
@@ -151,7 +151,7 @@ export function replay(
     let decision = 0;
     let current = hiloStep(serverSeed, clientSeed, decision);
     let cumulative = SCALE_PPM;
-    let outcome: Outcome = 'lose';
+    let outcome: Ending = 'bust';
     let settled = false;
     let bankedTotal = ZERO_BANKED;
     let position: Position = openPosition(stakeUnits);
@@ -202,7 +202,7 @@ export function replay(
                 });
 
                 if (!win) {
-                    outcome = 'lose';
+                    outcome = 'bust';
                     settled = true;
                 }
 
@@ -227,7 +227,7 @@ export function replay(
                     ],
                     cumulativePpm: cumulative,
                 });
-                outcome = 'cashout';
+                outcome = 'cashed-out';
                 settled = true;
                 break;
             case 'partial-cashout': {
@@ -242,7 +242,7 @@ export function replay(
                 // The chain is left where the last guess put it, exactly as a
                 // cashout leaves it: the abandon deals no card.
                 steps.push(abandonStep(action.actionIndex, position, cumulative));
-                outcome = 'lose';
+                outcome = 'abandoned';
                 settled = true;
                 break;
             default:

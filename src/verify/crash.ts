@@ -30,7 +30,7 @@
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { divHalfUp, payoutUnits, ppmToMultiplierString } from './ints';
 import { SeedStream, bytesToHex, rawU64 } from './seed';
-import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import { BorshError, BorshReader } from '../wire/borsh';
 
 export const GAME_TYPE = 'crash:v1';
@@ -278,7 +278,7 @@ export function replay(
         },
     ];
     let cumulative = SCALE_PPM;
-    let outcome: Outcome = 'lose';
+    let outcome: Ending = 'bust';
     let settled = false;
 
     for (const action of actions.slice(1)) {
@@ -313,7 +313,7 @@ export function replay(
                     ],
                     cumulativePpm: cumulative,
                 });
-                outcome = win ? 'cashout' : 'lose';
+                outcome = win ? 'cashed-out' : 'bust';
                 settled = true;
                 break;
             }
@@ -329,7 +329,7 @@ export function replay(
                         ],
                         cumulativePpm: 0n,
                     });
-                    outcome = 'lose';
+                    outcome = 'abandoned';
                     settled = true;
                     break;
                 }
@@ -355,7 +355,7 @@ export function replay(
                     ],
                     cumulativePpm: cumulative,
                 });
-                outcome = win ? 'cashout' : 'lose';
+                outcome = 'abandoned';
                 settled = true;
                 break;
             }
@@ -371,7 +371,7 @@ export function replay(
                     ],
                     cumulativePpm: 0n,
                 });
-                outcome = 'lose';
+                outcome = 'bust';
                 settled = true;
                 break;
             default:

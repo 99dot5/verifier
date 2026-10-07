@@ -190,7 +190,7 @@ describe('crash:v1 vectors', () => {
         // Every cashout on an instant-bust round loses, tick 0 included.
         const busted = replay(instantBust.server_seed, instantBust.client_seed, round(null, [cashout(0)]), STAKE_MUTEZ);
 
-        expect(busted.outcome).toBe('lose');
+        expect(busted.outcome).toBe('bust');
         expect(busted.cumulativePpm).toBe(0n);
         expect(busted.payoutUnits).toBe(0n);
     });
@@ -209,7 +209,7 @@ describe('crash:v1 replay', () => {
         const result = replay(rv.server_seed, rv.client_seed, round(null, [cashout(Number(LAST_WIN_TICK))]), STAKE_MUTEZ);
 
         expect(result.settled).toBe(true);
-        expect(result.outcome).toBe('cashout');
+        expect(result.outcome).toBe('cashed-out');
         expect(result.cumulativePpm).toBe(multiplierPpm(LAST_WIN_TICK));
         expect(result.cumulativePpm).toBe(BigInt(rv.max_win_multiplier_ppm)); // the last winning tick is the best available
         // Consistency only: payoutUnits is the helper replay itself calls. The
@@ -230,7 +230,7 @@ describe('crash:v1 replay', () => {
 
         const result = replay(rv.server_seed, rv.client_seed, actions, STAKE_MUTEZ);
 
-        expect(result.outcome).toBe('cashout');
+        expect(result.outcome).toBe('cashed-out');
         expect(result.cumulativePpm).toBe(multiplierPpm(AUTO_TICK));
         // Consistency only; payout math is pinned by the transcript_vectors below.
         expect(result.payoutUnits).toBe(payoutUnits(STAKE_MUTEZ, multiplierPpm(AUTO_TICK)));
@@ -242,7 +242,7 @@ describe('crash:v1 replay', () => {
         for (const tick of [CRASH_TICK, CRASH_TICK + 1n, MAX_ROUND_TICK_CAP].map(Number)) {
             const result = replay(rv.server_seed, rv.client_seed, round(null, [cashout(tick)]), STAKE_MUTEZ);
 
-            expect(result.outcome).toBe('lose');
+            expect(result.outcome).toBe('bust');
             expect(result.cumulativePpm).toBe(0n);
         }
     });
@@ -255,7 +255,7 @@ describe('crash:v1 replay', () => {
 
         const result = replay(rv.server_seed, rv.client_seed, actions, STAKE_MUTEZ);
 
-        expect(result.outcome).toBe('lose');
+        expect(result.outcome).toBe('bust');
         expect(result.cumulativePpm).toBe(0n);
         expect(result.payoutUnits).toBe(0n);
         // Had the tick been clamped to the cap before the comparison the way
@@ -277,7 +277,7 @@ describe('crash:v1 replay', () => {
             );
 
             expect(result.settled).toBe(true);
-            expect(result.outcome).toBe('lose');
+            expect(result.outcome).toBe(actionType === 'expire' ? 'bust' : 'abandoned');
             expect(result.cumulativePpm).toBe(0n);
             expect(result.payoutUnits).toBe(0n);
         }
@@ -298,7 +298,7 @@ describe('crash:v1 replay', () => {
         );
 
         expect(viaAbandon.settled).toBe(true);
-        expect(viaAbandon.outcome).toBe('cashout');
+        expect(viaAbandon.outcome).toBe('abandoned');
         expect(viaAbandon.cumulativePpm).toBe(viaCashout.cumulativePpm);
         // Consistency only; payout math is pinned by the transcript_vectors below.
         expect(viaAbandon.payoutUnits).toBe(payoutUnits(STAKE_MUTEZ, multiplierPpm(AUTO_TICK)));
@@ -312,7 +312,7 @@ describe('crash:v1 replay', () => {
             STAKE_MUTEZ,
         );
 
-        expect(lost.outcome).toBe('lose');
+        expect(lost.outcome).toBe('abandoned');
         expect(lost.payoutUnits).toBe(0n);
     });
 
@@ -409,8 +409,8 @@ describe('crash:v1 transcript vectors', () => {
         // settle that takes no payload at all.
         expect(types).toEqual(new Set(['place-bet', 'cashout', 'expire']));
         // Both outcomes, or a replayer that returned one constant would pass.
-        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'cashout')).toBe(true);
-        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'lose')).toBe(true);
+        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'cashed-out')).toBe(true);
+        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'bust')).toBe(true);
     });
 
     it.each(TRANSCRIPT_VECTORS.map((vector) => [vector.name, vector] as const))(

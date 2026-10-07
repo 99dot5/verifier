@@ -352,7 +352,7 @@
           "payload_hex": "2a000000"
         }
       ],
-      "expected_outcome": "cashout",
+      "expected_outcome": "cashed-out",
       "expected_cumulative_ppm": 1337928,
       "expected_payout_units": "133792800"
     },
@@ -373,7 +373,7 @@
           "payload_hex": "2b000000"
         }
       ],
-      "expected_outcome": "lose",
+      "expected_outcome": "bust",
       "expected_cumulative_ppm": 0,
       "expected_payout_units": "0"
     },
@@ -394,7 +394,7 @@
           "payload_hex": "ffffffff"
         }
       ],
-      "expected_outcome": "lose",
+      "expected_outcome": "bust",
       "expected_cumulative_ppm": 0,
       "expected_payout_units": "0"
     },
@@ -415,7 +415,7 @@
           "payload_hex": "00000000"
         }
       ],
-      "expected_outcome": "cashout",
+      "expected_outcome": "cashed-out",
       "expected_cumulative_ppm": 1000000,
       "expected_payout_units": "100000000"
     },
@@ -436,7 +436,7 @@
           "payload_hex": ""
         }
       ],
-      "expected_outcome": "lose",
+      "expected_outcome": "bust",
       "expected_cumulative_ppm": 0,
       "expected_payout_units": "0"
     },
@@ -457,7 +457,7 @@
           "payload_hex": "0a000000"
         }
       ],
-      "expected_outcome": "cashout",
+      "expected_outcome": "cashed-out",
       "expected_cumulative_ppm": 1071773,
       "expected_payout_units": "107177300"
     },
@@ -478,7 +478,7 @@
           "payload_hex": "64000000"
         }
       ],
-      "expected_outcome": "lose",
+      "expected_outcome": "bust",
       "expected_cumulative_ppm": 0,
       "expected_payout_units": "0"
     }

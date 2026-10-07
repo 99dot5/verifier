@@ -24,7 +24,7 @@
 import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
 import { divHalfUp, mulPpm, ppmToMultiplierString } from './ints';
 import { SeedStream } from './seed';
-import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 import { abandonStep } from './hilo';
 import {
     ZERO_BANKED,
@@ -153,7 +153,7 @@ export function replay(
         },
     ];
     let cumulative = SCALE_PPM;
-    let outcome: Outcome = 'lose';
+    let outcome: Ending = 'bust';
     let settled = false;
     let bankedTotal = ZERO_BANKED;
     let position: Position = openPosition(stakeUnits);
@@ -177,7 +177,7 @@ export function replay(
                 if (mineSet.has(tile)) {
                     cumulative = 0n;
                     position = loseLive(position);
-                    outcome = 'lose';
+                    outcome = 'bust';
                     settled = true;
                     steps.push({
                         actionIndex: action.actionIndex,
@@ -223,7 +223,7 @@ export function replay(
                 });
 
                 if (allSafeRevealed) {
-                    outcome = 'win';
+                    outcome = 'completed';
                     settled = true;
                 }
                 break;
@@ -250,7 +250,7 @@ export function replay(
                     ],
                     cumulativePpm: cumulative,
                 });
-                outcome = 'cashout';
+                outcome = 'cashed-out';
                 settled = true;
                 break;
             case 'partial-cashout': {
@@ -264,7 +264,7 @@ export function replay(
             case 'abandon':
                 // Admissible before any reveal (unlike a cashout): the sweep's
                 // only settling action for an untouched round, worth the stake.
-                outcome = 'lose';
+                outcome = 'abandoned';
                 steps.push(abandonStep(action.actionIndex, position, cumulative));
                 settled = true;
                 break;

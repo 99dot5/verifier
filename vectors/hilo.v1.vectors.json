@@ -12,7 +12,7 @@
     "multipliers": "fair_ppm = half_up(1e6 * 1e6 / probability_ppm); offered_ppm = half_up(fair_ppm * 995000 / 1e6). Both directions computed each step from the CURRENT card; the guess pays the multiplier quoted on the card it was made against",
     "win_rule": "higher wins iff next_rank >= current_rank; lower wins iff next_rank <= current_rank (an equal rank wins BOTH directions)",
     "cumulative": "starts at 1e6 on place-bet; each winning guess multiplies: cum = half_up(cum * step_multiplier_ppm / 1e6); a losing guess sets 0 and settles the round",
-    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each winning guess folds live' = half_up(live * step_multiplier_ppm / 1e6). The system 'partial-cashout' action (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain \u2014 note it consumes an action index, shifting every later card draw. Cashout and the system 'abandon' action pay banked + live (abandon settles with outcome lose but at the position's current value, sec-28); a lost guess pays banked (never less: the banked part is already the player's)",
+    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each winning guess folds live' = half_up(live * step_multiplier_ppm / 1e6). The system 'partial-cashout' action (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain \u2014 note it consumes an action index, shifting every later card draw. Cashout and the system 'abandon' action pay banked + live (abandon settles abandoned but at the position's current value, sec-28); a lost guess pays banked (never less: the banked part is already the player's)",
     "house_edge_ppm": 995000,
     "scale_ppm": 1000000,
     "rounding": "half-up (midpoint away from zero), mirroring game-engine-core/src/fixed_point.rs",
@@ -270,7 +270,7 @@
         }
       ],
       "final": {
-        "outcome": "lost",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "0"
       }
@@ -438,7 +438,7 @@
         }
       ],
       "final": {
-        "outcome": "lost",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "0"
       }
@@ -587,7 +587,7 @@
         }
       ],
       "final": {
-        "outcome": "lost",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "40"
       }

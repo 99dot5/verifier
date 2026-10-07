@@ -324,15 +324,16 @@ implemented rule, verifies `inconclusive` rather than being replayed under a
 guessed rule.
 
 The settlement rule at the trust boundary: the rollup replays the transcript
-and credits the engine's `amount_won`, truncated toward zero to the asset's
-grain, in the same atomic units. For the compounding games (hilo, mines,
-hydra) that is the banked/live fold of `libs/games/src/partial_cashout.rs`:
+and credits the engine's settle `payout` as is: the engine computes it in the
+stake's atomic units, so nothing is truncated after it. For the compounding
+games (hilo, mines, hydra) that is the banked/live fold of `libs/games/src/partial_cashout.rs`:
 the live position starts at the stake, each winning step rounds it half-up at
 the asset grain (`live' = half_up(live × step_ppm / 1_000_000)`), each
 `partial-cashout` moves its amount from live to banked, a lost decision zeroes
 live, and a cashout — or, since sec-28, an `abandon` — pays `banked + live`.
 For the single-decision games (crash, plinko) there is nothing to fold and it
-collapses to `payout = floor(stake × cumulative_ppm / 1_000_000)`. Note that
+collapses to `payout = floor(stake × cumulative_ppm / 1_000_000)`, the floor
+the engine itself applies in `single_multiplier_payout`. Note that
 `floor(stake × cumulative)` is NOT the rule for a multi-step round: the
 per-step rounding makes the two differ by a few atomic units, and a
 `partial-cashout` by the whole banked amount.

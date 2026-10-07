@@ -41,13 +41,13 @@ export function mulPpm(aPpm: bigint, bPpm: bigint): bigint {
  * The payout rule for the SINGLE-DECISION games (crash, plinko), in the
  * rollup's own units.
  *
- * The kernel replays the round and credits the engine's `amount_won`,
- * truncated TOWARD ZERO to the asset's grain and widened to `u128`
- * (`libs/smart-rollup/src/games.rs`: `truncate_to_units`, with `decimals`
- * from the session's bound asset via `money::decimals_for` — the table this
- * app mirrors in `./assets`). Crash and plinko have one decision and no
- * banked/live split, so `amount_won = stake × multiplier` and, for a stake in
- * integer base units (mutez, scale 6), that collapses to one floor division:
+ * The kernel replays the round and credits the engine's settle `payout`
+ * as is: the engine already computes it in the asset's atomic units (the
+ * stake's units, `decimals` from the session's bound asset via
+ * `money::decimals_for` — the table this app mirrors in `./assets`). Crash
+ * and plinko have one decision and no banked/live split, so the engine pays
+ * `game_engine_core::betting::value::single_multiplier_payout`, one floor
+ * division:
  *
  *     payout_units = floor(stake_units × cumulative_ppm / 1e6)
  *

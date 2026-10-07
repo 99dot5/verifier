@@ -141,7 +141,7 @@
     {
       "description": "hilo:v1 — place-bet, one winning guess, cashout (three actions)",
       "predicate": "the one guess wins; cashout settles at the port's payout",
-      "expected_outcome": "cashout",
+      "expected_outcome": "cashed-out",
       "source": "synthetic",
       "tenant_id": "99dot5-com-shadownet",
       "pool_id": "standard",
@@ -184,7 +184,7 @@
     {
       "description": "plinko:v1 — place-bet with a config payload, then a payload-free cashout",
       "predicate": "settles at the port's bin multiplier; cashout at index 1 changes nothing",
-      "expected_outcome": "lose",
+      "expected_outcome": "completed",
       "source": "synthetic",
       "tenant_id": "99dot5-com-shadownet",
       "pool_id": "standard",
@@ -221,7 +221,7 @@
     {
       "description": "mines:v1 — reveals with a system partial-cashout (bank) between them, then cashout",
       "predicate": "every listed reveal is safe under the seed's layout; the bank amount <= live at its index; settles at banked + live",
-      "expected_outcome": "cashout",
+      "expected_outcome": "cashed-out",
       "source": "synthetic",
       "tenant_id": "99dot5-com-shadownet",
       "pool_id": "standard",
@@ -282,7 +282,7 @@
     {
       "description": "hilo:v1 — abandoned by the janitor sweep after one winning guess",
       "predicate": "the guess wins, so the abandon pays banked + live > 0 (PR #1220)",
-      "expected_outcome": "lose",
+      "expected_outcome": "abandoned",
       "source": "synthetic",
       "tenant_id": "99dot5-com-shadownet",
       "pool_id": "standard",

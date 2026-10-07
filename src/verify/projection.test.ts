@@ -944,7 +944,7 @@ describe('the projection reproduces the Rust adapter’s payload bytes', () => {
 
     /** The settling tick a winning row's payout implies, or null when it loses. */
     function anchoredTick(vector: TranscriptVector): bigint | null {
-        if (vector.expected_outcome !== 'cashout') {
+        if (vector.expected_outcome !== 'cashed-out') {
             return null;
         }
 
@@ -984,8 +984,8 @@ describe('the projection reproduces the Rust adapter’s payload bytes', () => {
         // Both modes and both outcomes, or half the table is untested.
         expect(TRANSCRIPT_VECTORS.some(isAuto)).toBe(true);
         expect(TRANSCRIPT_VECTORS.some((v) => !isAuto(v))).toBe(true);
-        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'cashout')).toBe(true);
-        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'lose')).toBe(true);
+        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'cashed-out')).toBe(true);
+        expect(TRANSCRIPT_VECTORS.some((v) => v.expected_outcome === 'bust')).toBe(true);
     });
 
     it('anchors enough actions independently for this block to prove anything', () => {

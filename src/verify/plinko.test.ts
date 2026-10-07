@@ -95,7 +95,8 @@ describe('plinko:v1 vectors', () => {
 
             expect(abandoned.settled).toBe(true);
             expect(abandoned.payoutUnits).toBe(result.payoutUnits);
-            expect(abandoned.outcome).toBe(result.outcome);
+            expect(result.outcome).toBe('completed');
+            expect(abandoned.outcome).toBe('abandoned');
             expect(abandoned.steps[1].title).toContain('sealed outcome');
         }
     });

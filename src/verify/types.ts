@@ -22,13 +22,14 @@ export interface StepWorking {
     cumulativePpm: bigint;
 }
 
-export type Outcome = 'win' | 'lose' | 'cashout' | 'push';
+/** How a round settled: the kernel's `Ending::as_str`, recorded as `SettlementEntry.outcome`. */
+export type Ending = 'cashed-out' | 'completed' | 'bust' | 'abandoned';
 
 export interface ReplayResult {
     gameType: string;
     steps: StepWorking[];
     cumulativePpm: bigint;
-    outcome: Outcome;
+    outcome: Ending;
     /** False when the transcript ends without a settling action. */
     settled: boolean;
     /**

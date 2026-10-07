@@ -52,8 +52,6 @@ const vectors: { step_vectors: StepVector[]; round_vectors: RoundVector[] } = JS
     ),
 );
 
-const OUTCOME_BY_VECTOR: Record<string, string> = { 'cashed-out': 'cashout', lost: 'lose' };
-
 describe('hilo:v1 vectors', () => {
     it('reproduces every step vector (seed, card, probabilities, multipliers)', () => {
         for (const sv of vectors.step_vectors) {
@@ -85,7 +83,7 @@ describe('hilo:v1 vectors', () => {
             const result = replay(rv.server_seed, rv.client_seed, actions, decimalStringToUnits(rv.stake, 6));
 
             expect(result.settled).toBe(true);
-            expect(result.outcome).toBe(OUTCOME_BY_VECTOR[rv.final.outcome]);
+            expect(result.outcome).toBe(rv.final.outcome);
             expect(result.cumulativePpm).toBe(BigInt(rv.final.cumulative_multiplier_ppm));
 
             for (const [i, s] of rv.steps.entries()) {

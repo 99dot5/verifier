@@ -52,8 +52,6 @@ const vectors: {
     ),
 );
 
-const OUTCOME_BY_VECTOR: Record<string, string> = { 'cashed-out': 'cashout', lost: 'lose', won: 'win' };
-
 describe('mines:v1 vectors', () => {
     it('reproduces every layout vector including the draw intermediates', () => {
         for (const lv of vectors.layout_vectors) {
@@ -92,7 +90,7 @@ describe('mines:v1 vectors', () => {
             const result = replay(rv.server_seed, rv.client_seed, actions, decimalStringToUnits(rv.stake, 6));
 
             expect(result.settled).toBe(true);
-            expect(result.outcome).toBe(OUTCOME_BY_VECTOR[rv.final.outcome]);
+            expect(result.outcome).toBe(rv.final.outcome);
             expect(result.cumulativePpm).toBe(BigInt(rv.final.cumulative_multiplier_ppm));
 
             for (const [i, s] of rv.steps.entries()) {

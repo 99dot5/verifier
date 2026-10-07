@@ -10,7 +10,7 @@
     "layout": "partial Fisher-Yates over tiles [0..25): draw i consumes 4 stream bytes as a little-endian u32 raw; swap_index = i + ((raw * (25 - i)) >> 32) (Lemire wide-reduction, unbiased); swap tiles[i] <-> tiles[swap_index]. After mine_count draws, mines = sorted(tiles[0..mine_count])",
     "step_multiplier": "revealing the k-th safe tile (k 0-indexed): fair_step_ppm = half_up((25 - k) * 1e6 / (safe - k)) with safe = 25 - mine_count. Every reveal carries the house edge: offered_step_ppm = half_up(fair_step_ppm * 995000 / 1e6) for every k, so round RTP is 0.995^k rather than a flat 0.995",
     "cumulative": "starts at 1e6; each safe reveal multiplies: cum = half_up(cum * offered_step_ppm / 1e6), so cum(k) = 0.995^k * fair(k) and RTP is 99.5% per reveal, compounding to 0.995^k over the round. Revealing a mine sets 0 and settles as a loss. Revealing the last safe tile auto-settles as a win",
-    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each safe reveal folds live' = half_up(live * offered_step_ppm / 1e6). The system 'partial-cashout' action (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain. Cashout (allowed after >= 1 reveal) and a full clear and the system 'abandon' action pay banked + live (abandon settles with outcome lose but at the position's current value, sec-28); a mine hit pays banked (never less: the banked part is already the player's)",
+    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each safe reveal folds live' = half_up(live * offered_step_ppm / 1e6). The system 'partial-cashout' action (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain. Cashout (allowed after >= 1 reveal) and a full clear and the system 'abandon' action pay banked + live (abandon settles abandoned, but at the position's current value, sec-28); a mine hit pays banked (never less: the banked part is already the player's)",
     "action_borsh": "place-bet payload = borsh(Config { mine_count: u32 LE }); reveal payload = borsh(tile_index: u32 LE); cashout payload is empty",
     "house_edge_ppm": 995000,
     "scale_ppm": 1000000,
@@ -1128,7 +1128,7 @@
         }
       ],
       "final": {
-        "outcome": "lost",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "0"
       }
@@ -1304,7 +1304,7 @@
         }
       ],
       "final": {
-        "outcome": "won",
+        "outcome": "completed",
         "cumulative_multiplier_ppm": 24875000,
         "payout": "248.75"
       }
@@ -1546,7 +1546,7 @@
         }
       ],
       "final": {
-        "outcome": "lost",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "0"
       }
@@ -1697,7 +1697,7 @@
         }
       ],
       "final": {
-        "outcome": "lost",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "40"
       }

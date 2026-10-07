@@ -119,7 +119,7 @@ describe('hilo replay with a partial cashout', () => {
         expect(guess.title).toContain(`drew ${drawn.rank} of ${drawn.suit}`);
 
         expect(result.settled).toBe(true);
-        expect(result.outcome).toBe('cashout');
+        expect(result.outcome).toBe('cashed-out');
         expect(result.cumulativePpm).toBe(quoted);
 
         const bankStep = result.steps[1];
@@ -132,14 +132,14 @@ describe('hilo replay with a partial cashout', () => {
     it('abandonment settles at the current position — banked plus live (sec-28)', () => {
         // 12.5 banked out of a 100 stake leaves 87.5 live; the abandon pays
         // both, exactly what a cashout here would, so a forged one gains
-        // nothing. Outcome stays `lose` — no decision of the player's ended it.
+        // nothing. The ending is `abandoned` — no decision of the player's ended it.
         const result = replay(SERVER, CLIENT, [
             action(0, 'place-bet'),
             action(1, 'partial-cashout', encodePartialCashout(12_500_000n)),
             action(2, 'abandon'),
         ], STAKE_UNITS);
 
-        expect(result.outcome).toBe('lose');
+        expect(result.outcome).toBe('abandoned');
         expect(result.settled).toBe(true);
         expect(result.bankedUnits).toBe(12_500_000n);
         expect(result.payoutUnits).toBe(STAKE_UNITS);

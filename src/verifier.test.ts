@@ -552,7 +552,7 @@ describe('verifyRound', () => {
 
         expect(report.verdict).toBe('verified');
         expect(report.gameType).toBe('hilo:v1');
-        expect(report.replay?.outcome).toBe('cashout');
+        expect(report.replay?.outcome).toBe('cashed-out');
         // The optional client-seed check is the only one allowed to be
         // "unavailable" in a verified round.
         expect(report.checks.filter((c) => c.status !== 'pass').map((c) => c.id)).toEqual(['client-seed-text']);
@@ -1984,7 +1984,7 @@ describe('a clean round of each remaining replayable game', () => {
 
             expect(report.verdict).toBe('verified');
             expect(report.gameType).toBe('mines:v1');
-            expect(report.replay?.outcome).toBe('cashout');
+            expect(report.replay?.outcome).toBe('cashed-out');
             expect(nonPassing(report)).toEqual(OPTIONAL_CHECKS);
         });
 
@@ -2126,7 +2126,7 @@ describe('a clean round of each remaining replayable game', () => {
 
         it('finds a hero whose attack survives, or the round below is a loss', () => {
             expect(HERO).toBeGreaterThanOrEqual(0);
-            expect(replayHydra(ACTIONS).outcome).toBe('cashout');
+            expect(replayHydra(ACTIONS).outcome).toBe('cashed-out');
         });
 
         it('verifies a clean hydra round end to end', () => {
@@ -2134,7 +2134,7 @@ describe('a clean round of each remaining replayable game', () => {
 
             expect(report.verdict).toBe('verified');
             expect(report.gameType).toBe('hydra:v1');
-            expect(report.replay?.outcome).toBe('cashout');
+            expect(report.replay?.outcome).toBe('cashed-out');
             expect(report.replay?.settledAtIndex).toBe(2);
             expect(nonPassing(report)).toEqual(OPTIONAL_CHECKS);
         });

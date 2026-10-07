@@ -8,10 +8,9 @@
  * is a settle trigger only — it cannot change the payout, which is why a
  * deadline-swept round pays identically to a player-collected one.
  */
-import { SCALE_PPM } from './constants';
 import { payoutUnits, ppmToMultiplierString } from './ints';
 import { SeedStream, bytesToHex } from './seed';
-import { ReplayError, type Outcome, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
 
 export const GAME_TYPE = 'plinko:v1';
 
@@ -122,14 +121,6 @@ export function exactRtp(rows: number, risk: Risk): { weightedSum: bigint; denom
     return { weightedSum, denominator, display: `${whole}${frac ? '.' + frac : ''} ppm` };
 }
 
-export function outcomeFromMultiplier(multiplierPpm: bigint): Outcome {
-    if (multiplierPpm > SCALE_PPM) {
-        return 'win';
-    }
-
-    return multiplierPpm === SCALE_PPM ? 'push' : 'lose';
-}
-
 /** Replay a full plinko transcript exactly the way the rollup kernel does. */
 export function replay(
     serverSeed: string,
@@ -171,7 +162,9 @@ export function replay(
             cumulativePpm: multiplierPpm,
         },
     ];
-    const outcome: Outcome = outcomeFromMultiplier(multiplierPpm);
+    // Every plinko settle is `completed`: the sealed bin pays its multiplier,
+    // above, at or below 1x alike. Only a system abandon records `abandoned`.
+    let outcome: Ending = 'completed';
     const cumulative = multiplierPpm;
     let settled = false;
 
@@ -212,6 +205,7 @@ export function replay(
                     ],
                     cumulativePpm: multiplierPpm,
                 });
+                outcome = 'abandoned';
                 settled = true;
                 break;
             default:

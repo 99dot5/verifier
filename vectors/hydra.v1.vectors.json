@@ -14,7 +14,7 @@
     "damage": "damage roll < 100000 -> 0 (miss), >= 850000 -> 2 (crit), else 1. monster hp per stage = 1,2,1,2,1,2,2,2,3,3,3,4; at 0 the stage advances and the next monster spawns at full hp; clearing stage 11 settles the round as a win",
     "step_multiplier": "every surviving attack: fair = half_up(1e12 / (1e6 - death)), step = half_up(fair * 995000 / 1e6), so RTP is 99.5% per attack and 0.995^n over n attacks. cum = half_up(cum * step / 1e6); a death sets cum to 0",
     "mana_and_potions": "magic-attack needs mana > 0 and costs 1 MP whether or not it survives. drink-potion (+1 HP) and drink-mana (+1 MP) are free, admissible only after the first attack and below the hero's max",
-    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each surviving attack folds live' = half_up(live * step / 1e6). The system 'partial-cashout' (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain. Cashout (after >= 1 attack), a full clear and the system 'abandon' all pay banked + live (abandon settles with outcome lose but at the position's current value, sec-28); a death pays banked",
+    "payout": "the value model is a (banked, live) pair in integer micro-tez: live starts at stake * 1e6 and each surviving attack folds live' = half_up(live * step / 1e6). The system 'partial-cashout' (borsh payload: amount u128 LE, in the asset's atomic units) moves amount from live to banked without touching the multiplier chain. Cashout (after >= 1 attack), a full clear and the system 'abandon' all pay banked + live (abandon settles abandoned but at the position's current value, sec-28); a death pays banked",
     "action_borsh": "place-bet payload = borsh(Config { hero: u8, weapon: u8, armour: u8, sprite: u8 }) (4 bytes); every other player action has an empty payload",
     "house_edge_ppm": 995000,
     "scale_ppm": 1000000,
@@ -137,7 +137,7 @@
   "round_vectors": [
     {
       "name": "abandon-before-first-attack-pays-stake",
-      "predicate": "abandon with no attack settles lose and pays the stake (banked 0 + live = stake)",
+      "predicate": "abandon with no attack settles abandoned and pays the stake (banked 0 + live = stake)",
       "server_seed": "server-0",
       "client_seed": "client-seed",
       "hero": 1,
@@ -172,7 +172,7 @@
           "action_index": 1,
           "action": "abandon",
           "payload_borsh_hex": "",
-          "effect": "lose",
+          "effect": "abandoned",
           "multiplier_ppm": 1000000,
           "cumulative_multiplier_ppm": 1000000,
           "current_health": 4,
@@ -186,7 +186,7 @@
         }
       ],
       "final": {
-        "outcome": "lose",
+        "outcome": "abandoned",
         "cumulative_multiplier_ppm": 1000000,
         "payout": "100"
       }
@@ -242,7 +242,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 3,
@@ -272,7 +272,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 2,
@@ -299,7 +299,7 @@
             "damage_dealt": 0,
             "step_multiplier_ppm": 0
           },
-          "effect": "lose",
+          "effect": "bust",
           "multiplier_ppm": 0,
           "cumulative_multiplier_ppm": 0,
           "current_health": 0,
@@ -313,7 +313,7 @@
         }
       ],
       "final": {
-        "outcome": "lose",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "0"
       }
@@ -369,7 +369,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 3,
@@ -415,7 +415,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 4,
@@ -431,7 +431,7 @@
           "action_index": 4,
           "action": "cashout",
           "payload_borsh_hex": "",
-          "effect": "cashout",
+          "effect": "cashed-out",
           "multiplier_ppm": 1000000,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 4,
@@ -445,7 +445,7 @@
         }
       ],
       "final": {
-        "outcome": "cashout",
+        "outcome": "cashed-out",
         "cumulative_multiplier_ppm": 1020407,
         "payout": "102.040706"
       }
@@ -501,7 +501,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 2,
@@ -547,7 +547,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1019054
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1019054,
           "cumulative_multiplier_ppm": 1029399,
           "current_health": 1,
@@ -563,7 +563,7 @@
           "action_index": 4,
           "action": "cashout",
           "payload_borsh_hex": "",
-          "effect": "cashout",
+          "effect": "cashed-out",
           "multiplier_ppm": 1000000,
           "cumulative_multiplier_ppm": 1029399,
           "current_health": 1,
@@ -577,7 +577,7 @@
         }
       ],
       "final": {
-        "outcome": "cashout",
+        "outcome": "cashed-out",
         "cumulative_multiplier_ppm": 1029399,
         "payout": "102.939944"
       }
@@ -633,7 +633,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 3,
@@ -663,7 +663,7 @@
             "monster_hp_after": 2,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 3,
@@ -693,7 +693,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1030766,
           "current_health": 3,
@@ -709,7 +709,7 @@
           "action_index": 4,
           "action": "cashout",
           "payload_borsh_hex": "",
-          "effect": "cashout",
+          "effect": "cashed-out",
           "multiplier_ppm": 1000000,
           "cumulative_multiplier_ppm": 1030766,
           "current_health": 3,
@@ -723,7 +723,7 @@
         }
       ],
       "final": {
-        "outcome": "cashout",
+        "outcome": "cashed-out",
         "cumulative_multiplier_ppm": 1030766,
         "payout": "103.076623"
       }
@@ -779,7 +779,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 3,
@@ -809,7 +809,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 2,
@@ -855,7 +855,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1053494
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1053494,
           "cumulative_multiplier_ppm": 1074993,
           "current_health": 2,
@@ -871,7 +871,7 @@
           "action_index": 5,
           "action": "cashout",
           "payload_borsh_hex": "",
-          "effect": "cashout",
+          "effect": "cashed-out",
           "multiplier_ppm": 1000000,
           "cumulative_multiplier_ppm": 1074993,
           "current_health": 2,
@@ -885,7 +885,7 @@
         }
       ],
       "final": {
-        "outcome": "cashout",
+        "outcome": "cashed-out",
         "cumulative_multiplier_ppm": 1074993,
         "payout": "104.824572"
       }
@@ -941,7 +941,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 2,
@@ -984,7 +984,7 @@
             "damage_dealt": 0,
             "step_multiplier_ppm": 0
           },
-          "effect": "lose",
+          "effect": "bust",
           "multiplier_ppm": 0,
           "cumulative_multiplier_ppm": 0,
           "current_health": 0,
@@ -998,14 +998,14 @@
         }
       ],
       "final": {
-        "outcome": "lose",
+        "outcome": "bust",
         "cumulative_multiplier_ppm": 0,
         "payout": "50"
       }
     },
     {
       "name": "bank-then-abandon-pays-banked-plus-live",
-      "predicate": "one surviving attack, a 50 TEZ partial-cashout, a second surviving attack, then abandon settles lose paying banked + live",
+      "predicate": "one surviving attack, a 50 TEZ partial-cashout, a second surviving attack, then abandon settles abandoned paying banked + live",
       "server_seed": "server-0",
       "client_seed": "client-seed",
       "hero": 0,
@@ -1054,7 +1054,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 3,
@@ -1100,7 +1100,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 2,
@@ -1116,7 +1116,7 @@
           "action_index": 4,
           "action": "abandon",
           "payload_borsh_hex": "",
-          "effect": "lose",
+          "effect": "abandoned",
           "multiplier_ppm": 1000000,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 2,
@@ -1130,7 +1130,7 @@
         }
       ],
       "final": {
-        "outcome": "lose",
+        "outcome": "abandoned",
         "cumulative_multiplier_ppm": 1020407,
         "payout": "101.533106"
       }
@@ -1186,7 +1186,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1010152,
           "current_health": 3,
@@ -1232,7 +1232,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1020407,
           "current_health": 4,
@@ -1262,7 +1262,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1030766,
           "current_health": 4,
@@ -1292,7 +1292,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1041230,
           "current_health": 4,
@@ -1322,7 +1322,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1051801,
           "current_health": 4,
@@ -1352,7 +1352,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1062479,
           "current_health": 4,
@@ -1382,7 +1382,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1010152
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1010152,
           "cumulative_multiplier_ppm": 1073265,
           "current_health": 4,
@@ -1412,7 +1412,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1015412
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1015412,
           "cumulative_multiplier_ppm": 1089806,
           "current_health": 4,
@@ -1442,7 +1442,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1033085
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1033085,
           "cumulative_multiplier_ppm": 1125862,
           "current_health": 3,
@@ -1504,7 +1504,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1033085
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1033085,
           "cumulative_multiplier_ppm": 1163111,
           "current_health": 3,
@@ -1566,7 +1566,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1081512
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1081512,
           "cumulative_multiplier_ppm": 1257919,
           "current_health": 4,
@@ -1612,7 +1612,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1081512
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1081512,
           "cumulative_multiplier_ppm": 1360454,
           "current_health": 4,
@@ -1658,7 +1658,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1119475
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1119475,
           "cumulative_multiplier_ppm": 1522994,
           "current_health": 4,
@@ -1688,7 +1688,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1119475
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1119475,
           "cumulative_multiplier_ppm": 1704954,
           "current_health": 4,
@@ -1718,7 +1718,7 @@
             "monster_hp_after": 2,
             "step_multiplier_ppm": 1194217
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1194217,
           "cumulative_multiplier_ppm": 2036085,
           "current_health": 3,
@@ -1780,7 +1780,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1194217
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1194217,
           "cumulative_multiplier_ppm": 2431527,
           "current_health": 3,
@@ -1842,7 +1842,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1194217
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1194217,
           "cumulative_multiplier_ppm": 2903771,
           "current_health": 4,
@@ -1888,7 +1888,7 @@
             "monster_hp_after": 2,
             "step_multiplier_ppm": 1341043
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1341043,
           "cumulative_multiplier_ppm": 3894082,
           "current_health": 4,
@@ -1934,7 +1934,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1341043
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1341043,
           "cumulative_multiplier_ppm": 5222131,
           "current_health": 3,
@@ -1996,7 +1996,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1341043
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1341043,
           "cumulative_multiplier_ppm": 7003102,
           "current_health": 3,
@@ -2058,7 +2058,7 @@
             "monster_hp_after": 2,
             "step_multiplier_ppm": 1479060
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1479060,
           "cumulative_multiplier_ppm": 10358008,
           "current_health": 3,
@@ -2120,7 +2120,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 1479060
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1479060,
           "cumulative_multiplier_ppm": 15320115,
           "current_health": 3,
@@ -2182,7 +2182,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 1479060
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 1479060,
           "cumulative_multiplier_ppm": 22659369,
           "current_health": 3,
@@ -2244,7 +2244,7 @@
             "monster_hp_after": 2,
             "step_multiplier_ppm": 2081573
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 2081573,
           "cumulative_multiplier_ppm": 47167131,
           "current_health": 4,
@@ -2290,7 +2290,7 @@
             "monster_hp_after": 2,
             "step_multiplier_ppm": 2081573
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 2081573,
           "cumulative_multiplier_ppm": 98181826,
           "current_health": 3,
@@ -2352,7 +2352,7 @@
             "monster_hp_after": 1,
             "step_multiplier_ppm": 2081573
           },
-          "effect": "continue-win",
+          "effect": "advance",
           "multiplier_ppm": 2081573,
           "cumulative_multiplier_ppm": 204372638,
           "current_health": 3,
@@ -2414,7 +2414,7 @@
             "monster_hp_after": 0,
             "step_multiplier_ppm": 2081573
           },
-          "effect": "win",
+          "effect": "completed",
           "multiplier_ppm": 2081573,
           "cumulative_multiplier_ppm": 425416565,
           "current_health": 4,
@@ -2428,7 +2428,7 @@
         }
       ],
       "final": {
-        "outcome": "win",
+        "outcome": "completed",
         "cumulative_multiplier_ppm": 425416565,
         "payout": "42541.696164"
       }

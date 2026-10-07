@@ -663,7 +663,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                 title: 'Transcript settles, and to this outcome',
                 status: replayResult.settled ? 'pass' : 'fail',
                 detail: replayResult.settled
-                    ? `replayed → ${replayResult.outcome} over ${actions.length} action(s). The wire carries no claimed outcome: the kernel derives the outcome from this same replay, and the payout above is the only number the sequencer asserts.`
+                    ? `replayed → ${replayResult.outcome} over ${actions.length} action(s). The wire carries no claimed outcome: the kernel derives the ending (its SettlementEntry.outcome) from this same replay, and the payout above is the only number the sequencer asserts.`
                     : `the transcript ends without a settling action, so the round never closes — the kernel rejects this as reject-round-unfinished`,
             });
         } catch (error) {

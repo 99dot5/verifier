@@ -139,7 +139,7 @@ describe('hydra:v1 vectors', () => {
 
         const outcomes = new Set(vectors.round_vectors.map((rv) => rv.final.outcome));
 
-        expect(outcomes).toEqual(new Set(['lose', 'cashout', 'win']));
+        expect(outcomes).toEqual(new Set(['abandoned', 'bust', 'cashed-out', 'completed']));
         expect(vectors.round_vectors.some((rv) => rv.steps.some((s) => s.fight?.wounded))).toBe(true);
         expect(vectors.round_vectors.some((rv) => rv.steps.some((s) => s.fight?.damage_dealt === 0))).toBe(true);
         expect(vectors.round_vectors.some((rv) => rv.steps.some((s) => s.fight?.damage_dealt === 2))).toBe(true);
@@ -235,18 +235,18 @@ describe('hydra:v1 transcript rules', () => {
         expect(decisions).toEqual(decisions.map((_, i) => String(i)));
     });
 
-    it('abandon before the first attack pays the stake, outcome lose', () => {
+    it('abandon before the first attack pays the stake, ending abandoned', () => {
         const rv = named('abandon-before-first-attack-pays-stake');
         const result = replayVector(rv);
 
-        expect(result.outcome).toBe('lose');
+        expect(result.outcome).toBe('abandoned');
         expect(result.payoutUnits).toBe(100_000_000n);
     });
 
     it('death after a bank pays the banked total', () => {
         const result = replayVector(named('bank-then-death-pays-banked'));
 
-        expect(result.outcome).toBe('lose');
+        expect(result.outcome).toBe('bust');
         expect(result.cumulativePpm).toBe(0n);
         expect(result.payoutUnits).toBe(result.bankedUnits);
         expect(result.payoutUnits).toBe(50_000_000n);

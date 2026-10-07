@@ -140,9 +140,10 @@ something the checks here do yet.
 
 Both amounts are bare `u128` in atomic units of the session's asset — mutez, at
 6 decimal places, for TEZ — read with the `u128()` Borsh reader into a `bigint`.
-The width is what lets an 18-decimal asset ride the same layout; the arithmetic
-ceiling is the kernel's 96-bit `Decimal` mantissa (about 7.9e28 units), above
-which the kernel rejects the transcript with `reject-amount-out-of-range`. The asset itself is never on the wire: it is bound to
+The width is what lets an 18-decimal asset ride the same layout, and the kernel's
+arithmetic uses all of it: the engines compute in `u128` units, and a transcript
+whose amounts overflow one (a stake times a multiplier, a position sum) is
+rejected `reject-amount-out-of-range`. The asset itself is never on the wire: it is bound to
 the session at its first deposit and the kernel reads it off the session record,
 so a transcript cannot name an asset its session does not hold.
 

@@ -425,7 +425,7 @@ const ROUND_STARTED_CRASH_STATE = 11;
  * `RoundStartedEvent.stake` (2).
  *
  * Field 2 means something different on each round event — `action_index` on
- * `RoundUpdated`, `outcome` on `RoundEnded`, both VARINT — so the read is
+ * `RoundUpdated`, `ending` (a `RoundEnding`) on `RoundEnded`, both VARINT — so the read is
  * gated on the payload case AND on the wire type, never on the number alone.
  */
 const ROUND_STARTED_STAKE = 2;
@@ -549,7 +549,7 @@ function readRoundBearingEvent(
         }
 
         // Both gates matter: field 2 is `action_index` on `RoundUpdated` and
-        // `outcome` on `RoundEnded`, and reading either as a Money would
+        // `ending` (a `RoundEnding`) on `RoundEnded`, and reading either as a Money would
         // fabricate a stake out of a varint.
         if (
             payloadCase === 'roundStarted' &&

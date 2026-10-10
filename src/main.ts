@@ -22,7 +22,7 @@ import {
 import { decodeExternalMessage } from './wire/messages';
 import { hexToBytes } from './verify/seed';
 import { importReceipts } from './receipts/import';
-import { readReceiptsHandoff } from './receipts/handoff';
+import { readReceiptsHandoff, readRoundHandoff } from './receipts/handoff';
 import { decodeReceiptFrame } from './receipts/recompute';
 import { locateSessionDeposit } from './chain/deposit';
 
@@ -481,12 +481,40 @@ async function adoptHandedOverReceipts(): Promise<void> {
     }
 
     if (text === null) {
+        adoptHandedOverRound();
+
         return;
     }
 
     history.replaceState(null, '', window.location.pathname + window.location.search);
     receiptsTextarea.value = text;
     adoptReceiptsScope('loaded from the game — read in this page, never uploaded. Press “Fetch from chain & verify”.');
+}
+
+/**
+ * A link that carries only a round id (`#round=…`) prefills the round field.
+ * Read only when the link carries no receipts, which name their own round.
+ */
+function adoptHandedOverRound(): void {
+    let roundId: string | null;
+
+    try {
+        roundId = readRoundHandoff(window.location.hash);
+    } catch (error) {
+        // Dropped too: a reload must not report the same bad link again.
+        history.replaceState(null, '', window.location.pathname + window.location.search);
+        progress.textContent = (error as Error).message;
+
+        return;
+    }
+
+    if (roundId === null) {
+        return;
+    }
+
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    roundIdInput.value = roundId;
+    progress.textContent = 'round ID filled in from the link — press “Fetch from chain & verify”';
 }
 
 void adoptHandedOverReceipts();

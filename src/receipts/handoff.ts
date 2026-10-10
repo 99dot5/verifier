@@ -12,14 +12,26 @@
  * - `gz`   — gzip of the export's JSON text;
  * - `json` — the UTF-8 JSON text itself (a browser without `CompressionStream`).
  *
- * The encoder is `libs/game-shell/src/receipts-handoff.ts`. This module only
+ * The encoder is `libs/casino-client/src/receipts/handoff.ts`. This module only
  * turns the fragment back into the text the file picker would have produced;
  * whether that text is a valid export is `importReceipts`'s question, asked
  * exactly as it is for a file, so a hand-off is no more trusted than a file.
+ *
+ * A link may instead carry only a round id (`#round=<uuid>`), which prefills
+ * the round field and nothing else. When both are present the receipts win:
+ * they name their own round.
  */
 
 /** The fragment parameter the game writes. */
 export const RECEIPTS_FRAGMENT_KEY = 'receipts';
+
+/**
+ * The fragment parameter carrying a bare round id (`#round=<uuid>`), from a
+ * page that knows the round but holds no receipts for it. It only fills in the
+ * round field: the round is then checked against the chain alone, exactly as
+ * if the reader had typed the id.
+ */
+export const ROUND_FRAGMENT_KEY = 'round';
 
 /** The largest decoded document this page accepts from a fragment (bytes). */
 export const MAX_HANDOFF_JSON_BYTES = 32 * 1024 * 1024;
@@ -122,4 +134,30 @@ export async function readReceiptsHandoff(hash: string): Promise<string | null> 
     }
 
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+}
+
+/**
+ * The round id carried by a location fragment (`#round=…`), as a lowercase
+ * hyphenated UUID, or `null` when the fragment carries none. Accepts the
+ * hyphenated form and the bare 32-hex form. Throws, with a reader-facing
+ * message, when the value is not a UUID — it is never passed on as typed.
+ */
+export function readRoundHandoff(hash: string): string | null {
+    const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+    const value = params.get(ROUND_FRAGMENT_KEY);
+
+    if (value === null) {
+        return null;
+    }
+
+    const text = value.trim().toLowerCase();
+    const hex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(text)
+        ? text.replaceAll('-', '')
+        : text;
+
+    if (!/^[0-9a-f]{32}$/.test(hex)) {
+        throw new Error('the round ID in the link is not a UUID');
+    }
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

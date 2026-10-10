@@ -1,13 +1,13 @@
 // @vitest-environment node
 /**
  * The receipts hand-off fragment (`#receipts=<scheme>.<base64url>`), as the
- * games write it (`libs/game-shell/src/receipts-handoff.ts`, whose own tests
+ * games write it (`libs/casino-client/src/receipts/handoff.ts`, whose own tests
  * round-trip through this format). The vectors below are fixed strings — a
  * `gz.` one produced by Node's zlib, not by the game's encoder — so this side
  * pins the format, not one implementation's output.
  */
 import { describe, expect, it } from 'vitest';
-import { readReceiptsHandoff } from './handoff';
+import { readReceiptsHandoff, readRoundHandoff } from './handoff';
 
 const TEXT = '{"schema":"99dot5.receipts.v1","note":"hand-off vector"}';
 const GZ =
@@ -42,5 +42,35 @@ describe('readReceiptsHandoff', () => {
         await expect(readReceiptsHandoff('#receipts=gz.AAAA')).rejects.toThrow();
         // 0xff 0xfe is not valid UTF-8.
         await expect(readReceiptsHandoff('#receipts=json._-4')).rejects.toThrow();
+    });
+
+    it('still reads the receipts when the link also names a round', async () => {
+        await expect(readReceiptsHandoff(`#round=${ROUND}&receipts=${JSON_FORM}`)).resolves.toBe(TEXT);
+    });
+});
+
+const ROUND = '9a256790-c7c0-47b0-9a5b-6ed2905d2df1';
+
+describe('readRoundHandoff', () => {
+    it('reads nothing from a fragment that carries no round', () => {
+        expect(readRoundHandoff('')).toBeNull();
+        expect(readRoundHandoff(`#receipts=${JSON_FORM}`)).toBeNull();
+    });
+
+    it('reads the hyphenated form, with or without the leading #', () => {
+        expect(readRoundHandoff(`#round=${ROUND}`)).toBe(ROUND);
+        expect(readRoundHandoff(`round=${ROUND}`)).toBe(ROUND);
+    });
+
+    it('normalises the bare 32-hex form and upper case to the hyphenated lowercase form', () => {
+        expect(readRoundHandoff(`#round=${ROUND.replaceAll('-', '')}`)).toBe(ROUND);
+        expect(readRoundHandoff(`#round=${ROUND.toUpperCase()}`)).toBe(ROUND);
+    });
+
+    it('refuses anything that is not a UUID rather than passing it on', () => {
+        expect(() => readRoundHandoff('#round=')).toThrow(/not a UUID/);
+        expect(() => readRoundHandoff('#round=9a256790-c7c0-47b0-9a5b')).toThrow(/not a UUID/);
+        expect(() => readRoundHandoff(`#round=${ROUND}0`)).toThrow(/not a UUID/);
+        expect(() => readRoundHandoff('#round=<script>')).toThrow(/not a UUID/);
     });
 });

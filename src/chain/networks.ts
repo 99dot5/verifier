@@ -31,8 +31,7 @@
  * indexer query is evidence, not proof: the administrator address is the root
  * of the whole key chain, so a reader who takes it on trust has reintroduced
  * exactly the trust this tool removes. Each entry's `evidence` says how it was
- * established; cross-check it against the origination ceremony's own records
- * (docs/runbooks/onboard-tenant.md, Step 8).
+ * established; cross-check it against the origination ceremony's own records.
  */
 import rawNetworks from './networks.json';
 

@@ -93,6 +93,17 @@ label {
     color: var(--muted);
 }
 
+/* A grid row is as tall as its tallest cell, and a label can wrap to two
+   lines, so the control used to sit wherever its own label's height left it
+   and one row's inputs landed at different heights. Pinning the control to
+   the bottom of the stretched cell keeps a row's inputs on one baseline;
+   the label text stays at the top. (A datalist renders nothing, so it takes
+   no slot.) */
+.grid label > input,
+.grid label > select {
+    margin-top: auto;
+}
+
 input,
 select,
 textarea {

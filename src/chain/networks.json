@@ -14,7 +14,26 @@
             "chainId": "NetXsqzbfFenSTS",
             "tzktApiUrl": "https://api.shadownet.tzkt.io",
             "rpcUrl": "https://rpc.shadownet.teztnets.com",
-            "deployments": []
+            "deployments": [
+                {
+                    "status": "active",
+                    "tenantId": "stg-99dot5-com-shadownet",
+                    "rollupAddress": "sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK",
+                    "originationAdministrator": {
+                        "address": "KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d",
+                        "level": 5392545
+                    },
+                    "evidence": [
+                        "sr_originate, verified 2026-10-08 via TzKT: GET https://api.shadownet.tzkt.io/v1/operations/sr_originate?rollup=sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK returns level 5392545, operation opAu56t71DewkrjoHZEwH4YrRyi6m3Swnuq2CBwyCowTmiNwwNa, sender tz1NqnqWgn6hrdL8Xu5jKWVzYGXMGYHfKHng.",
+                        "Administrator KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d was originated at level 5392389 (ooyewG1tsw38PaH7EEbAiSne49oJocq89gtWAs3X8owq5bQbzxB); its owner multisig KT1JYp2tXj9PutzKDsv1VTvqPVZXgubyX6Nb set its rollup to sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK at level 5392615 (onxYfsVKZPrkZ7VHzvV8GeUov5dDsC75hYAN4dVRkp2W8R6hqHN).",
+                        "RegisterTenant (0x0100) at level 5394307 (opCiDboTSy9Xt1G2qp6p4wLnHQdWuHddCd5gUneAeQsyY8HCBgn), sent to the rollup by the administrator, names stg-99dot5-com-shadownet with sequencer key edpkvQGVagSNSUihcXErJFQEdeGo7NSBpuiqqmy7pSuQMvhFWZuLVE; SetTenantStatus active at level 5394360 (opPqyDQvdmjx1hpQ4UVJVkZVcAzdnbKGu25fbwUaKQbStwptjJf).",
+                        "RegisterPool (0x010c): standard at level 5394332 (ooBrqQ2ZKBLMc1msvPAnzoW9PNLpucrKAxJKuSunV1JRSf3sPaj), TEZ, max_win 1000000000, active.",
+                        "RegisterPoolVault (0x0101): standard vault KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty at level 5394347 (opZGc2rBBNmep9Wxv9Mwpfk5UybTafaxcwxz5wX68Pi9Nd4iziP), active.",
+                        "Cross-checked 2026-10-08 against a Tezos RPC node (https://rpc.shadownet.teztnets.com): chain_id NetXsqzbfFenSTS; genesis_info of sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK returns level 5392545; KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d storage is (KT1JYp2tXj9PutzKDsv1VTvqPVZXgubyX6Nb, Some sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK).",
+                        "Confirmed by the operator against the origination ceremony: the rollup's /config/admin-contract/current reads KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d."
+                    ]
+                }
+            ]
         }
     ]
 }

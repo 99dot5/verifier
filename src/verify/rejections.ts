@@ -154,9 +154,10 @@ const REASON_CYCLE_TOO_SHORT = 25;
  * — the assertion the crash tick can contradict.
  *
  * Both members are refusals of a settle command on liveness grounds:
- * `ROUND_CLOSED` is the round-was-not-alive gate, `STATE_OUT_OF_SYNC` is the
- * no-in-progress-row path, and a server choosing between them cannot escape
- * the comparison. `ROUND_MODE_AUTO` is NOT here and must not be added: it
+ * `ROUND_CLOSED` is the round-was-not-alive gate (crashed, or already settled
+ * with no in-progress row left); `STATE_OUT_OF_SYNC` stays alongside it so a
+ * server choosing that code for the same situation cannot escape the
+ * comparison. `ROUND_MODE_AUTO` is NOT here and must not be added: it
  * refuses on mode, not on liveness, and it is correct by design.
  */
 const LIVENESS_REASONS: ReadonlySet<number> = new Set([REASON_ROUND_CLOSED, REASON_STATE_OUT_OF_SYNC]);

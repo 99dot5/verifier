@@ -20,6 +20,7 @@
  *     a verdict computed from half a document.
  */
 import { hexToBytes } from '@99dot5/round-replay';
+import { isLocatorLevel, isOperationHash, type LocatorHints } from './handoff';
 
 export const RECEIPTS_SCHEMA = '99dot5.receipts.v1';
 
@@ -70,6 +71,12 @@ export interface ImportedReceipts {
     sessionPublicKey: string;
     /** L1 level of the session's deposit; a hint the verifier confirms. */
     depositOperationLevel: number | null;
+    /**
+     * Where the round's transcript and seed batch sit on L1, as the exporter
+     * reported them, or `null` when the document carries none (or none that
+     * parsed). HINTS this page confirms against L1, never evidence.
+     */
+    locatorHints: LocatorHints | null;
     commands: ImportedCommand[];
     frames: ImportedFrame[];
     /** D13's whole input, called out separately so it survives a partial export. */
@@ -77,8 +84,12 @@ export interface ImportedReceipts {
 }
 
 export type ImportResult =
-    | { status: 'ok'; receipts: ImportedReceipts }
-    | { status: 'error'; message: string };
+    /**
+     * `findings` are reader-facing notes about parts of the document that were
+     * set aside without stopping the import — today only a malformed
+     * `locatorHints`, which is a hint and not evidence.
+     */
+    { status: 'ok'; receipts: ImportedReceipts; findings: string[] } | { status: 'error'; message: string };
 
 /** Parse and shape-validate an export document. Never throws. */
 export function importReceipts(text: string): ImportResult {
@@ -91,7 +102,9 @@ export function importReceipts(text: string): ImportResult {
     }
 
     try {
-        return { status: 'ok', receipts: readDocument(document) };
+        const findings: string[] = [];
+
+        return { status: 'ok', receipts: readDocument(document, findings), findings };
     } catch (error) {
         return fail(error instanceof Error ? error.message : String(error));
     }
@@ -101,7 +114,7 @@ function fail(message: string): ImportResult {
     return { status: 'error', message };
 }
 
-function readDocument(document: unknown): ImportedReceipts {
+function readDocument(document: unknown, findings: string[]): ImportedReceipts {
     const root = asObject(document, 'the export');
     const schema = asString(root.schema, 'schema');
 
@@ -163,10 +176,85 @@ function readDocument(document: unknown): ImportedReceipts {
             depositLevel === null || depositLevel === undefined
                 ? null
                 : asNumber(depositLevel, 'depositOperationLevel'),
+        locatorHints: readLocatorHints(root.locatorHints, findings),
         commands,
         frames,
         roundEndedFrame: asHex(root.roundEndedFrameHex, 'roundEndedFrameHex'),
     };
+}
+
+/**
+ * The document's `locatorHints`, or `null` when it carries none.
+ *
+ * Unlike every other field, a malformed value here is NOT an import error: it
+ * is treated as absent and reported as a finding, and the document imports.
+ * A hint only narrows or relocates a search, so losing one costs a wider scan
+ * and never a verdict, while refusing the document would throw away the
+ * signed frames that are the actual evidence. Each member (`transcript`,
+ * `seedBatch`) is judged on its own and dropped whole when its shape is wrong.
+ *
+ * Unknown keys, inside `locatorHints` or inside a member, are IGNORED rather
+ * than reported: the field is a bag of optional hints, and a key this build
+ * does not know can only be a hint it would not use.
+ */
+function readLocatorHints(value: unknown, findings: string[]): LocatorHints | null {
+    if (value === undefined || value === null) {
+        return null;
+    }
+
+    if (typeof value !== 'object' || Array.isArray(value)) {
+        findings.push("the export's locatorHints is not an object; it was ignored (a hint, not evidence)");
+
+        return null;
+    }
+
+    const raw = value as Record<string, unknown>;
+    const hints: LocatorHints = {};
+    const member = (key: string): Record<string, unknown> | null => {
+        const entry = raw[key];
+
+        if (entry === undefined || entry === null) {
+            return null;
+        }
+
+        if (typeof entry !== 'object' || Array.isArray(entry)) {
+            findings.push(`the export's locatorHints.${key} is not an object; it was ignored (a hint, not evidence)`);
+
+            return null;
+        }
+
+        return entry as Record<string, unknown>;
+    };
+
+    const transcript = member('transcript');
+
+    if (transcript !== null) {
+        if (isLocatorLevel(transcript.level) && isOperationHash(transcript.operationHash)) {
+            hints.transcript = { level: transcript.level, operationHash: transcript.operationHash };
+        } else {
+            findings.push(
+                "the export's locatorHints.transcript needs a positive integer level and an operation hash (o…); " +
+                    'it was ignored (a hint, not evidence)',
+            );
+        }
+    }
+
+    const seedBatch = member('seedBatch');
+
+    if (seedBatch !== null) {
+        const operationHash = seedBatch.operationHash ?? null;
+
+        if (isLocatorLevel(seedBatch.level) && (operationHash === null || isOperationHash(operationHash))) {
+            hints.seedBatch = { level: seedBatch.level, operationHash };
+        } else {
+            findings.push(
+                "the export's locatorHints.seedBatch needs a positive integer level and an operation hash (o…) or null; " +
+                    'it was ignored (a hint, not evidence)',
+            );
+        }
+    }
+
+    return hints.transcript || hints.seedBatch ? hints : null;
 }
 
 function asObject(value: unknown, what: string): Record<string, unknown> {

@@ -32,6 +32,7 @@
  * same trust it exists to remove.
  */
 import { blake2b } from '@noble/hashes/blake2.js';
+import type { DepositLocation } from './chain/deposit';
 import type { InboxMessage } from './chain/inbox';
 import type { AdminLineage, LineageKey } from './chain/admin-lineage';
 import type { ImportedReceipts } from './receipts/import';
@@ -166,9 +167,9 @@ export interface ScanContext {
     /** L1 head when the scan ran; null = unknown, which makes the range undecidable. */
     headLevel: number | null;
     /**
-     * The session's own deposit operation — the bracket's LOWER bound, because
-     * a session is not `active` until its deposit is processed, so no round of
-     * it can precede that level. `confirmed` is false when the level could not
+     * The session's own deposit operation — the bracket's LOWER bound: no
+     * round can SETTLE before the deposit; a copy posted earlier is applied as
+     * a session-missing reject (rollup `rounds.rs`, step 8). `confirmed` is false when the level could not
      * be checked against L1: an unconfirmed hint is not a bound. The UI shell
      * derives the level from L1 itself, so it only ever passes `true`; the flag
      * is for a caller that has a level from somewhere else.
@@ -201,6 +202,13 @@ export type ReceiptsInput =
  *                  moved past it. The ONE accusatory verdict.
  *   `incomplete`   a proof had no inputs.
  *   `failed`       a proof ran and did not hold.
+ *
+ * `verified` also needs `session-before-transcript`, which needs the
+ * session's deposit from an indexer and the node. A passing D10 lifts no cap:
+ * a receipts document the server built can reconstruct and still be capped at
+ * `attested`. And, accepted: an indexer or node outage turns a round with
+ * complete receipts that used to read `verified` into `incomplete`, until a
+ * re-run can reach them.
  */
 export type Verdict =
     | 'verified'
@@ -284,6 +292,15 @@ export interface VerifyInput {
     receipts?: ReceiptsInput;
     /** What the caller scanned; required for the suppression ladder to resolve. */
     scan?: ScanContext | null;
+    /**
+     * The session's earliest deposit, resolved for the transcript copy this
+     * function will choose (`resolveSessionDeposit` over
+     * {@link selectRoundTranscript}'s copy, with the vaults of the SIGNED
+     * pool). Read ONLY by the `session-before-transcript` check; the
+     * suppression bracket keeps reading `scan.deposit`. Absent or null means
+     * no lookup ran, and the check is then `unavailable`.
+     */
+    sessionDeposit?: DepositLocation | null;
 }
 
 export function verifyRound(input: VerifyInput): VerificationReport {
@@ -326,18 +343,13 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         matchSigningKey(m, input.signingDomain, input.keys.keys) !== null;
 
     const earliest = (predicate: (m: InboxMessage) => boolean, what: string): InboxMessage | undefined => {
-        const candidates = inTenant
-            .filter(predicate)
-            .sort((a, b) => a.level - b.level || a.messageIndex - b.messageIndex);
+        const { chosen, authenticated, skipped } = selectEarliestAuthenticated(
+            inTenant.filter(predicate),
+            input.keys,
+            input.signingDomain,
+        );
 
-        if (input.keys.status !== 'available' || input.keys.keys.length === 0) {
-            return candidates[0];
-        }
-
-        const chosen = candidates.find(authenticates);
-        const skipped = candidates.filter((m) => m !== chosen && !authenticates(m));
-
-        if (chosen && skipped.length > 0) {
+        if (authenticated && chosen && skipped.length > 0) {
             findings.push(
                 `Skipped ${skipped.length} ${what} frame(s) under this tenant's slug that verify under no key the ` +
                     `tenant registered (${skipped.map((m) => `level ${m.level}, op ${m.operationHash}`).join('; ')}). ` +
@@ -346,7 +358,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             );
         }
 
-        return chosen ?? candidates[0];
+        return chosen;
     };
 
     const transcriptMessage = earliest(
@@ -710,6 +722,21 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         detail: preBetSeed.detail,
     });
 
+    // The session existed when the kernel applied this copy (D10). Judged on
+    // the copy chosen above, and only when it is authenticated: a forged or
+    // foreign frame under the tenant's slug can never make a round `failed`.
+    const sessionCheck = evaluateSessionBeforeTranscript(
+        transcriptMessage.level,
+        authenticates(transcriptMessage),
+        input.sessionDeposit,
+    );
+
+    checks.push(sessionCheck.check);
+
+    if (sessionCheck.finding) {
+        findings.push(sessionCheck.finding);
+    }
+
     const anyFail = checks.some((c) => c.status === 'fail');
     // "verified" requires every proof to have actually run and passed. The
     // payout and commitment halves are the substance, but the SIGNATURE check
@@ -764,6 +791,14 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             // bets, so an honest round from it carries the echo.
             OPENER_SEED_CHECK_ID,
             PRE_BET_SEED_CHECK_ID,
+            // The session-before-transcript check JOINS the list (D10). A
+            // `verified` that never checked the session existed when the
+            // kernel applied this copy is exactly the hole it closes: a copy
+            // posted before the session's first deposit is applied as a
+            // session-missing reject, and every proof above still passes on
+            // it. The cost is stated: an indexer or node outage now reads
+            // `incomplete` until the lookup can run.
+            SESSION_BEFORE_TRANSCRIPT_CHECK_ID,
         ] as const
     ).every((id) => checks.find((c) => c.id === id)?.status === 'pass');
 
@@ -1017,6 +1052,178 @@ function clientSeedFromReceipts(input: VerifyInput, roundId: string): { requestI
     const found = placeBetFromReceipts(input, roundId);
 
     return found?.decoded.placeBetClientSeed ? { requestId: found.requestId, seed: found.decoded.placeBetClientSeed } : null;
+}
+
+/**
+ * Whether `message` verifies under some key of `keys` for `domain`. The same
+ * test `verifyRound` applies when it picks the earliest authenticated copy;
+ * exported so a locator hint is confirmed under exactly that rule.
+ */
+export function authenticatesUnder(message: InboxMessage, keys: KeySet, domain: SigningDomain): boolean {
+    return keys.status === 'available' && matchSigningKey(message, domain, keys.keys) !== null;
+}
+
+/**
+ * The earliest of `candidates` by (level, index in its operation) that
+ * authenticates, the rule `verifyRound` applies to every message it relies
+ * on: the kernel drops unauthenticated frames and applies the FIRST
+ * authenticated copy. When none authenticates (no key set, no signing domain,
+ * or no match) the earliest candidate stands in with `authenticated: false`,
+ * so the signature check can report it rather than hide the round.
+ */
+export function selectEarliestAuthenticated(
+    candidates: InboxMessage[],
+    keys: KeySet,
+    domain: SigningDomain | null,
+): { chosen: InboxMessage | undefined; authenticated: boolean; skipped: InboxMessage[] } {
+    const sorted = [...candidates].sort((a, b) => a.level - b.level || a.messageIndex - b.messageIndex);
+
+    if (keys.status !== 'available' || keys.keys.length === 0 || domain === null) {
+        return { chosen: sorted[0], authenticated: false, skipped: [] };
+    }
+
+    const authentic = (m: InboxMessage) => authenticatesUnder(m, keys, domain);
+    const chosen = sorted.find(authentic);
+
+    if (!chosen) {
+        return { chosen: sorted[0], authenticated: false, skipped: [] };
+    }
+
+    return { chosen, authenticated: true, skipped: sorted.filter((m) => m !== chosen && !authentic(m)) };
+}
+
+/**
+ * The round's transcript copy `verifyRound` judges, chosen by the same rule
+ * ({@link selectEarliestAuthenticated} over the tenant's RoundTranscripts for
+ * the round), or null when there is no candidate at all. The deposit resolver
+ * runs on this copy before `verifyRound`, so there is one rule, not two.
+ */
+export function selectRoundTranscript(
+    input: Pick<VerifyInput, 'messages' | 'roundId' | 'tenantId' | 'keys' | 'signingDomain'>,
+): { message: InboxMessage; authenticated: boolean } | null {
+    const roundId = input.roundId.trim().toLowerCase();
+    const { chosen, authenticated } = selectEarliestAuthenticated(
+        input.messages.filter(
+            (m) =>
+                m.envelope.tenantId === input.tenantId &&
+                m.envelope.message.kind === 'round-transcript' &&
+                m.envelope.message.roundId === roundId,
+        ),
+        input.keys,
+        input.signingDomain,
+    );
+
+    return chosen ? { message: chosen, authenticated } : null;
+}
+
+export const SESSION_BEFORE_TRANSCRIPT_CHECK_ID = 'session-before-transcript';
+
+const SESSION_BEFORE_TRANSCRIPT_TITLE = 'The session existed on chain when the transcript was applied';
+
+/**
+ * The `session-before-transcript` check. The kernel creates a session only at
+ * its first credited deposit (rollup `sessions.rs`, `credit_deposit`), applies
+ * a transcript whose session does not exist yet as a `REJECT_SESSION_MISSING`
+ * reject that burns the seed and records a zero payout (`rounds.rs`, step 8,
+ * `burn_and_record`), and ignores every later copy of that round id, because
+ * dedup is on the settlement path's existence. So a copy posted before the
+ * session existed settles the round for good, as a loss with no payout.
+ *
+ * It compares the level T_e of the copy `verifyRound` chose with the level D
+ * of the session's earliest deposit, and reads only `deposit` (never the
+ * suppression bracket's `scan.deposit`). Only one row fails: an authenticated
+ * copy below a deposit the indexer reported, the node confirmed, the node
+ * shows created the session on its vault, and no other vault of the pool
+ * holds the session. Every weaker row is `unavailable`, because an indexer's
+ * silence or a top-up proves nothing about the session's first deposit.
+ */
+export function evaluateSessionBeforeTranscript(
+    transcriptLevel: number,
+    authenticated: boolean,
+    deposit: DepositLocation | null | undefined,
+): { check: Check; finding: string | null } {
+    const row = (status: CheckStatus, detail: string, finding: string | null = null) => ({
+        check: { id: SESSION_BEFORE_TRANSCRIPT_CHECK_ID, title: SESSION_BEFORE_TRANSCRIPT_TITLE, status, detail },
+        finding,
+    });
+    const withFinding = (status: CheckStatus, finding: string, detail: string) =>
+        row(status, `${finding} ${detail}`, finding);
+    const T = transcriptLevel;
+
+    if (!authenticated) {
+        return row(
+            'unavailable',
+            'the transcript copy is not authenticated, so its level proves nothing about the session',
+        );
+    }
+
+    if (!deposit) {
+        return row('unavailable', "no lookup of the session's deposit ran for this transcript copy");
+    }
+
+    if (deposit.lookup === 'failed') {
+        return row('unavailable', `the session's deposit lookup failed: ${deposit.detail}`);
+    }
+
+    if (deposit.lookup === 'none' || deposit.level === null) {
+        return withFinding(
+            'unavailable',
+            'No applied deposit naming this session was found on any vault the signed pool ever registered. If ' +
+                'none exists, the kernel applied this transcript as a REJECT_SESSION_MISSING reject and the round ' +
+                "never settled. But an indexer's silence is not proof of absence, so this verifier does not conclude it.",
+            deposit.detail,
+        );
+    }
+
+    const D = deposit.level;
+
+    if (D < T) {
+        return row(
+            'pass',
+            `a deposit at level ${D} (confirmed on the node) precedes the transcript at ${T}. Any confirmed deposit ` +
+                "below the transcript proves the session existed, because the session's first deposit is at or " +
+                `before it. ${deposit.detail}`,
+        );
+    }
+
+    if (D === T) {
+        return withFinding(
+            'unavailable',
+            `The deposit and the transcript share level ${D}; the kernel's order within a level is not ` +
+                'reconstructed here, so whether the session existed when the transcript was applied is not decided.',
+            deposit.detail,
+        );
+    }
+
+    if (!deposit.firstProven) {
+        return withFinding(
+            'unavailable',
+            `The deposit at level ${D} is confirmed but not shown to be the session-creating one (a top-up, or a ` +
+                `vault that records no binding), so an earlier deposit the indexer did not return cannot be ruled ` +
+                `out, and the transcript at level ${T} is not judged.`,
+            deposit.detail,
+        );
+    }
+
+    if (!deposit.otherVaults?.clear) {
+        return withFinding(
+            'unavailable',
+            `Multi-vault pool; first-deposit proof is per vault. The deposit at level ${D} created the session on ` +
+                `${deposit.vault}, above the transcript at level ${T}, but another vault of the pool may have ` +
+                `created it earlier: ${deposit.otherVaults?.detail ?? 'the other vaults were not looked up'}.`,
+            deposit.detail,
+        );
+    }
+
+    return withFinding(
+        'fail',
+        `The earliest authenticated copy of this transcript (level ${T}) predates the earliest deposit the ` +
+            `indexer reports (level ${D}). The node confirms it as the session-creating deposit: it wrote the ` +
+            `vault's sessions entry, and no other vault of this pool holds one (${deposit.otherVaults.detail}). ` +
+            'The rollup kernel had no session for it and applied it as a REJECT_SESSION_MISSING reject: it burned ' +
+            'the seed, paid nothing, and every later copy of the round was ignored.',
+        deposit.detail,
+    );
 }
 
 /** The first admissible key this message's signature verifies under, for `domain`, or null. */
@@ -1647,8 +1854,13 @@ function resolveMissingTranscript(
     return 'suppressed';
 }
 
-/** Whether the scanned range brackets the round, and why not when it does not. */
-function describeBracket(scan: ScanContext | null): { status: 'ok' | 'narrow'; reason: string } {
+/**
+ * Whether the scanned range brackets the round, and why not when it does not.
+ * Consulted only on the missing-transcript ladder: a found round is never
+ * made `inconclusive` by a scan a confirmed transcript hint capped below the
+ * head.
+ */
+export function describeBracket(scan: ScanContext | null): { status: 'ok' | 'narrow'; reason: string } {
     if (!scan) {
         return { status: 'narrow', reason: 'the caller did not state what range it scanned' };
     }
@@ -1681,7 +1893,7 @@ function describeBracket(scan: ScanContext | null): { status: 'ok' | 'narrow'; r
     if (scan.fromLevel > scan.deposit.level) {
         return {
             status: 'narrow',
-            reason: `the scan started at level ${scan.fromLevel}, after the session's deposit at ${scan.deposit.level} — no round of this session can precede the deposit, so the range must start at or before it`,
+            reason: `the scan started at level ${scan.fromLevel}, after the session's deposit at ${scan.deposit.level} — no round of this session can SETTLE before the deposit (a copy posted earlier is applied as a session-missing reject, rollup rounds.rs step 8), so the range must start at or before it`,
         };
     }
 

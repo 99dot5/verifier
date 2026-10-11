@@ -16,7 +16,19 @@
 // silently ignored; the client-side re-check below is what keeps the tool
 // honest if an indexer ever does ignore it.
 import { describe, expect, it } from 'vitest';
-import { locateSessionDeposit } from './deposit';
+import type { AdminLineage } from './admin-lineage';
+import {
+    type DepositChain,
+    locateSessionDeposit,
+    resolveSessionDeposit,
+    sessionKeyScriptExprHash,
+    sessionsBigMapId,
+    writesSessionEntry,
+} from './deposit';
+import type { InboxMessage, RpcManagerOperation, RpcManagerOperationGroup } from './inbox';
+import firstDepositCapture from './testdata/shadownet-first-deposit.json';
+import topUpCapture from './testdata/shadownet-top-up.json';
+import sessionsEntryCapture from './testdata/shadownet-sessions-entry.json';
 
 const TZKT = 'https://api.shadownet.tzkt.io';
 const VAULT = 'KT1GCjZwMGnZhJzGw36rm8gyKeh2ZJe9vjNE';
@@ -127,6 +139,7 @@ describe('locateSessionDeposit', () => {
             fetchImpl: mockIndexer({ [VAULT]: [row(1, 4219556, 'ffffffffffffffffffffffffffffffff')] }),
         });
 
+        expect(located.lookup).toBe('none');
         expect(located.level).toBeNull();
         expect(located.detail).toContain('no applied deposit naming session');
     });
@@ -178,6 +191,7 @@ describe('locateSessionDeposit', () => {
             fetchImpl: mockIndexer({}),
         });
 
+        expect(located.lookup).toBe('failed');
         expect(located.level).toBeNull();
         expect(located.detail).toContain('no vault is registered on-chain for this pool');
     });
@@ -193,7 +207,356 @@ describe('locateSessionDeposit', () => {
             fetchImpl: failing,
         });
 
+        expect(located.lookup).toBe('failed');
         expect(located.level).toBeNull();
         expect(located.detail).toContain('503');
+    });
+});
+
+// ── The session-creating deposit: receipts captured from shadownet (D-9) ──
+//
+// Every shape the `firstProven` rule reads is pinned against REAL node
+// output, captured read-only on 2026-10-11 from the public shadownet node and
+// indexer listed in networks.json (the URLs are in each fixture's
+// `capturedFrom`): the first deposit of one session to the shadownet vault,
+// a top-up of the same session, and that session's `sessions` entry with the
+// script expression hash the node and the indexer report for its key.
+
+const REAL_VAULT = sessionsEntryCapture.vault;
+const REAL_SESSION_HEX = sessionsEntryCapture.sessionIdHex;
+const REAL_SESSION = '01a1175f-11b1-7662-986b-81d519ccfcc1';
+const firstDepositGroup = firstDepositCapture.operationGroup as unknown as RpcManagerOperationGroup;
+const topUpGroup = topUpCapture.operationGroup as unknown as RpcManagerOperationGroup;
+const firstDepositCall = firstDepositGroup.contents[0];
+const topUpCall = topUpGroup.contents[0];
+
+describe('the deposit receipt shape (captured)', () => {
+    it("reads the sessions big_map id as the 5th leaf of the production vault's storage", () => {
+        expect(sessionsBigMapId(sessionsEntryCapture.storageAtHead)).toBe(sessionsEntryCapture.bigMapId);
+        // The receipt's own storage, in the flattened sequence form, agrees.
+        expect(
+            sessionsBigMapId((firstDepositCall.metadata?.operation_result as unknown as { storage: unknown }).storage),
+        ).toBe(sessionsEntryCapture.bigMapId);
+    });
+
+    it('pins the first deposit: a top-level big_map update of the sessions id at the session key, with a value', () => {
+        const diff = firstDepositCall.metadata?.operation_result?.lazy_storage_diff ?? [];
+
+        expect(firstDepositCall.destination).toBe(REAL_VAULT);
+        expect(firstDepositCall.parameters?.entrypoint).toBe('deposit');
+        expect(diff).toHaveLength(1);
+        expect(diff[0]).toMatchObject({ kind: 'big_map', id: sessionsEntryCapture.bigMapId, diff: { action: 'update' } });
+        expect(diff[0].diff.updates).toHaveLength(1);
+        expect(diff[0].diff.updates?.[0].key).toEqual({ bytes: REAL_SESSION_HEX });
+        expect(diff[0].diff.updates?.[0].value).toBeDefined();
+        expect(writesSessionEntry(firstDepositCall, sessionsEntryCapture.bigMapId, REAL_SESSION)).toBe(true);
+    });
+
+    it('pins the top-up: the same big_map is touched with NO update, so it proves nothing', () => {
+        const diff = topUpCall.metadata?.operation_result?.lazy_storage_diff ?? [];
+
+        expect(topUpCall.parameters?.entrypoint).toBe('deposit');
+        expect(JSON.stringify(topUpCall.parameters?.value)).toContain(REAL_SESSION_HEX);
+        expect(diff).toEqual([{ kind: 'big_map', id: sessionsEntryCapture.bigMapId, diff: { action: 'update', updates: [] } }]);
+        expect(writesSessionEntry(topUpCall, sessionsEntryCapture.bigMapId, REAL_SESSION)).toBe(false);
+    });
+
+    it("derives the node's script expression hash for a sessions key (rule 4's lookup key)", () => {
+        const derived = sessionKeyScriptExprHash(REAL_SESSION);
+
+        expect(derived).toBe(sessionsEntryCapture.nodeScriptExprHash);
+        expect(derived).toBe(sessionsEntryCapture.tzktKeyHash);
+        // The receipt reports the same hash for the key it wrote.
+        expect(firstDepositCall.metadata?.operation_result?.lazy_storage_diff?.[0].diff.updates?.[0].key_hash).toBe(derived);
+        expect(sessionKeyScriptExprHash(REAL_SESSION_HEX)).toBe(derived);
+    });
+
+    it('does not read a write that sits only under internal_operation_results (a contract-wallet deposit)', () => {
+        const topLevel = firstDepositCall.metadata?.operation_result;
+        const moved: RpcManagerOperation = {
+            ...firstDepositCall,
+            metadata: {
+                operation_result: { ...topLevel, status: 'applied', lazy_storage_diff: undefined },
+                internal_operation_results: [{ kind: 'transaction', result: topLevel }],
+            },
+        };
+
+        expect(writesSessionEntry(moved, sessionsEntryCapture.bigMapId, REAL_SESSION)).toBe(false);
+    });
+
+    it('reads an update with no value as a removal, and another big_map or session as no write', () => {
+        const withUpdate = (update: object, id = sessionsEntryCapture.bigMapId): RpcManagerOperation => ({
+            ...firstDepositCall,
+            metadata: {
+                operation_result: {
+                    status: 'applied',
+                    lazy_storage_diff: [{ kind: 'big_map', id, diff: { action: 'update', updates: [update] } }],
+                },
+            },
+        });
+
+        expect(writesSessionEntry(withUpdate({ key: { bytes: REAL_SESSION_HEX } }), sessionsEntryCapture.bigMapId, REAL_SESSION)).toBe(false);
+        expect(
+            writesSessionEntry(withUpdate({ key: { bytes: REAL_SESSION_HEX }, value: {} }, '999'), sessionsEntryCapture.bigMapId, REAL_SESSION),
+        ).toBe(false);
+        expect(
+            writesSessionEntry(withUpdate({ key: { bytes: 'ff'.repeat(16) }, value: {} }), sessionsEntryCapture.bigMapId, REAL_SESSION),
+        ).toBe(false);
+    });
+
+    it('reads no sessions id from a preview vault (nine fields, no big_map) or any other contract', () => {
+        const preview = {
+            prim: 'Pair',
+            args: [
+                { string: 'tz1dBStuxore6uR3E2s5NAhjSGc3EtpkwCp7' },
+                [{ string: 'tz1g3LZAHCeHkW7hgmE2HuNX6xGE7JGJAe7X' }],
+                { prim: 'False' },
+                { prim: 'None' },
+                { string: 'preview' },
+                { int: '1000' },
+                { string: 'sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK' },
+                { string: 'stg-99dot5-com-shadownet' },
+                { int: '0' },
+            ],
+        };
+
+        expect(sessionsBigMapId(preview)).toBeNull();
+        expect(sessionsBigMapId({ prim: 'Unit' })).toBeNull();
+        expect(sessionsBigMapId(null)).toBeNull();
+    });
+});
+
+// ── resolveSessionDeposit: the lookup the session-before-transcript check reads (D-6) ──
+
+const TRANSCRIPT_LEVEL = 5_396_000;
+
+/** The chosen transcript copy, reduced to what the resolver reads off its signed envelope. */
+function transcriptCopy(poolId = 'standard', level = TRANSCRIPT_LEVEL): InboxMessage {
+    return {
+        level,
+        operationHash: 'op-transcript',
+        messageIndex: 0,
+        rawHex: '',
+        envelope: {
+            tenantId: 'stg-99dot5-com-shadownet',
+            poolId,
+            message: { kind: 'round-transcript', roundId: 'r', sessionId: REAL_SESSION },
+        },
+    } as unknown as InboxMessage;
+}
+
+function lineageWith(vaults: { vault: string; level: number; poolId?: string }[]): AdminLineage {
+    return {
+        administrators: [],
+        keys: [],
+        vaults: vaults.map((v) => ({
+            tenantId: 'stg-99dot5-com-shadownet',
+            poolId: v.poolId ?? 'standard',
+            vault: v.vault,
+            status: 'active',
+            level: v.level,
+            operationHash: `op-register-${v.vault}`,
+        })),
+        proposals: [],
+        ambiguities: [],
+        scannedOperationCount: 0,
+        ignoredOperationCount: 0,
+    };
+}
+
+/** A chain over the captured shadownet data: the indexer reports the first deposit, the node has its block. */
+function capturedChain(overrides: Partial<DepositChain> & { indexer?: typeof fetch } = {}): DepositChain {
+    return {
+        locateDeposit: (vaultAddresses, sessionIdHex) =>
+            locateSessionDeposit({
+                tzktApiUrl: TZKT,
+                vaultAddresses,
+                sessionIdHex,
+                fetchImpl:
+                    overrides.indexer ??
+                    mockIndexer({
+                        [REAL_VAULT]: [
+                            { id: 2, level: topUpCapture.level, hash: topUpGroup.hash, parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } } },
+                            { id: 1, level: firstDepositCapture.level, hash: firstDepositGroup.hash, parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } } },
+                        ],
+                    }),
+            }),
+        blockOperations: async (level) =>
+            level === firstDepositCapture.level ? [firstDepositGroup] : level === topUpCapture.level ? [topUpGroup] : [],
+        contractStorage: async () => sessionsEntryCapture.storageAtHead,
+        bigMapHas: async () => false,
+        ...overrides,
+    };
+}
+
+describe('resolveSessionDeposit', () => {
+    it('found: the indexer and the node agree, and the receipt proves the deposit created the session', async () => {
+        const located = await resolveSessionDeposit({
+            transcript: transcriptCopy('standard', firstDepositCapture.level - 10),
+            lineage: lineageWith([{ vault: REAL_VAULT, level: 5_394_347 }]),
+            formPoolId: '',
+            chain: capturedChain(),
+        });
+
+        expect(located).toMatchObject({
+            lookup: 'found',
+            level: firstDepositCapture.level,
+            operationHash: firstDepositGroup.hash,
+            vault: REAL_VAULT,
+            firstProven: true,
+            otherVaults: { clear: true },
+        });
+        expect(located.detail).toContain('The node confirms it');
+        expect(located.otherVaults?.detail).toContain('no other vault of pool standard');
+    });
+
+    it('found, not first: the indexer omits the first deposit and returns the top-up', async () => {
+        const located = await resolveSessionDeposit({
+            transcript: transcriptCopy('standard', firstDepositCapture.level),
+            lineage: lineageWith([{ vault: REAL_VAULT, level: 5_394_347 }]),
+            formPoolId: 'standard',
+            chain: capturedChain({
+                indexer: mockIndexer({
+                    [REAL_VAULT]: [{ id: 2, level: topUpCapture.level, hash: topUpGroup.hash, parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } } }],
+                }),
+            }),
+        });
+
+        expect(located).toMatchObject({ lookup: 'found', level: topUpCapture.level, firstProven: false, otherVaults: null });
+        expect(located.detail).toContain('not shown to be the session-creating deposit');
+    });
+
+    it('none: every page exhausted with no row naming the session', async () => {
+        const requested: string[] = [];
+        // An indexer that ignores the filter: a full page of another session's
+        // rows, then an empty page. Every page is read, none matches.
+        const paging = ((url: string) => {
+            requested.push(url);
+
+            const rows = new URL(url).searchParams.get('id.gt')
+                ? []
+                : Array.from({ length: 1000 }, (_, i) => row(i + 1, 5_000_000 + i, 'ab'.repeat(16)));
+
+            return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(rows) } as Response);
+        }) as unknown as typeof fetch;
+        const located = await resolveSessionDeposit({
+            transcript: transcriptCopy(),
+            lineage: lineageWith([{ vault: REAL_VAULT, level: 5_394_347 }]),
+            formPoolId: '',
+            chain: capturedChain({ indexer: paging }),
+        });
+
+        expect(requested).toHaveLength(2);
+        expect(requested[1]).toContain('id.gt=1000');
+        expect(located.lookup).toBe('none');
+    });
+
+    const failures: { name: string; reason: string; input: () => Parameters<typeof resolveSessionDeposit>[0] }[] = [
+        {
+            name: 'HTTP 500 from the indexer',
+            reason: 'the indexer returned 500',
+            input: () => ({
+                transcript: transcriptCopy(),
+                lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),
+                formPoolId: '',
+                chain: capturedChain({
+                    indexer: (() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve([]) } as Response)) as unknown as typeof fetch,
+                }),
+            }),
+        },
+        {
+            name: 'a fetch error',
+            reason: 'could not be looked up: network down',
+            input: () => ({
+                transcript: transcriptCopy(),
+                lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),
+                formPoolId: '',
+                chain: capturedChain({ indexer: (() => Promise.reject(new Error('network down'))) as unknown as typeof fetch }),
+            }),
+        },
+        {
+            name: 'no vault registered for the signed pool',
+            reason: 'no vault is registered on-chain for this pool',
+            input: () => ({
+                transcript: transcriptCopy(),
+                lineage: lineageWith([{ vault: REAL_VAULT, level: 1, poolId: 'another-pool' }]),
+                formPoolId: '',
+                chain: capturedChain(),
+            }),
+        },
+        {
+            name: 'the node disagrees with the indexer',
+            reason: 'indexer and node disagree',
+            input: () => ({
+                transcript: transcriptCopy(),
+                lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),
+                formPoolId: '',
+                chain: capturedChain({ blockOperations: async () => [] }),
+            }),
+        },
+        {
+            name: 'the form names another pool than the signed transcript',
+            reason: 'the form names pool another-pool, the signed transcript names pool standard',
+            input: () => ({
+                transcript: transcriptCopy(),
+                lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),
+                formPoolId: 'another-pool',
+                chain: capturedChain(),
+            }),
+        },
+        {
+            name: 'no lineage (an override key)',
+            reason: 'no administrator lineage was derived',
+            input: () => ({ transcript: transcriptCopy(), lineage: null, formPoolId: '', chain: capturedChain() }),
+        },
+        {
+            name: 'the vault storage cannot be read',
+            reason: 'could not read the storage of vault',
+            input: () => ({
+                transcript: transcriptCopy(),
+                lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),
+                formPoolId: '',
+                chain: capturedChain({ contractStorage: () => Promise.reject(new Error('RPC 500')) }),
+            }),
+        },
+    ];
+
+    for (const { name, reason, input } of failures) {
+        it(`failed: ${name}`, async () => {
+            const located = await resolveSessionDeposit(input());
+
+            expect(located.lookup).toBe('failed');
+            expect(located.level).toBeNull();
+            expect(located.firstProven).toBe(false);
+            expect(located.detail).toContain(reason);
+        });
+    }
+
+    it('rule 4: another production vault registered before the transcript that holds the session clears nothing', async () => {
+        const OLD_VAULT = 'KT1V9p3YByfpVs1QWmnZPHTNHDy9XaNPLTqz';
+        const asked: string[] = [];
+        const located = await resolveSessionDeposit({
+            transcript: transcriptCopy('standard', firstDepositCapture.level - 10),
+            lineage: lineageWith([
+                { vault: OLD_VAULT, level: 5_000_000 },
+                { vault: REAL_VAULT, level: 5_394_347 },
+                // Registered after the transcript: it cannot have held a credited deposit before it.
+                { vault: 'KT1LateVaultLateVaultLateVaultLat', level: firstDepositCapture.level },
+            ]),
+            formPoolId: '',
+            chain: capturedChain({
+                contractStorage: async (address) => {
+                    asked.push(address);
+
+                    return sessionsEntryCapture.storageAtHead;
+                },
+                bigMapHas: async (id, expr) => id === sessionsEntryCapture.bigMapId && expr === sessionsEntryCapture.nodeScriptExprHash,
+            }),
+        });
+
+        expect(located.firstProven).toBe(true);
+        expect(located.otherVaults?.clear).toBe(false);
+        expect(located.otherVaults?.detail).toContain(`vault ${OLD_VAULT} holds a sessions entry for this session`);
+        expect(asked).not.toContain('KT1LateVaultLateVaultLateVaultLat');
     });
 });

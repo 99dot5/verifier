@@ -7,7 +7,7 @@
  * pins the format, not one implementation's output.
  */
 import { describe, expect, it } from 'vitest';
-import { readReceiptsHandoff, readRoundHandoff } from './handoff';
+import { readHintHandoff, readReceiptsHandoff, readRoundHandoff } from './handoff';
 
 const TEXT = '{"schema":"99dot5.receipts.v1","note":"hand-off vector"}';
 const GZ =
@@ -72,5 +72,97 @@ describe('readRoundHandoff', () => {
         expect(() => readRoundHandoff('#round=9a256790-c7c0-47b0-9a5b')).toThrow(/not a UUID/);
         expect(() => readRoundHandoff(`#round=${ROUND}0`)).toThrow(/not a UUID/);
         expect(() => readRoundHandoff('#round=<script>')).toThrow(/not a UUID/);
+    });
+});
+
+describe('readHintHandoff', () => {
+    const TRANSCRIPT_OP = 'ooxa3P8hPVb3cX7YQ7e4H9SpX2nWm3kD5aQe8vRrZ1t6Ug7Fh2J';
+    const BATCH_OP = 'onyxCAJ2FSiVUv8fEzSgfrYQtCbqQd8ZLjnGx1qEKmrBV3cWPdT';
+    // The fragment the sender writes (`libs/casino-client`'s `roundHandoffUrl`).
+    const ALL = `#round=${ROUND}&transcriptLevel=1234567&transcriptOp=${TRANSCRIPT_OP}&seedBatchLevel=1234500&seedBatchOp=${BATCH_OP}`;
+
+    it('reads no hint, and no finding, from a link that carries none', () => {
+        expect(readHintHandoff('')).toEqual({ hints: null, findings: [] });
+        expect(readHintHandoff(`#round=${ROUND}`)).toEqual({ hints: null, findings: [] });
+    });
+
+    it('reads every hint key the sender writes, beside the round id', () => {
+        expect(readHintHandoff(ALL)).toEqual({
+            hints: {
+                transcript: { level: 1_234_567, operationHash: TRANSCRIPT_OP },
+                seedBatch: { level: 1_234_500, operationHash: BATCH_OP },
+            },
+            findings: [],
+        });
+        expect(readRoundHandoff(ALL)).toBe(ROUND);
+    });
+
+    it('reads a level-only seed batch as one with no operation hash', () => {
+        expect(readHintHandoff(`#round=${ROUND}&seedBatchLevel=42`)).toEqual({
+            hints: { seedBatch: { level: 42, operationHash: null } },
+            findings: [],
+        });
+    });
+
+    it('drops a malformed key with a finding, and never drops the round', () => {
+        const cases: { fragment: string; hints: unknown; finding: RegExp }[] = [
+            {
+                fragment: `#round=${ROUND}&transcriptLevel=0&transcriptOp=${TRANSCRIPT_OP}`,
+                hints: null,
+                finding: /transcriptLevel hint is not a positive integer level/,
+            },
+            {
+                fragment: `#round=${ROUND}&transcriptLevel=12.5&transcriptOp=${TRANSCRIPT_OP}`,
+                hints: null,
+                finding: /transcriptLevel hint is not a positive integer level/,
+            },
+            {
+                fragment: `#round=${ROUND}&transcriptLevel=99999999999999999999&transcriptOp=${TRANSCRIPT_OP}`,
+                hints: null,
+                finding: /transcriptLevel hint is not a positive integer level/,
+            },
+            {
+                fragment: `#round=${ROUND}&transcriptLevel=7&transcriptOp=${TRANSCRIPT_OP.slice(0, -1)}0`,
+                hints: null,
+                finding: /transcriptOp hint is not an operation hash/,
+            },
+            {
+                fragment: `#round=${ROUND}&transcriptLevel=7`,
+                hints: null,
+                finding: /transcript hint needs both transcriptLevel and transcriptOp/,
+            },
+            {
+                fragment: `#round=${ROUND}&seedBatchLevel=-3&seedBatchOp=${BATCH_OP}`,
+                hints: null,
+                finding: /seedBatchLevel hint is not a positive integer level/,
+            },
+            {
+                fragment: `#round=${ROUND}&seedBatchLevel=42&seedBatchOp=<script>`,
+                hints: { seedBatch: { level: 42, operationHash: null } },
+                finding: /seedBatchOp hint is not an operation hash/,
+            },
+            {
+                fragment: `#round=${ROUND}&seedBatchOp=${BATCH_OP}`,
+                hints: null,
+                finding: /seedBatchOp alone was ignored/,
+            },
+        ];
+
+        for (const { fragment, hints, finding } of cases) {
+            const read = readHintHandoff(fragment);
+
+            expect(read.hints, fragment).toEqual(hints);
+            expect(read.findings.join('\n'), fragment).toMatch(finding);
+            expect(readRoundHandoff(fragment), fragment).toBe(ROUND);
+        }
+    });
+
+    it('keeps the good hint when only the other one is malformed', () => {
+        const read = readHintHandoff(
+            `#round=${ROUND}&transcriptLevel=x&transcriptOp=${TRANSCRIPT_OP}&seedBatchLevel=42&seedBatchOp=${BATCH_OP}`,
+        );
+
+        expect(read.hints).toEqual({ seedBatch: { level: 42, operationHash: BATCH_OP } });
+        expect(read.findings).toHaveLength(2);
     });
 });

@@ -45,6 +45,9 @@ const CHAIN_ID_PREFIX = [87, 82, 0] as const;
 /** Tezos smart-rollup address prefix bytes (`sr1…`, base58check payload = 20-byte hash). */
 const SR1_PREFIX = [6, 124, 117] as const;
 
+/** Tezos script-expression hash prefix bytes (`expr…`, base58check payload = 32-byte blake2b). */
+const EXPR_PREFIX = [13, 44, 64, 27] as const;
+
 /**
  * Decode a Tezos `edpk…` base58check string to the 32 raw Ed25519 public key
  * bytes. Self-contained (~30 lines) rather than a dependency, so the
@@ -163,6 +166,18 @@ export function encodeKt1(hash: Uint8Array): string {
     }
 
     return encodeBase58Check(KT1_PREFIX, hash);
+}
+
+/**
+ * Encode a 32-byte blake2b digest of a packed Michelson value as `expr…`, the
+ * form the node takes in `/context/big_maps/{id}/{script_expr_hash}`.
+ */
+export function encodeScriptExprHash(hash: Uint8Array): string {
+    if (hash.length !== 32) {
+        throw new RangeError(`script expression hash must be 32 bytes, got ${hash.length}`);
+    }
+
+    return encodeBase58Check(EXPR_PREFIX, hash);
 }
 
 /**

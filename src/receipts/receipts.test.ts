@@ -182,7 +182,9 @@ describe('proto-reader', () => {
                 payload: { case: 'roundEnded', roundId: ROUND_ID, actionIndex: 2, playerCommitment: commitment },
             },
         ];
-        const decoded = frames.map((spec) => decodeServerEnvelope(splitSignedFrame(serverFrame(TENANT_SEED, spec)).body));
+        const decoded = frames.map((spec) =>
+            decodeServerEnvelope(splitSignedFrame(serverFrame(TENANT_SEED, spec)).body),
+        );
 
         expect(decoded[0]).toMatchObject({
             sequence: 2n,
@@ -370,6 +372,7 @@ describe('proto-reader', () => {
 });
 
 describe('importReceipts', () => {
+    const TRANSCRIPT_OP = 'ooxa3P8hPVb3cX7YQ7e4H9SpX2nWm3kD5aQe8vRrZ1t6Ug7Fh2J';
     const document = () => ({
         schema: RECEIPTS_SCHEMA,
         tenantId: 'test-tenant',
@@ -430,6 +433,78 @@ describe('importReceipts', () => {
         expect(result.receipts.frames[0].sequence).toBe(2n);
         expect(result.receipts.depositOperationLevel).toBe(1000);
         expect(result.receipts.commands).toHaveLength(1);
+    });
+
+    it('reads a document with no locatorHints as carrying none, with no finding', () => {
+        const result = importReceipts(JSON.stringify(document()));
+
+        expect(result.status === 'ok' && result.receipts.locatorHints).toBeNull();
+        expect(result.status === 'ok' && result.findings).toEqual([]);
+    });
+
+    it('reads valid locatorHints, ignoring keys it does not know', () => {
+        const hints = {
+            transcript: { level: 1_234_567, operationHash: TRANSCRIPT_OP, opIndex: 3 },
+            seedBatch: { level: 1_234_500, operationHash: null },
+            futureHint: { level: 1 },
+        };
+        const result = importReceipts(JSON.stringify({ ...document(), locatorHints: hints }));
+
+        expect(result.status).toBe('ok');
+        expect(result.status === 'ok' && result.receipts.locatorHints).toEqual({
+            transcript: { level: 1_234_567, operationHash: TRANSCRIPT_OP },
+            seedBatch: { level: 1_234_500, operationHash: null },
+        });
+        expect(result.status === 'ok' && result.findings).toEqual([]);
+    });
+
+    it('treats malformed locatorHints as absent plus a finding, and still imports the document', () => {
+        const cases: { locatorHints: unknown; kept: unknown; finding: RegExp }[] = [
+            { locatorHints: 'level 7', kept: null, finding: /locatorHints is not an object/ },
+            { locatorHints: [1, 2], kept: null, finding: /locatorHints is not an object/ },
+            {
+                locatorHints: { transcript: { level: 0, operationHash: TRANSCRIPT_OP } },
+                kept: null,
+                finding: /locatorHints.transcript needs/,
+            },
+            {
+                locatorHints: { transcript: { level: 7, operationHash: 'not-an-op' } },
+                kept: null,
+                finding: /locatorHints.transcript needs/,
+            },
+            {
+                locatorHints: { transcript: { level: 7 } },
+                kept: null,
+                finding: /locatorHints.transcript needs/,
+            },
+            {
+                locatorHints: { seedBatch: 42 },
+                kept: null,
+                finding: /locatorHints.seedBatch is not an object/,
+            },
+            {
+                locatorHints: {
+                    transcript: { level: 7, operationHash: TRANSCRIPT_OP },
+                    seedBatch: { level: '42', operationHash: null },
+                },
+                kept: { transcript: { level: 7, operationHash: TRANSCRIPT_OP } },
+                finding: /locatorHints.seedBatch needs/,
+            },
+        ];
+
+        for (const { locatorHints, kept, finding } of cases) {
+            const result = importReceipts(JSON.stringify({ ...document(), locatorHints }));
+
+            expect(result.status, JSON.stringify(locatorHints)).toBe('ok');
+
+            if (result.status !== 'ok') {
+                continue;
+            }
+
+            expect(result.receipts.locatorHints, JSON.stringify(locatorHints)).toEqual(kept);
+            expect(result.findings.join('\n'), JSON.stringify(locatorHints)).toMatch(finding);
+            expect(result.receipts.commands).toHaveLength(1);
+        }
     });
 
     it('rejects text that is not JSON', () => {
@@ -991,7 +1066,6 @@ describe('client seed in the export fixture', () => {
         // the reader getting better.
         expect(arms.size).toBeGreaterThanOrEqual(15);
     });
-
 });
 
 describe('receipts export fixture', () => {

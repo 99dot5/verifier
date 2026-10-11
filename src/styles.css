@@ -188,12 +188,14 @@ button:disabled {
  * `inconclusive` (the range was too narrow), `undetermined` (not on chain yet,
  * and nothing says it never will be) and `attested` (checked, but only
  * weakly). Giving any of them a warning colour would read as an accusation the
- * verdict is specifically declining to make.
+ * verdict is specifically declining to make. The preliminary pass's label
+ * shares it: it states no verdict at all.
  */
 .verdict.incomplete,
 .verdict.inconclusive,
 .verdict.undetermined,
-.verdict.attested {
+.verdict.attested,
+.verdict.preliminary {
     background: rgba(154, 164, 173, 0.12);
     border: 1px solid var(--muted);
     color: var(--muted);

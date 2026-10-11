@@ -147,6 +147,52 @@ export async function fetchBlockInboxMessages(
     return messages;
 }
 
+/** One `lazy_storage_diff` entry of an operation receipt, as the node renders it. */
+export interface RpcLazyStorageDiff {
+    kind: string;
+    id: string;
+    diff: {
+        action: string;
+        updates?: { key_hash?: string; key?: unknown; value?: unknown }[];
+    };
+}
+
+/** A manager operation in a block, with its receipt; only the fields the deposit proof reads are typed. */
+export interface RpcManagerOperation {
+    kind: string;
+    destination?: string;
+    parameters?: { entrypoint: string; value: unknown };
+    metadata?: {
+        operation_result?: { status: string; lazy_storage_diff?: RpcLazyStorageDiff[] };
+        internal_operation_results?: unknown[];
+    };
+}
+
+export interface RpcManagerOperationGroup {
+    hash: string;
+    contents: RpcManagerOperation[];
+}
+
+/**
+ * Every manager operation group in one block, receipts included, as the node
+ * returns them. The sibling of {@link fetchBlockInboxMessages} for the
+ * deposit proof, which reads a vault call's receipt rather than inbox bytes.
+ */
+export async function fetchBlockOperations(
+    rpcUrl: string,
+    level: number,
+    signal?: AbortSignal,
+): Promise<RpcManagerOperationGroup[]> {
+    const url = `${rpcUrl.replace(/\/$/, '')}/chains/main/blocks/${level}/operations/3`;
+    const response = await fetch(url, { signal });
+
+    if (!response.ok) {
+        throw new Error(`RPC ${response.status} for ${url} (archive node required for old levels)`);
+    }
+
+    return (await response.json()) as RpcManagerOperationGroup[];
+}
+
 /**
  * Scan a level range: locate via TzKT, fetch bytes via RPC. Reports progress
  * and respects aborts — a browser scanning tens of levels must stay honest

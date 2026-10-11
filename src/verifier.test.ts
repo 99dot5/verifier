@@ -14,8 +14,27 @@ import { blake2b } from '@noble/hashes/blake2.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import type { DepositLocation } from './chain/deposit';
 import type { InboxMessage } from './chain/inbox';
-import { ACTIONS_AFTER_SETTLE_CHECK_ID, supportedGameTypes, verifyRound } from './verifier';
+import {
+    ACTIONS_AFTER_SETTLE_CHECK_ID,
+    describeBracket,
+    evaluateSessionBeforeTranscript,
+    SESSION_BEFORE_TRANSCRIPT_CHECK_ID,
+    supportedGameTypes,
+    verifyRound,
+} from './verifier';
+import {
+    DEFAULT_SCAN_DEPTH,
+    resolveReceiptsDeposit,
+    runChainVerification,
+    runPastedVerification,
+    type ChainRunInput,
+    type PreliminaryReport,
+} from './run';
+import type { AdminLineage } from './chain/admin-lineage';
+import { locateSessionDeposit, sessionKeyScriptExprHash, type DepositChain } from './chain/deposit';
+import type { LocatorHints } from './receipts/handoff';
 import {
     actionTypeOf,
     bytesToHex,
@@ -47,7 +66,7 @@ import { STAKE_CHECK_ID } from './verify/stake';
 import { OPENER_SEED_CHECK_ID, PRE_BET_SEED_CHECK_ID } from './verify/seed-commitment';
 import { computeCommitment } from './receipts/commitment';
 import type { ImportedReceipts } from './receipts/import';
-import type { ReceiptsInput, ScanContext } from './verifier';
+import type { KeySet, ReceiptsInput, ScanContext } from './verifier';
 
 /** The seed rule every listed deployment selects today. */
 
@@ -320,6 +339,7 @@ function buildReceipts(overrides: Partial<ImportedReceipts> = {}, shape: Receipt
         sequencerPublicKey: encodeEdpk(PUBLIC_KEY),
         sessionPublicKey: encodeEdpk(SESSION_PUBLIC_KEY),
         depositOperationLevel: BATCH_LEVEL - 10,
+        locatorHints: null,
         commands: [
             { requestId: BET_REQUEST, payloadCase: 'placeBet', frame: bet, sentAtUnixMs: 1, sendCount: 1 },
             { requestId: CASHOUT_REQUEST, payloadCase: 'cashOut', frame: cashOut, sentAtUnixMs: 2, sendCount: 1 },
@@ -359,6 +379,21 @@ function buildReceipts(overrides: Partial<ImportedReceipts> = {}, shape: Receipt
 function receiptsFor(shape: ReceiptShape = {}): ReceiptsInput {
     return { status: 'ok', receipts: buildReceipts({}, shape) };
 }
+
+/**
+ * The session's deposit as the resolver reports it for an honest round: found
+ * below the transcript and confirmed on the node, so `session-before-transcript`
+ * passes. The default for `verify()`, like the bracketing scan below.
+ */
+const DEPOSIT_BELOW_TRANSCRIPT: DepositLocation = {
+    lookup: 'found',
+    level: BATCH_LEVEL - 10,
+    operationHash: 'op-deposit',
+    vault: 'KT1TestVault',
+    firstProven: true,
+    otherVaults: null,
+    detail: 'first deposit found by the fixture',
+};
 
 /** A range that brackets the round: it starts at the deposit and reaches head. */
 const BRACKETING_SCAN: ScanContext = {
@@ -510,6 +545,8 @@ function verify(
         signingDomain?: SigningDomain | null;
         /** Whether the round's rollup is a listed deployment; `false` = a rollup no entry lists. */
         deploymentListed?: boolean;
+        /** What the deposit resolver reported; defaults to a confirmed deposit below the transcript. */
+        sessionDeposit?: DepositLocation | null;
     } = {},
 ) {
     const key = extra.publicKey === undefined ? PUBLIC_KEY : extra.publicKey;
@@ -522,6 +559,7 @@ function verify(
         // that cares about a missing half says so explicitly.
         receipts: extra.receipts ?? { status: 'ok', receipts: buildReceipts() },
         scan: extra.scan === undefined ? BRACKETING_SCAN : extra.scan,
+        sessionDeposit: extra.sessionDeposit === undefined ? DEPOSIT_BELOW_TRANSCRIPT : extra.sessionDeposit,
         roundId: extra.roundId ?? ROUND_ID,
         tenantId: TENANT,
         messages,
@@ -2267,5 +2305,738 @@ describe('a clean round of each remaining replayable game', () => {
             expect(report.gameType).toBe('plinko:v1');
             expect(nonPassing(report)).toEqual(OPTIONAL_CHECKS);
         });
+    });
+});
+
+// ── Locator hints: confirmed, then used to relocate the scan (US-D2) ─────
+//
+// `runChainVerification` is the shell's fetch flow without the DOM. The chain
+// is a stub over a fixed message list: `scanRange` returns what lies in the
+// range, `fetchBlock` one level. Every frame is built with `frame()` and
+// signed under the suite's lineage key.
+
+describe('locator hints', () => {
+    const T = 100_000;
+    const HEAD = T + 50;
+    const LINEAGE: KeySet = {
+        status: 'available',
+        keys: [
+            {
+                edpk: encodeEdpk(PUBLIC_KEY),
+                registration: {
+                    level: 1,
+                    operationHash: 'op-register-tenant',
+                    source: 'register-tenant',
+                    administrator: 'KT1TestAdministrator',
+                },
+            },
+        ],
+    };
+    const VERDICT_WORD = /\b(verified|attested|inconclusive|undetermined|suppressed|incomplete|failed)\b/i;
+
+    /** The honest round with its batch at `batchLevel` and transcript at `transcriptLevel`. */
+    const round = (batchLevel: number, transcriptLevel: number = T) => buildRound({ batchLevel, transcriptLevel });
+
+    // ── The deposit side of the stub chain ──────────────────────────────
+    //
+    // A small world of vaults and deposits, read through the same indexer
+    // search (`locateSessionDeposit`, over a stubbed fetch) and the same node
+    // shapes the D-9 captures pin in `chain/deposit.test.ts`.
+    const VAULT_A = 'KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty';
+    const VAULT_B = 'KT1V9p3YByfpVs1QWmnZPHTNHDy9XaNPLTqz';
+    const SESSION_HEX = SESSION_ID.replaceAll('-', '');
+
+    interface WorldDeposit {
+        vault: string;
+        level: number;
+        /** The receipt writes the vault's `sessions` entry for the session (a first deposit). */
+        firstWrite: boolean;
+    }
+
+    interface DepositWorld {
+        /** The pool's vault registrations, all under the signed tenant and pool. */
+        vaults: { vault: string; level: number; kind: 'production' | 'preview' | 'unknown-id' }[];
+        /** What the indexer returns. */
+        indexed: WorldDeposit[];
+        /** What the node's blocks hold; defaults to `indexed`. */
+        onNode?: WorldDeposit[];
+        /** An indexer that answers with this HTTP status instead. */
+        indexerStatus?: number;
+        /** Whether each vault's `sessions` big_map holds the session at head; 'error' = the lookup fails. */
+        heldAt?: Record<string, boolean | 'error'>;
+    }
+
+    const worldWith = (depositLevel: number, overrides: Partial<DepositWorld> = {}): DepositWorld => ({
+        vaults: [{ vault: VAULT_A, level: 1, kind: 'production' }],
+        indexed: [{ vault: VAULT_A, level: depositLevel, firstWrite: true }],
+        ...overrides,
+    });
+
+    function lineageOf(world: DepositWorld): AdminLineage {
+        return {
+            administrators: [],
+            keys: [],
+            vaults: world.vaults.map((v) => ({
+                tenantId: TENANT,
+                poolId: POOL,
+                vault: v.vault,
+                status: 'active',
+                level: v.level,
+                operationHash: `op-register-${v.vault}`,
+            })),
+            proposals: [],
+            ambiguities: [],
+            scannedOperationCount: 0,
+            ignoredOperationCount: 0,
+        };
+    }
+
+    /** The node's storage for a vault: the production comb (sessions id at leaf 5), the preview's nine fields, or an 8-leaf comb with no id. */
+    function storageOf(world: DepositWorld, vault: string): unknown {
+        const index = world.vaults.findIndex((v) => v.vault === vault);
+        const kind = world.vaults[index]?.kind ?? 'production';
+        const fifth = kind === 'production' ? { int: String(500 + index) } : { prim: 'None' };
+        const leaves = [{ string: 'tz1admin' }, { prim: 'False' }, { prim: 'None' }, { string: POOL }, fifth, { string: 'sr1' }, { string: TENANT }, { int: '0' }];
+
+        return { prim: 'Pair', args: kind === 'preview' ? [...leaves, { int: '1000' }] : leaves };
+    }
+
+    function depositChainOver(world: DepositWorld): DepositChain {
+        const rowsFor = (vault: string) =>
+            world.indexed
+                .filter((d) => d.vault === vault)
+                .map((d, i) => ({
+                    id: d.level * 10 + i,
+                    level: d.level,
+                    hash: `op-deposit-${d.level}`,
+                    parameter: { entrypoint: 'deposit', value: { session_id: SESSION_HEX } },
+                }));
+        const indexer = ((url: string) => {
+            const query = new URL(url).searchParams;
+            const rows = query.get('id.gt') ? [] : rowsFor(query.get('target') ?? '');
+            const status = world.indexerStatus ?? 200;
+
+            return Promise.resolve({ ok: status === 200, status, json: () => Promise.resolve(rows) } as Response);
+        }) as unknown as typeof fetch;
+        const vaultOfBigMap = (id: string) =>
+            world.vaults.find((v) => (storageOf(world, v.vault) as { args: { int?: string }[] }).args[4].int === id);
+
+        return {
+            locateDeposit: (vaultAddresses, sessionIdHex, levelHint) =>
+                locateSessionDeposit({
+                    tzktApiUrl: 'https://indexer.test',
+                    vaultAddresses,
+                    sessionIdHex,
+                    levelHint,
+                    fetchImpl: indexer,
+                }),
+            blockOperations: async (level) =>
+                (world.onNode ?? world.indexed)
+                    .filter((d) => d.level === level)
+                    .map((d) => {
+                        const id = (storageOf(world, d.vault) as { args: { int?: string }[] }).args[4].int ?? 'none';
+
+                        return {
+                            hash: `op-deposit-${d.level}`,
+                            contents: [
+                                {
+                                    kind: 'transaction',
+                                    destination: d.vault,
+                                    parameters: {
+                                        entrypoint: 'deposit',
+                                        value: { prim: 'Pair', args: [{ bytes: SESSION_HEX }, { prim: 'Pair', args: [] }] },
+                                    },
+                                    metadata: {
+                                        operation_result: {
+                                            status: 'applied',
+                                            lazy_storage_diff: [
+                                                {
+                                                    kind: 'big_map',
+                                                    id,
+                                                    diff: {
+                                                        action: 'update',
+                                                        updates: d.firstWrite
+                                                            ? [{ key: { bytes: SESSION_HEX }, value: { prim: 'Pair', args: [] } }]
+                                                            : [],
+                                                    },
+                                                },
+                                            ],
+                                        },
+                                    },
+                                },
+                            ],
+                        };
+                    }),
+            contractStorage: async (vault) => storageOf(world, vault),
+            bigMapHas: async (id, expr) => {
+                expect(expr).toBe(sessionKeyScriptExprHash(SESSION_ID));
+
+                const held = world.heldAt?.[vaultOfBigMap(id)?.vault ?? ''] ?? false;
+
+                if (held === 'error') {
+                    throw new Error('RPC 500');
+                }
+
+                return held;
+            },
+        };
+    }
+
+    /** A stub chain over `messages` and a deposit world, logging every inbox call in order. */
+    function chainOver(messages: InboxMessage[], log: string[] = [], world: DepositWorld = worldWith(T - 1_000)): ChainRunInput['chain'] {
+        return {
+            ...depositChainOver(world),
+            headLevel: async () => {
+                log.push('head');
+
+                return HEAD;
+            },
+            scanRange: async (from, to) => {
+                log.push(`scan ${from}-${to}`);
+
+                return messages.filter((m) => m.level >= from && m.level <= to);
+            },
+            fetchBlock: async (level) => {
+                log.push(`block ${level}`);
+
+                return messages.filter((m) => m.level === level);
+            },
+        };
+    }
+
+    function run(
+        messages: InboxMessage[],
+        options: {
+            hints?: LocatorHints | null;
+            malformed?: string[];
+            /** The suppression bracket's deposit (`scan.deposit`). */
+            deposit?: number | null;
+            /** The deposit world D10 reads; defaults to one first deposit at `deposit` (or T − 1 000). */
+            world?: DepositWorld;
+            keys?: KeySet;
+            receipts?: ReceiptsInput;
+            formPoolId?: string;
+            /** `null` = no lineage (an override key). */
+            lineage?: AdminLineage | null;
+            /** Replace the bracket's deposit lookup (D-8 passes the extracted resolver). */
+            resolveDeposit?: () => Promise<ScanContext['deposit']>;
+            log?: string[];
+            onPreliminary?: (p: PreliminaryReport) => void;
+        } = {},
+    ) {
+        const log = options.log ?? [];
+        const world = options.world ?? worldWith(options.deposit ?? T - 1_000);
+
+        return runChainVerification({
+            verify: {
+                roundId: ROUND_ID,
+                tenantId: TENANT,
+                signingDomain: DOMAIN,
+                deploymentListed: true,
+                receipts: options.receipts ?? { status: 'ok', receipts: buildReceipts() },
+            },
+            fromLevel: null,
+            toLevel: null,
+            hints: { hints: options.hints ?? null, source: 'the link', malformed: options.malformed ?? [] },
+            resolveKeys: async () => {
+                log.push('keys');
+
+                return options.keys ?? LINEAGE;
+            },
+            resolveDeposit:
+                options.resolveDeposit ??
+                (async () => {
+                    log.push('deposit');
+
+                    return options.deposit == null ? null : { level: options.deposit, confirmed: true };
+                }),
+            lineage: () => (options.lineage === undefined ? lineageOf(world) : options.lineage),
+            formPoolId: options.formPoolId ?? POOL,
+            chain: chainOver(messages, log, world),
+            onPreliminary: options.onPreliminary,
+        });
+    }
+
+    const transcriptHint = (level: number, operationHash = `op-level-${level}`) => ({ level, operationHash });
+    const batchHint = (level: number, operationHash: string | null = `op-level-${level}`) => ({ level, operationHash });
+
+    it('resolves the keys, then the hints, then the deposit, and only then scans (D1)', async () => {
+        const log: string[] = [];
+
+        await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, deposit: T - 50, log });
+
+        expect(log.slice(0, 4)).toEqual(['keys', `block ${T}`, 'deposit', 'head']);
+        expect(log.slice(4).every((entry) => entry.startsWith('scan '))).toBe(true);
+    });
+
+    it('D-1(a): confirmed transcript and batch hints scan [min(D, B_h), T] and verify', async () => {
+        const batchLevel = T - 500;
+        const deposit = T - 1_000;
+        const log: string[] = [];
+        const result = await run(round(batchLevel), {
+            hints: { transcript: transcriptHint(T), seedBatch: batchHint(batchLevel) },
+            deposit,
+            log,
+        });
+
+        expect(result.report.verdict).toBe('verified');
+        expect(result.report.scan).toMatchObject({ fromLevel: Math.min(deposit, batchLevel), toLevel: T, headLevel: HEAD });
+        expect(log).toContain(`scan ${deposit}-${T}`);
+        expect(result.hintedRun).toBeNull();
+        expect(result.hints.map((h) => h.fate)).toEqual([
+            `used (confirmed at level ${T}, op op-level-${T})`,
+            `used (confirmed at level ${batchLevel}, op op-level-${batchLevel})`,
+        ]);
+        expect(result.report.findings.join('\n')).toContain(
+            `Locator hint (RoundTranscript) from the link: used (confirmed at level ${T}, op op-level-${T})`,
+        );
+    });
+
+    it('D-1(b): ignores a wrong-level, wrong-op, foreign-signed or wrong-round hint and still verifies', async () => {
+        const honest = round(T - 5);
+        // The same round signed by a key the tenant never registered.
+        const [, foreign] = buildRound({ transcriptLevel: T + 7, signingSeed: new Uint8Array(32).fill(7) });
+        // Another round's transcript, authentic, in its own block.
+        const otherBody = transcriptBody({}, honestPayout(hilo.v1.GAME_TYPE));
+
+        otherBody.splice(1, 16, ...uuid('0f0f0f0f-0000-4000-8000-000000000000'));
+
+        const otherRound = frame(T + 9, otherBody);
+        const messages = [...honest, foreign, otherRound];
+        const cases: { name: string; hint: { level: number; operationHash: string }; fate: RegExp }[] = [
+            { name: 'wrong level', hint: transcriptHint(T + 1, `op-level-${T}`), fate: /^ignored: not found at the stated level/ },
+            { name: 'wrong op', hint: transcriptHint(T, 'op-somewhere-else'), fate: /^ignored: not found at the stated level/ },
+            { name: 'foreign-signed', hint: transcriptHint(T + 7), fate: /^ignored: not authenticated/ },
+            { name: 'wrong round', hint: transcriptHint(T + 9), fate: /^ignored: not found at the stated level/ },
+        ];
+
+        for (const { name, hint, fate } of cases) {
+            const result = await run(messages, { hints: { transcript: hint }, deposit: T - 50 });
+
+            expect(result.hints, name).toHaveLength(1);
+            expect(result.hints[0].used, name).toBe(false);
+            expect(result.hints[0].fate, name).toMatch(fate);
+            expect(result.report.verdict, name).toBe('verified');
+            // Ignored, so the unhinted range applies: the default depth below the head.
+            expect(result.report.scan, name).toMatchObject({ fromLevel: HEAD - DEFAULT_SCAN_DEPTH, toLevel: HEAD });
+        }
+    });
+
+    it('reports malformed hints, and a batch hint no confirmed transcript ties to a seed index, as ignored', async () => {
+        const result = await run(round(T - 5), {
+            hints: { seedBatch: batchHint(T - 5) },
+            malformed: ["the link's transcriptLevel hint is not a positive integer level; it was ignored"],
+        });
+
+        expect(result.hints.map((h) => h.fate)).toEqual([
+            "ignored: malformed (the link's transcriptLevel hint is not a positive integer level; it was ignored)",
+            'ignored: no confirmed transcript states the seed index this batch must cover',
+        ]);
+        expect(result.report.verdict).toBe('verified');
+        expect(result.report.scan).toMatchObject({ fromLevel: HEAD - DEFAULT_SCAN_DEPTH, toLevel: HEAD });
+    });
+
+    it('D-1(d): a hinted batch copy at or after T re-runs without the batch hint, and the re-run decides', async () => {
+        const trueBatch = T - 5;
+        const duplicateLevel = T + 3;
+        const [duplicate] = round(duplicateLevel);
+        const result = await run([...round(trueBatch), duplicate], {
+            hints: { transcript: transcriptHint(T), seedBatch: batchHint(duplicateLevel) },
+            deposit: null,
+        });
+
+        expect(result.hintedRun).not.toBeNull();
+        expect(result.hintedRun?.verdict).toBe('failed');
+        expect(statusOf(result.hintedRun ?? { checks: [] }, 'commitment-order')).toBe('fail');
+        expect(result.report.verdict).toBe('verified');
+        expect(statusOf(result.report, 'commitment-order')).toBe('pass');
+        // The re-run scans the unhinted depth anchored at T, never near the head.
+        expect(result.report.scan).toMatchObject({ fromLevel: T - DEFAULT_SCAN_DEPTH, toLevel: T });
+        expect(result.report.findings.join('\n')).toContain('re-ran without the batch hint');
+    });
+
+    it('D6: any other hinted verdict stands with no re-run', async () => {
+        const batchLevel = T - 500;
+        const inflated = buildRound({
+            batchLevel,
+            transcriptLevel: T,
+            claimedPayout: honestPayout(hilo.v1.GAME_TYPE) + 1n,
+        });
+        const result = await run(inflated, {
+            hints: { transcript: transcriptHint(T), seedBatch: batchHint(batchLevel) },
+            deposit: T - 1_000,
+        });
+
+        expect(result.report.verdict).toBe('failed');
+        expect(statusOf(result.report, 'replay-payout')).toBe('fail');
+        expect(result.hintedRun).toBeNull();
+    });
+
+    it('D-1(e): a transcript hint alone keeps the unhinted depth U as the lower bound', async () => {
+        const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, deposit: T - 5_000 });
+
+        expect(result.report.verdict).toBe('verified');
+        expect(result.report.scan).toMatchObject({
+            fromLevel: Math.min(T - DEFAULT_SCAN_DEPTH, T - 5_000),
+            toLevel: T,
+        });
+    });
+
+    it('D-3: a preliminary pass with no verdict word, then the final pass replaces it', async () => {
+        const batchLevel = T - 30_000;
+        const deposit = T - 10_000;
+        // An authenticated early copy of the round between the batch and the
+        // deposit: outside the preliminary window, inside the final one.
+        const earlyCopy = T - 25_000;
+        const [, early] = round(batchLevel, earlyCopy);
+        const seen: PreliminaryReport[] = [];
+        const result = await run([...round(batchLevel), early], {
+            hints: { transcript: transcriptHint(T), seedBatch: batchHint(batchLevel) },
+            deposit,
+            onPreliminary: (p) => seen.push(p),
+        });
+
+        expect(seen).toHaveLength(1);
+        expect(seen[0].label).toBe(`Preliminary (scan continuing to level ${batchLevel}): no failure found so far`);
+        expect(seen[0].label).not.toMatch(VERDICT_WORD);
+        expect('verdict' in seen[0]).toBe(false);
+        expect(seen[0].scan).toMatchObject({ fromLevel: deposit, toLevel: T });
+        expect(result.preliminary).toBe(seen[0]);
+        // The final pass reaches the early copy, and the kernel applies the
+        // FIRST copy, so that is the one checked. It lies below the session's
+        // first deposit, so the kernel applied it as a session-missing reject:
+        // the session-before-transcript check (D10) fails it.
+        expect(result.report.scan).toMatchObject({ fromLevel: batchLevel, toLevel: T });
+        expect(result.report.references.find((r) => r.summary.startsWith('RoundTranscript'))?.level).toBe(earlyCopy);
+        expect(statusOf(seen[0], SESSION_BEFORE_TRANSCRIPT_CHECK_ID)).toBe('pass');
+        expect(statusOf(result.report, SESSION_BEFORE_TRANSCRIPT_CHECK_ID)).toBe('fail');
+        expect(result.report.findings.join('\n')).toContain('REJECT_SESSION_MISSING');
+        expect(result.report.verdict).toBe('failed');
+    });
+
+    it('D-4: the bracket is ok at the head with a found deposit, and narrow when the scan stops at T', () => {
+        const deposit = { level: T - 1_000, confirmed: true };
+
+        expect(describeBracket({ fromLevel: T - 2_000, toLevel: HEAD, headLevel: HEAD, deposit }).status).toBe('ok');
+
+        const capped = describeBracket({ fromLevel: T - 2_000, toLevel: T, headLevel: HEAD, deposit });
+
+        expect(capped.status).toBe('narrow');
+        expect(capped.reason).toContain(`stopped at level ${T}, below the head`);
+    });
+
+    it('D3: a found round is never made inconclusive by a scan capped at T below the head', async () => {
+        const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, deposit: null });
+
+        expect(result.report.scan?.toLevel).toBeLessThan(HEAD);
+        expect(result.report.verdict).toBe('verified');
+    });
+    // ── session-before-transcript (D10) ─────────────────────────────────
+
+    const d10 = (report: { checks: { id: string; status: string; detail: string }[] }) =>
+        report.checks.find((c) => c.id === SESSION_BEFORE_TRANSCRIPT_CHECK_ID);
+    const findingsOf = (report: { findings: string[] }) => report.findings.join('\n');
+
+    /**
+     * The pre-deposit reject layout: an authenticated copy at T_e, between the
+     * batch B and the session's deposit D, and the honest copy at T > D.
+     */
+    function preDepositReject(layout: { batch: number; early: number }): InboxMessage[] {
+        const [, early] = round(layout.batch, layout.early);
+
+        return [...round(layout.batch), early];
+    }
+
+    const C_LAYOUT = { batch: T - 30_000, early: T - 25_000, deposit: T - 22_000 };
+    const C_HINTS = { transcript: transcriptHint(T), seedBatch: batchHint(C_LAYOUT.batch) };
+
+    it('D-1(c): a copy applied before the session existed fails, outside the default head window', async () => {
+        const result = await run(preDepositReject(C_LAYOUT), { hints: C_HINTS, deposit: C_LAYOUT.deposit });
+
+        // The copy is outside [head − 20 000, head], so only the hinted window reaches it.
+        expect(C_LAYOUT.early).toBeLessThan(HEAD - DEFAULT_SCAN_DEPTH);
+        expect(result.report.references.find((r) => r.summary.startsWith('RoundTranscript'))?.level).toBe(C_LAYOUT.early);
+        expect(d10(result.report)?.status).toBe('fail');
+        expect(d10(result.report)?.detail).toContain('REJECT_SESSION_MISSING');
+        expect(findingsOf(result.report)).toContain('REJECT_SESSION_MISSING');
+        expect(findingsOf(result.report)).toContain(`level ${C_LAYOUT.early}) predates the earliest deposit the indexer reports (level ${C_LAYOUT.deposit})`);
+        expect(result.report.verdict).toBe('failed');
+    });
+
+    it('D-1(f): a deposit and a transcript at the same level are not ordered, so the round is incomplete', async () => {
+        const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, deposit: T });
+
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain(`share level ${T}`);
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    it('D-1(g): with no keys, a forged copy below the deposit is unauthenticated and never fails the round', async () => {
+        const deposit = T - 1_000;
+        // B < forged copy < D < honest copy, so only the session check can speak to the forged copy.
+        const [, forged] = buildRound({ transcriptLevel: deposit - 5, signingSeed: new Uint8Array(32).fill(7) });
+        const result = await run([...round(deposit - 100), forged], {
+            keys: { status: 'unavailable', reason: 'the lineage walk failed in this fixture' },
+            deposit,
+        });
+
+        expect(result.report.references.find((r) => r.summary.startsWith('RoundTranscript'))?.level).toBe(deposit - 5);
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain('the transcript copy is not authenticated');
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    it('D-1(h): receipts labelled with another pool fail the lookup, never the round', async () => {
+        const result = await run(preDepositReject(C_LAYOUT), {
+            hints: C_HINTS,
+            deposit: C_LAYOUT.deposit,
+            receipts: { status: 'ok', receipts: buildReceipts({ poolId: 'other-pool' }) },
+            formPoolId: 'other-pool',
+        });
+
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain('the form names pool other-pool, the signed transcript names pool standard');
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    it('D-1(i): an indexer deposit the node does not hold fails the lookup', async () => {
+        const result = await run(round(T - 5), {
+            hints: { transcript: transcriptHint(T) },
+            world: worldWith(T + 10, { onNode: [] }),
+        });
+
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain('indexer and node disagree');
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    it('D-1(k): a top-up above the transcript, with the first deposit omitted, is not proven first', async () => {
+        const result = await run(round(T - 5), {
+            hints: { transcript: transcriptHint(T) },
+            world: worldWith(T + 10, { indexed: [{ vault: VAULT_A, level: T + 10, firstWrite: false }] }),
+        });
+
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain('not shown to be the session-creating one');
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    it('D-1(k) twin: a preview-vault deposit above the transcript never proves first', async () => {
+        const result = await run(round(T - 5), {
+            hints: { transcript: transcriptHint(T) },
+            world: worldWith(T + 10, { vaults: [{ vault: VAULT_A, level: 1, kind: 'preview' }] }),
+        });
+
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain('not shown to be the session-creating one');
+        expect(d10(result.report)?.detail).toContain('keeps no sessions big_map');
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    /** Two production vaults registered before T_e; the indexer returns only V2's first write above T_e. */
+    const rotated = (v1: DepositWorld['vaults'][number]['kind'], held: boolean | 'error'): DepositWorld => ({
+        vaults: [
+            { vault: VAULT_B, level: 1, kind: v1 },
+            { vault: VAULT_A, level: 2, kind: 'production' },
+        ],
+        indexed: [{ vault: VAULT_A, level: T + 10, firstWrite: true }],
+        heldAt: { [VAULT_B]: held },
+    });
+
+    it('D-1(l): a rotation overlap, where the older vault holds the session, is not a failure', async () => {
+        const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, world: rotated('production', true) });
+
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain('Multi-vault pool; first-deposit proof is per vault');
+        expect(d10(result.report)?.detail).toContain(`vault ${VAULT_B} holds a sessions entry for this session`);
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    it('D-1(m): on a rotated pool, a copy below the only binding deposit fails', async () => {
+        const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, world: rotated('production', false) });
+
+        expect(d10(result.report)?.status).toBe('fail');
+        expect(findingsOf(result.report)).toContain('The node confirms it as the session-creating deposit');
+        expect(findingsOf(result.report)).toContain('REJECT_SESSION_MISSING');
+        expect(result.report.verdict).toBe('failed');
+    });
+
+    for (const [name, world, reason] of [
+        ['the older vault lookup returns 500', rotated('production', 'error'), `vault ${VAULT_B} could not be looked up`],
+        ['the older vault is a preview vault', rotated('preview', false), `vault ${VAULT_B} keeps no sessions big_map`],
+        ['the older vault has no determinable big_map id', rotated('unknown-id', false), `vault ${VAULT_B} keeps no sessions big_map`],
+    ] as const) {
+        it(`D-1(m) twin: ${name}, so the round is incomplete`, async () => {
+            const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, world });
+
+            expect(d10(result.report)?.status).toBe('unavailable');
+            expect(d10(result.report)?.detail).toContain('Multi-vault pool');
+            expect(d10(result.report)?.detail).toContain(reason);
+            expect(result.report.verdict).toBe('incomplete');
+        });
+    }
+
+    it('D-1(j): an indexer outage with complete receipts reads incomplete (accepted degradation)', async () => {
+        const result = await run(round(T - 5), {
+            hints: { transcript: transcriptHint(T) },
+            world: worldWith(T - 1_000, { indexerStatus: 500 }),
+        });
+
+        expect(d10(result.report)?.status).toBe('unavailable');
+        expect(d10(result.report)?.detail).toContain('the indexer returned 500');
+        // Every other proof passed: without D10 this round read `verified`.
+        expect(result.report.checks.filter((c) => c.status !== 'pass').map((c) => c.id)).toEqual(
+            expect.arrayContaining([SESSION_BEFORE_TRANSCRIPT_CHECK_ID]),
+        );
+        expect(result.report.checks.some((c) => c.status === 'fail')).toBe(false);
+        expect(result.report.verdict).toBe('incomplete');
+    });
+
+    describe('D-2: a bare link (no receipts)', () => {
+        const bare = (world: DepositWorld) =>
+            run(round(T - 5), { hints: { transcript: transcriptHint(T) }, receipts: { status: 'absent' }, world });
+
+        it('found: the session id comes from the transcript and the check passes; incomplete without receipts', async () => {
+            const result = await bare(worldWith(T - 1_000));
+            const bracket = describeBracket(result.report.scan);
+
+            expect(d10(result.report)?.status).toBe('pass');
+            expect(result.report.verdict).toBe('incomplete');
+            expect(bracket.status).toBe('narrow');
+            expect(bracket.reason).toContain(`stopped at level ${T}, below the head`);
+        });
+
+        it("none: an indexer's silence is reported, never concluded", async () => {
+            const result = await bare(worldWith(T - 1_000, { indexed: [] }));
+            const bracket = describeBracket(result.report.scan);
+
+            expect(d10(result.report)?.status).toBe('unavailable');
+            expect(findingsOf(result.report)).toContain("an indexer's silence is not proof of absence");
+            expect(findingsOf(result.report)).toContain('REJECT_SESSION_MISSING');
+            expect(result.report.verdict).toBe('incomplete');
+            expect(bracket.status).toBe('narrow');
+            expect(bracket.reason).toContain(`stopped at level ${T}, below the head`);
+        });
+
+        it('failed: an indexer error leaves the check unavailable', async () => {
+            const result = await bare(worldWith(T - 1_000, { indexerStatus: 500 }));
+
+            expect(d10(result.report)?.status).toBe('unavailable');
+            expect(d10(result.report)?.detail).toContain('the indexer returned 500');
+            expect(result.report.verdict).toBe('incomplete');
+        });
+    });
+
+    it('D-4: session-before-transcript, all eight rows', () => {
+        const found = (level: number, firstProven: boolean, clear: boolean | null): DepositLocation => ({
+            lookup: 'found',
+            level,
+            operationHash: 'op-d',
+            vault: VAULT_A,
+            firstProven,
+            otherVaults: clear === null ? null : { clear, detail: clear ? 'no other vault' : `vault ${VAULT_B} holds a sessions entry` },
+            detail: 'deposit detail',
+        });
+        const rows: { name: string; authenticated: boolean; deposit: DepositLocation; status: string; text: string }[] = [
+            { name: 'unauthenticated', authenticated: false, deposit: found(T - 1, true, true), status: 'unavailable', text: 'not authenticated' },
+            { name: 'found, T_e > D', authenticated: true, deposit: found(T - 1, false, null), status: 'pass', text: `a deposit at level ${T - 1}` },
+            { name: 'found, T_e < D, first, clear', authenticated: true, deposit: found(T + 1, true, true), status: 'fail', text: 'REJECT_SESSION_MISSING' },
+            { name: 'found, T_e < D, not first', authenticated: true, deposit: found(T + 1, false, null), status: 'unavailable', text: 'not shown to be the session-creating one' },
+            { name: 'found, T_e < D, first, another vault holds it', authenticated: true, deposit: found(T + 1, true, false), status: 'unavailable', text: 'Multi-vault pool; first-deposit proof is per vault' },
+            { name: 'found, T_e == D', authenticated: true, deposit: found(T, true, true), status: 'unavailable', text: `share level ${T}` },
+            {
+                name: 'none',
+                authenticated: true,
+                deposit: { lookup: 'none', level: null, operationHash: null, vault: null, firstProven: false, otherVaults: null, detail: 'paged to the end' },
+                status: 'unavailable',
+                text: "an indexer's silence is not proof of absence",
+            },
+            {
+                name: 'failed',
+                authenticated: true,
+                deposit: { lookup: 'failed', level: null, operationHash: null, vault: null, firstProven: false, otherVaults: null, detail: 'the indexer returned 500' },
+                status: 'unavailable',
+                text: 'lookup failed: the indexer returned 500',
+            },
+        ];
+
+        for (const row of rows) {
+            const { check } = evaluateSessionBeforeTranscript(T, row.authenticated, row.deposit);
+
+            expect(check.status, row.name).toBe(row.status);
+            expect(check.detail, row.name).toContain(row.text);
+        }
+    });
+
+    describe('D-6b: the paste path', () => {
+        const paste = (messages: InboxMessage[], options: { keys?: KeySet; lineage?: AdminLineage | null } = {}) => {
+            const world = worldWith(T - 1_000);
+
+            return runPastedVerification({
+                verify: {
+                    roundId: ROUND_ID,
+                    tenantId: TENANT,
+                    signingDomain: DOMAIN,
+                    deploymentListed: true,
+                    receipts: { status: 'ok', receipts: buildReceipts() },
+                },
+                messages,
+                keys: options.keys ?? LINEAGE,
+                lineage: options.lineage === undefined ? lineageOf(world) : options.lineage,
+                formPoolId: POOL,
+                chain: depositChainOver(world),
+            });
+        };
+
+        it('looks the deposit up from a pasted authenticated transcript and verifies, with no scan', async () => {
+            const report = await paste(round(T - 5));
+
+            expect(report.scan).toBeNull();
+            expect(d10(report)?.status).toBe('pass');
+            expect(report.verdict).toBe('verified');
+        });
+
+        it('is inconclusive, never suppressed, for a paste with receipts and no transcript', async () => {
+            const report = await paste(round(T - 5).filter((m) => m.envelope.message.kind !== 'round-transcript'));
+
+            expect(report.scan).toBeNull();
+            expect(d10(report)).toBeUndefined();
+            expect(report.verdict).toBe('inconclusive');
+        });
+
+        it('is incomplete under the offline key override, which carries no lineage', async () => {
+            const report = await paste(round(T - 5), {
+                keys: { status: 'available', keys: [{ edpk: encodeEdpk(PUBLIC_KEY), registration: null }] },
+                lineage: null,
+            });
+
+            expect(d10(report)?.status).toBe('unavailable');
+            expect(d10(report)?.detail).toContain('no administrator lineage was derived');
+            expect(report.verdict).toBe('incomplete');
+        });
+    });
+
+    it('D-8: the no-transcript ladder keeps its deposit through the extracted resolver and reaches suppressed', async () => {
+        const deposit = T - 1_000;
+        const world = worldWith(deposit);
+        const endSession = frame(deposit + 50, [...u8(0x02), ...uuid(SESSION_ID), ...u8(0)]);
+        const receipts: ReceiptsInput = { status: 'ok', receipts: buildReceipts() };
+        const withoutTranscript = round(T - 5).filter((m) => m.envelope.message.kind !== 'round-transcript');
+        const result = await run([...withoutTranscript, endSession], {
+            receipts,
+            world,
+            resolveDeposit: () =>
+                resolveReceiptsDeposit({
+                    receipts,
+                    lineage: lineageOf(world),
+                    formTenantId: TENANT,
+                    formPoolId: POOL,
+                    locateDeposit: depositChainOver(world).locateDeposit,
+                }),
+        });
+
+        expect(result.report.scan).toMatchObject({ toLevel: HEAD, headLevel: HEAD, deposit: { level: deposit, confirmed: true } });
+        expect(d10(result.report)).toBeUndefined();
+        expect(result.report.verdict).toBe('suppressed');
     });
 });

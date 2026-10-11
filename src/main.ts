@@ -7,23 +7,35 @@
  * Tezos archive RPC — both swappable) or verifies messages you paste in.
  */
 import { deploymentsForTenant, isListedRollup, NETWORKS, type Deployment, type NetworkConfig } from './chain/networks';
-import { scanRange, type InboxMessage, type ScanProgress } from './chain/inbox';
-import { headLevel } from './chain/inbox';
-import { fetchAdminLineage, keysForTenant, vaultsForPool, type AdminLineage } from './chain/admin-lineage';
+import {
+    fetchBlockInboxMessages,
+    fetchBlockOperations,
+    headLevel,
+    scanRange,
+    type InboxMessage,
+    type ScanProgress,
+} from './chain/inbox';
+import { fetchAdminLineage, keysForTenant, type AdminLineage } from './chain/admin-lineage';
 import {
     keySetFromLineage,
     supportedGameTypes,
-    verifyRound,
     type KeySet,
     type ReceiptsInput,
     type ScanContext,
     type VerificationReport,
+    type VerifyInput,
 } from './verifier';
 import { decodeExternalMessage, hexToBytes } from '@99dot5/round-replay';
 import { importReceipts } from './receipts/import';
-import { readReceiptsHandoff, readRoundHandoff } from './receipts/handoff';
-import { decodeReceiptFrame } from './receipts/recompute';
-import { locateSessionDeposit } from './chain/deposit';
+import { type HintHandoff, readHintHandoff, readReceiptsHandoff, readRoundHandoff } from './receipts/handoff';
+import { type DepositChain, fetchBigMapHas, fetchContractStorage, locateSessionDeposit } from './chain/deposit';
+import {
+    resolveReceiptsDeposit,
+    runChainVerification,
+    runPastedVerification,
+    type HintInput,
+    type PreliminaryReport,
+} from './run';
 
 const app = document.getElementById('app')!;
 
@@ -179,6 +191,7 @@ app.innerHTML = `
     <section class="panel" id="report-panel" hidden>
         <h2>Report</h2>
         <div id="verdict"></div>
+        <div id="runs"></div>
         <h3>Checks</h3>
         <ul id="checks"></ul>
         <h3>The working</h3>
@@ -351,45 +364,56 @@ fetchButton.addEventListener('click', async () => {
     fetchButton.disabled = true;
     abortButton.hidden = false;
 
+    const signal = controller.signal;
+    const tzkt = tzktInput.value;
+    const rpc = rpcInput.value;
+
     try {
-        let from = Number(fromLevelInput.value);
-        let to = Number(toLevelInput.value);
-        // The head is fetched even when the reader pinned an upper bound: the
-        // suppression ladder needs to know whether the scan reached "now", and
-        // a range that stops short of the head cannot rule the transcript out.
-        const head = await headLevel(tzktInput.value, controller.signal);
+        const receipts = readReceiptsWithFindings();
+        let lineage: AdminLineage | null = null;
+        // The flow itself lives in `run.ts`, DOM-free: keys, then the locator
+        // hints, then the deposit, then the scan the three of them bound.
+        const result = await runChainVerification({
+            verify: verifyInputBase(roundId, receipts.input),
+            fromLevel: Number(fromLevelInput.value) || null,
+            toLevel: Number(toLevelInput.value) || null,
+            hints: selectHints(receipts.input, receipts.findings),
+            resolveKeys: async () => {
+                const resolved = await resolveKeySet(signal);
 
-        if (!to) {
-            to = head;
-            toLevelInput.value = String(to);
+                lineage = resolved.lineage;
+
+                return resolved.keys;
+            },
+            resolveDeposit: () => resolveDeposit(receipts.input, lineage, signal),
+            lineage: () => lineage,
+            formPoolId: poolInput.value.trim(),
+            chain: {
+                ...depositChain(signal),
+                // The head is fetched even when the reader pinned an upper
+                // bound: the suppression ladder needs to know whether the
+                // scan reached "now".
+                headLevel: () => headLevel(tzkt, signal),
+                scanRange: (from, to) => scanRange(tzkt, rpc, from, to, setProgress, signal),
+                fetchBlock: (level) => fetchBlockInboxMessages(rpc, level, signal),
+            },
+            onPreliminary: renderPreliminary,
+            onProgress: (text) => {
+                progress.textContent = text;
+            },
+        });
+        const scanned = result.report.scan;
+
+        // Echo the default range into empty fields, as before; a range a hint
+        // relocated is stated in the report instead, so a second press does
+        // not pin the reader to it.
+        if (scanned && !result.hints.some((h) => h.used)) {
+            fromLevelInput.value ||= String(scanned.fromLevel);
+            toLevelInput.value ||= String(scanned.toLevel);
         }
 
-        if (!from) {
-            from = Math.max(0, to - 20_000);
-            fromLevelInput.value = String(from);
-        }
-
-        const messages = await scanRange(
-            tzktInput.value,
-            rpcInput.value,
-            from,
-            to,
-            setProgress,
-            controller.signal,
-        );
-
-        progress.textContent = `decoded ${messages.length} sequencer message(s) in range`;
-
-        const resolved = await resolveKeySet(controller.signal);
-        const receipts = readReceipts();
-        const scan: ScanContext = {
-            fromLevel: from,
-            toLevel: to,
-            headLevel: head,
-            deposit: await resolveDeposit(receipts, resolved.lineage, controller.signal),
-        };
-
-        renderReport(runVerification(roundId, messages, resolved.keys, receipts, scan));
+        progress.textContent = 'done';
+        renderReport(result.report, result.hintedRun);
     } catch (error) {
         progress.textContent = error instanceof Error ? error.message : String(error);
     } finally {
@@ -398,6 +422,26 @@ fetchButton.addEventListener('click', async () => {
         controller = null;
     }
 });
+
+/**
+ * The hints to consume: the receipts document's when it carries any, else
+ * the link's. Malformed ones arrive as their parser's findings and are
+ * reported as "ignored: malformed".
+ */
+function selectHints(receipts: ReceiptsInput, receiptFindings: string[]): HintInput {
+    const documentHints = receipts.status === 'ok' ? receipts.receipts.locatorHints : null;
+    const documentMalformed = receiptFindings.filter((finding) => finding.includes('locatorHints'));
+
+    if (documentHints) {
+        return { hints: documentHints, source: 'the receipts document', malformed: documentMalformed };
+    }
+
+    return {
+        hints: handedOverHints?.hints ?? null,
+        source: handedOverHints?.hints ? 'the link' : 'the receipts document or the link',
+        malformed: [...documentMalformed, ...(handedOverHints?.findings ?? [])],
+    };
+}
 
 abortButton.addEventListener('click', () => controller?.abort());
 
@@ -440,12 +484,36 @@ el<HTMLButtonElement>('paste-verify').addEventListener('click', async () => {
     progress.textContent = `decoded ${messages.length} pasted message(s)`;
     // Pasted bytes still need a key set, and the only source of one is L1; an
     // offline reader supplies the override instead, and the signature check
-    // states which it used. The scan range is deliberately NULL: pasted
-    // messages are whatever the reader pasted, so "not on chain" is never a
-    // conclusion this path may reach, and the ladder truthfully resolves such
-    // a round as `inconclusive`.
-    renderReport(runVerification(roundId, messages, (await resolveKeySet()).keys, readReceipts(), null));
+    // states which it used. The scan stays NULL (`runPastedVerification`), so
+    // a round with no transcript resolves as `inconclusive`; a pasted
+    // authenticated transcript still gets its session's deposit looked up.
+    const resolved = await resolveKeySet();
+
+    renderReport(
+        await runPastedVerification({
+            verify: verifyInputBase(roundId, readReceipts()),
+            messages,
+            keys: resolved.keys,
+            lineage: resolved.lineage,
+            formPoolId: poolInput.value.trim(),
+            chain: depositChain(),
+        }),
+    );
 });
+
+/** The indexer and node reads behind the deposit lookups, over the form's endpoints. */
+function depositChain(signal?: AbortSignal): DepositChain {
+    const tzkt = tzktInput.value.trim();
+    const rpc = rpcInput.value.trim();
+
+    return {
+        locateDeposit: (vaultAddresses, sessionIdHex, levelHint) =>
+            locateSessionDeposit({ tzktApiUrl: tzkt, vaultAddresses, sessionIdHex, levelHint, signal }),
+        blockOperations: (level) => fetchBlockOperations(rpc, level, signal),
+        contractStorage: (address) => fetchContractStorage(rpc, address, signal),
+        bigMapHas: (bigMapId, scriptExprHash) => fetchBigMapHas(rpc, bigMapId, scriptExprHash, signal),
+    };
+}
 
 receiptsFileInput.addEventListener('change', async () => {
     const file = receiptsFileInput.files?.[0];
@@ -491,6 +559,12 @@ async function adoptHandedOverReceipts(): Promise<void> {
 }
 
 /**
+ * The locator hints a `#round=` link carried, kept for the next "Fetch from
+ * chain & verify". A receipts document's own hints win over these.
+ */
+let handedOverHints: HintHandoff | null = null;
+
+/**
  * A link that carries only a round id (`#round=…`) prefills the round field.
  * Read only when the link carries no receipts, which name their own round.
  */
@@ -511,19 +585,31 @@ function adoptHandedOverRound(): void {
         return;
     }
 
+    // Malformed locator hints are dropped with a note; the round id stands.
+    handedOverHints = readHintHandoff(window.location.hash);
+
+    const { findings } = handedOverHints;
+
     history.replaceState(null, '', window.location.pathname + window.location.search);
     roundIdInput.value = roundId;
-    progress.textContent = 'round ID filled in from the link — press “Fetch from chain & verify”';
+    progress.textContent = ['round ID filled in from the link — press “Fetch from chain & verify”', ...findings].join(
+        '. ',
+    );
 }
 
 void adoptHandedOverReceipts();
 
 /** Parse whatever is in the receipts box; an empty box is `absent`, not an error. */
 function readReceipts(): ReceiptsInput {
+    return readReceiptsWithFindings().input;
+}
+
+/** {@link readReceipts}, plus the import's findings (the locator-hint ones are reported per hint). */
+function readReceiptsWithFindings(): { input: ReceiptsInput; findings: string[] } {
     const text = receiptsTextarea.value.trim();
 
     if (!text) {
-        return { status: 'absent' };
+        return { input: { status: 'absent' }, findings: [] };
     }
 
     const result = importReceipts(text);
@@ -531,69 +617,34 @@ function readReceipts(): ReceiptsInput {
     if (result.status === 'error') {
         receiptsStatus.textContent = `receipts rejected: ${result.message}`;
 
-        return { status: 'error', message: result.message };
+        return { input: { status: 'error', message: result.message }, findings: [] };
     }
 
-    receiptsStatus.textContent =
+    receiptsStatus.textContent = [
         `receipts read: ${result.receipts.commands.length} command(s), ${result.receipts.frames.length} frame(s), ` +
-        `labelled round ${result.receipts.roundIdHex} of session ${result.receipts.sessionIdHex}`;
+            `labelled round ${result.receipts.roundIdHex} of session ${result.receipts.sessionIdHex}`,
+        ...result.findings,
+    ].join('. ');
 
-    return { status: 'ok', receipts: result.receipts };
+    return { input: { status: 'ok', receipts: result.receipts }, findings: result.findings };
 }
 
-/**
- * DERIVE the bracket's lower bound from L1: the level of the session's first
- * deposit to the pool's vault.
- *
- * The session id comes from the SIGNED `RoundEnded` frame rather than the
- * export's label, and the vault from the administrator lineage, so neither end
- * of the lookup is a value the exporter chose. The export's
- * `depositOperationLevel` is passed only as a cross-check — the shipped client
- * never writes it, so a ladder that waited for it would leave `suppressed` and
- * `undetermined` unreachable from every real export.
- */
-async function resolveDeposit(
+/** The suppression bracket's lower bound, derived from L1 by {@link resolveReceiptsDeposit}. */
+function resolveDeposit(
     receipts: ReceiptsInput,
     lineage: AdminLineage | null,
     signal?: AbortSignal,
 ): Promise<ScanContext['deposit']> {
-    if (receipts.status !== 'ok' || !lineage) {
-        return null;
-    }
-
-    let sessionIdHex: string | null = null;
-
-    try {
-        sessionIdHex = decodeReceiptFrame({
-            sequence: 0n,
-            payloadCase: 'roundEnded',
-            relatedRequestId: null,
-            frame: receipts.receipts.roundEndedFrame,
-        }).envelope.sessionId;
-    } catch {
-        sessionIdHex = null;
-    }
-
-    if (!sessionIdHex) {
-        return null;
-    }
-
-    progress.textContent = 'locating the session’s deposit on L1…';
-
-    const located = await locateSessionDeposit({
-        tzktApiUrl: tzktInput.value.trim(),
-        vaultAddresses: depositVaults(lineage),
-        sessionIdHex,
-        levelHint: receipts.receipts.depositOperationLevel,
-        signal,
+    return resolveReceiptsDeposit({
+        receipts,
+        lineage,
+        formTenantId: tenantInput.value.trim(),
+        formPoolId: poolInput.value.trim(),
+        locateDeposit: depositChain(signal).locateDeposit,
+        onProgress: (text) => {
+            progress.textContent = text;
+        },
     });
-
-    progress.textContent = located.detail;
-
-    // `confirmed` now means "this level came from L1", which is the only kind
-    // of lower bound §8.3(d) admits. A lookup that found nothing yields no
-    // bound at all rather than an unconfirmed one.
-    return located.level === null ? null : { level: located.level, confirmed: true };
 }
 
 /**
@@ -779,27 +830,6 @@ function renderPoolSlugs(lineage: AdminLineage): void {
 }
 
 /**
- * The vaults to search for the session's first deposit: the named pool's, or,
- * with no pool named, every vault registered under the tenant.
- *
- * The wider search is safe because `locateSessionDeposit` keeps the LOWEST
- * level across the vaults it is given. A deposit to another pool's vault that
- * carries the same session id can therefore only move the bracket's lower
- * bound earlier, which demands a longer scan — it can never let a scan that
- * starts after the session's real deposit count as bracketing the round.
- */
-function depositVaults(lineage: AdminLineage): string[] {
-    const tenantId = tenantInput.value.trim();
-    const poolId = poolInput.value.trim();
-
-    if (poolId) {
-        return vaultsForPool(lineage, tenantId, poolId);
-    }
-
-    return [...new Set(lineage.vaults.filter((v) => v.tenantId === tenantId).map((v) => v.vault))];
-}
-
-/**
  * Prefill tenant and pool from a receipts document as soon as it is loaded, so
  * a preview-pool player never has to know which pool they played in. These are
  * the EXPORTER'S LABELS, used only as form defaults: the keys still come from
@@ -903,16 +933,14 @@ function hyphenateUuid(value: string): string {
 
 receiptsTextarea.addEventListener('change', () => adoptReceiptsScope('receipts read from the text box'));
 
-function runVerification(
+/** Everything `verifyRound` takes from the form, i.e. all but the messages, keys, scan and session deposit. */
+function verifyInputBase(
     roundId: string,
-    messages: InboxMessage[],
-    keys: KeySet,
     receipts: ReceiptsInput,
-    scan: ScanContext | null,
-): VerificationReport {
+): Omit<VerifyInput, 'messages' | 'keys' | 'scan' | 'sessionDeposit'> {
     const rollupAddress = rollupInput.value.trim();
 
-    return verifyRound({
+    return {
         roundId,
         tenantId: tenantInput.value.trim(),
         // The instance every signature is checked against (#952): the
@@ -925,22 +953,15 @@ function runVerification(
         // rollup no entry lists is an unknown deployment and is not replayed.
         // The seed rule itself comes from the round's game version.
         deploymentListed: rollupAddress ? isListedRollup(NETWORKS, rollupAddress) : false,
-        messages,
-        keys,
         receipts,
-        scan,
         clientSeedText: clientSeedTextInput.value || undefined,
-    });
+    };
 }
 
-function renderReport(report: VerificationReport): void {
-    el('report-panel').hidden = false;
-
-    const verdict = el('verdict');
-    // Seven labels, because the seven verdicts are not interchangeable: four
-    // of them are different reasons the tool is NOT alleging anything, and
-    // wording any two of them alike would either hide a finding or invent one.
-    const labels: Record<VerificationReport['verdict'], string> = {
+// Seven labels, because the seven verdicts are not interchangeable: four of
+// them are different reasons the tool is NOT alleging anything, and wording
+// any two of them alike would either hide a finding or invent one.
+const VERDICT_LABELS: Record<VerificationReport['verdict'], string> = {
         verified: 'VERIFIED — authentic messages, pre-committed seed, correct payout, and your own commands behind it',
         attested: 'ATTESTED — checked, but weakly: your receipts could not be reconstructed, so only the server’s own signed statement was compared',
         inconclusive:
@@ -949,10 +970,55 @@ function renderReport(report: VerificationReport): void {
         suppressed: 'SUPPRESSED — your receipts are valid, the round is not on chain, and this session’s EndSession is — which is written only after every round of the session settled',
         failed: 'FAILED — at least one check did not hold; see below',
         incomplete: 'INCOMPLETE — not all evidence was found; nothing is proven either way',
-    };
+};
 
+/**
+ * The preliminary pass (scan still running): its checks, under a label that
+ * states no verdict. The final report replaces it.
+ */
+function renderPreliminary(preliminary: PreliminaryReport): void {
+    const verdict = el('verdict');
+
+    renderBody(preliminary);
+    verdict.className = 'verdict preliminary';
+    verdict.textContent = preliminary.label;
+    el('runs').innerHTML = '';
+}
+
+/**
+ * The final report. With `hintedRun`, the narrowed fallback re-ran without
+ * the sequencer's batch hint: both runs are shown side by side and the
+ * verdict is the re-run's.
+ */
+function renderReport(report: VerificationReport, hintedRun: VerificationReport | null = null): void {
+    const verdict = el('verdict');
+    const runs = el('runs');
+
+    renderBody(report);
     verdict.className = `verdict ${report.verdict}`;
-    verdict.textContent = labels[report.verdict];
+    verdict.textContent = VERDICT_LABELS[report.verdict];
+    runs.innerHTML = '';
+
+    if (hintedRun) {
+        for (const [label, run] of [
+            ['With the sequencer’s batch hint', hintedRun],
+            ['Without it (this verdict stands)', report],
+        ] as const) {
+            const p = document.createElement('p');
+            const failing = run.checks.filter((c) => c.status === 'fail').map((c) => c.id);
+
+            p.className = 'note';
+            p.textContent =
+                `${label}: ${run.verdict.toUpperCase()}` +
+                (run.scan ? `, levels ${run.scan.fromLevel}–${run.scan.toLevel}` : '') +
+                (failing.length > 0 ? `, failing: ${failing.join(', ')}` : '');
+            runs.appendChild(p);
+        }
+    }
+}
+
+function renderBody(report: Omit<VerificationReport, 'verdict'>): void {
+    el('report-panel').hidden = false;
 
     const checks = el('checks');
 
@@ -1011,8 +1077,8 @@ function renderReport(report: VerificationReport): void {
             `Scanned levels ${report.scan.fromLevel}–${report.scan.toLevel}` +
             (report.scan.headLevel === null ? ' (L1 head unknown)' : ` (L1 head ${report.scan.headLevel})`) +
             (report.scan.deposit
-                ? `; the session's first deposit was located on L1 at level ${report.scan.deposit.level}, which is the ` +
-                  'lower bound no round of this session can precede'
+                ? `; the session's first deposit was located on L1 at level ${report.scan.deposit.level}, before which ` +
+                  'no round of this session can settle'
                 : '; the session’s deposit could not be located on L1, so the range has no lower bound');
         evidence.appendChild(line);
     }

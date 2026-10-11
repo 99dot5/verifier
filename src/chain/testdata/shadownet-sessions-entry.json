@@ -1,0 +1,52 @@
+{
+  "capturedFrom": [
+    "GET https://rpc.shadownet.teztnets.com/chains/main/blocks/head/context/contracts/KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty/storage, captured 2026-10-11 (storageAtHead)",
+    "GET https://rpc.shadownet.teztnets.com/chains/main/blocks/head/context/big_maps/38248/exprujVMTpjKEksZCx1gqmAnXfbUyPNUEnwABBxDsWuovhexp5d5xK returned 200 with valueAtHead; the same path with exprtZBwZUeYYYfUs9B9Rg2ywHezVHnCCnmF9WsDQVrs582dSK63dC returned 404",
+    "GET https://api.shadownet.tzkt.io/v1/bigmaps/38248/keys?key=01a1175f11b17662986b81d519ccfcc1 reports hash exprujVMTpjKEksZCx1gqmAnXfbUyPNUEnwABBxDsWuovhexp5d5xK, firstLevel 5395144"
+  ],
+  "vault": "KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty",
+  "storageAtHead": {
+    "prim": "Pair",
+    "args": [
+      {
+        "string": "tz1dBStuxore6uR3E2s5NAhjSGc3EtpkwCp7"
+      },
+      {
+        "prim": "False"
+      },
+      {
+        "prim": "None"
+      },
+      {
+        "string": "standard"
+      },
+      {
+        "int": "38248"
+      },
+      {
+        "string": "sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK"
+      },
+      {
+        "string": "stg-99dot5-com-shadownet"
+      },
+      {
+        "int": "185000000"
+      }
+    ]
+  },
+  "bigMapId": "38248",
+  "sessionIdHex": "01a1175f11b17662986b81d519ccfcc1",
+  "nodeScriptExprHash": "exprujVMTpjKEksZCx1gqmAnXfbUyPNUEnwABBxDsWuovhexp5d5xK",
+  "tzktKeyHash": "exprujVMTpjKEksZCx1gqmAnXfbUyPNUEnwABBxDsWuovhexp5d5xK",
+  "valueAtHead": {
+    "prim": "Pair",
+    "args": [
+      {
+        "string": "tz1g3LZAHCeHkW7hgmE2HuNX6xGE7JGJAe7X"
+      },
+      {
+        "string": "edpkvArSZFp5RjdrbSJBRzffN3bjnTfZvosEYocKb5S7GEbT6rxNcf"
+      }
+    ]
+  }
+}

@@ -19,7 +19,10 @@
  *
  * A link may instead carry only a round id (`#round=<uuid>`), which prefills
  * the round field and nothing else. When both are present the receipts win:
- * they name their own round.
+ * they name their own round. Beside the round id the link may carry the
+ * round's L1 locators (`transcriptLevel`, `transcriptOp`, `seedBatchLevel`,
+ * `seedBatchOp`, {@link readHintHandoff}): hints this page confirms against
+ * L1, never evidence.
  */
 
 /** The fragment parameter the game writes. */
@@ -32,6 +35,35 @@ export const RECEIPTS_FRAGMENT_KEY = 'receipts';
  * if the reader had typed the id.
  */
 export const ROUND_FRAGMENT_KEY = 'round';
+
+/** The fragment parameters carrying the locator hints beside a bare round id; each is optional. */
+export const TRANSCRIPT_LEVEL_FRAGMENT_KEY = 'transcriptLevel';
+export const TRANSCRIPT_OP_FRAGMENT_KEY = 'transcriptOp';
+export const SEED_BATCH_LEVEL_FRAGMENT_KEY = 'seedBatchLevel';
+export const SEED_BATCH_OP_FRAGMENT_KEY = 'seedBatchOp';
+
+/**
+ * Where the round's transcript and its seed batch sit on L1, as the sender
+ * reported them: HINTS this page confirms against L1, never evidence. A hint
+ * narrows or relocates a search within kernel-sound bounds and never decides
+ * a verdict. The same shape arrives as an export's `locatorHints` or as the
+ * hand-off's fragment keys. A batch known only by the level the kernel
+ * recorded has `operationHash: null`.
+ */
+export interface LocatorHints {
+    transcript?: { level: number; operationHash: string };
+    seedBatch?: { level: number; operationHash: string | null };
+}
+
+/** An L1 block level as a hint states it: a positive safe integer. */
+export function isLocatorLevel(value: unknown): value is number {
+    return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+/** A Tezos operation hash (`o…`, base58check, 51 characters). Grammar only; L1 decides whether it exists. */
+export function isOperationHash(value: unknown): value is string {
+    return typeof value === 'string' && /^o[1-9A-HJ-NP-Za-km-z]{50}$/.test(value);
+}
 
 /** The largest decoded document this page accepts from a fragment (bytes). */
 export const MAX_HANDOFF_JSON_BYTES = 32 * 1024 * 1024;
@@ -160,4 +192,75 @@ export function readRoundHandoff(hash: string): string | null {
     }
 
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** The locator hints a fragment carried, and what was wrong with any it dropped. */
+export interface HintHandoff {
+    /** `null` when the fragment carries no usable hint. */
+    hints: LocatorHints | null;
+    /** Reader-facing notes, one per dropped key or hint. Findings, never failures. */
+    findings: string[];
+}
+
+/**
+ * The locator hints carried beside a bare round id
+ * (`#round=<uuid>&transcriptLevel=<n>&transcriptOp=<o…>&seedBatchLevel=<n>&seedBatchOp=<o…>`).
+ *
+ * Never throws, and reads nothing about the round itself: a malformed hint is
+ * dropped with a finding while `round` stands, because a hint only narrows a
+ * search and losing one costs a slower scan, never a verdict. A transcript
+ * hint needs both its level and its operation hash; a batch hint needs its
+ * level, and a missing or malformed `seedBatchOp` leaves the level alone.
+ */
+export function readHintHandoff(hash: string): HintHandoff {
+    const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+    const findings: string[] = [];
+    const hints: LocatorHints = {};
+
+    /** A present key's value through `parse`; `undefined` when it is absent, or malformed (with a finding). */
+    const read = <T>(key: string, parse: (text: string) => T | null, grammar: string): T | undefined => {
+        const text = params.get(key);
+
+        if (text === null) {
+            return undefined;
+        }
+
+        const value = parse(text);
+
+        if (value === null) {
+            findings.push(`the link's ${key} hint is not ${grammar}; it was ignored`);
+
+            return undefined;
+        }
+
+        return value;
+    };
+    const level = (text: string) => (/^[1-9]\d*$/.test(text) && isLocatorLevel(Number(text)) ? Number(text) : null);
+    const operation = (text: string) => (isOperationHash(text) ? text : null);
+    const LEVEL = 'a positive integer level';
+    const OPERATION = 'an operation hash (o…)';
+
+    const transcriptLevel = read(TRANSCRIPT_LEVEL_FRAGMENT_KEY, level, LEVEL);
+    const transcriptOp = read(TRANSCRIPT_OP_FRAGMENT_KEY, operation, OPERATION);
+
+    if (transcriptLevel !== undefined && transcriptOp !== undefined) {
+        hints.transcript = { level: transcriptLevel, operationHash: transcriptOp };
+    } else if (transcriptLevel !== undefined || transcriptOp !== undefined) {
+        findings.push(
+            `the link's transcript hint needs both ${TRANSCRIPT_LEVEL_FRAGMENT_KEY} and ${TRANSCRIPT_OP_FRAGMENT_KEY}; it was ignored`,
+        );
+    }
+
+    const batchLevel = read(SEED_BATCH_LEVEL_FRAGMENT_KEY, level, LEVEL);
+    const batchOp = read(SEED_BATCH_OP_FRAGMENT_KEY, operation, OPERATION);
+
+    if (batchLevel !== undefined) {
+        hints.seedBatch = { level: batchLevel, operationHash: batchOp ?? null };
+    } else if (batchOp !== undefined) {
+        findings.push(
+            `the link's seed batch hint needs ${SEED_BATCH_LEVEL_FRAGMENT_KEY}; ${SEED_BATCH_OP_FRAGMENT_KEY} alone was ignored`,
+        );
+    }
+
+    return { hints: hints.transcript || hints.seedBatch ? hints : null, findings };
 }

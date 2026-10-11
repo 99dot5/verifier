@@ -4,12 +4,12 @@
 // independent python3 reference libs/games/scripts/gen_vectors.py).
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { vectorsUrl } from './vectors-path';
+import { vectorsUrl } from '../vectors-path';
 import { describe, expect, it } from 'vitest';
-import { decimalStringToUnits, unitsToDecimalString } from './ints';
-import { bytesToHex, deriveSeed, hexToBytes, rawU64 } from './seed';
-import { GAME_TYPE, hiloStep, replay } from './hilo';
-import type { TranscriptAction } from './types';
+import { decimalStringToUnits, unitsToDecimalString } from '../ints';
+import { bytesToHex, deriveSeed, hexToBytes, rawU64 } from '../seed';
+import { GAME_TYPE, hiloStep, replay } from './v1';
+import type { TranscriptAction } from '../types';
 
 /** The seed rule every listed deployment selects today. */
 

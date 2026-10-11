@@ -21,11 +21,11 @@
  * a full clear pay `banked + live`, and the system `abandon` pays
  * `banked + live` too (sec-28) with outcome `lose`.
  */
-import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
-import { divHalfUp, mulPpm, ppmToMultiplierString } from './ints';
-import { SeedStream, rawU64 } from './seed';
-import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
-import { abandonStep } from './hilo';
+import { HOUSE_EDGE_PPM, SCALE_PPM } from '../constants';
+import { divHalfUp, mulPpm, ppmToMultiplierString } from '../ints';
+import { SeedStream, rawU64 } from '../seed';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from '../types';
+import { abandonStep } from '../hilo/v1';
 import {
     ZERO_BANKED,
     addBanked,
@@ -38,7 +38,7 @@ import {
     partialCashoutStep,
     positionValue,
     type Position,
-} from './partial-cashout';
+} from '../partial-cashout';
 
 export const GAME_TYPE = 'hydra:v1';
 

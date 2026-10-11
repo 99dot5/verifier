@@ -5,8 +5,8 @@
 // A round is now ONE `RoundTranscript` message, so the fixture is a SeedBatch
 // at level L and the transcript at L+1. The round's maths is not hard-coded:
 // the expected payout is taken from the same replayer the verifier calls, and
-// that replayer is pinned against the shared golden vectors by hilo.test.ts /
-// plinko.test.ts. What this file exercises is the orchestration around it —
+// that replayer is pinned against the shared golden vectors by hilo/v1.test.ts /
+// plinko/v1.test.ts. What this file exercises is the orchestration around it —
 // earliest-wins, the commitment pair, signatures, the optional client-seed
 // check, and every way a round can fail to verify.
 import * as ed from '@noble/ed25519';
@@ -16,18 +16,24 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { InboxMessage } from './chain/inbox';
 import { ACTIONS_AFTER_SETTLE_CHECK_ID, supportedGameTypes, verifyRound } from './verifier';
-import * as crash from './verify/crash';
-import * as hilo from './verify/hilo';
-import * as hydra from './verify/hydra';
-import * as mines from './verify/mines';
-import * as plinko from './verify/plinko';
+import {
+    actionTypeOf,
+    bytesToHex,
+    crash,
+    decodeExternalMessage,
+    GAME_SEED_DERIVATIONS,
+    hexToBytes,
+    hilo,
+    hydra,
+    mines,
+    plinko,
+    type Replayer,
+    serverSeedCommitment,
+    tagOf,
+    unitsToDecimalString,
+} from '@99dot5/round-replay';
 import { RACE_BAND_TICKS, REJECTION_CHECK_ID } from './verify/rejections';
-import { unitsToDecimalString } from './verify/ints';
-import { GAME_SEED_DERIVATIONS, bytesToHex, hexToBytes, serverSeedCommitment } from './verify/seed';
-import type { Replayer } from './verify/types';
 import { vectorsUrl, type VectorGame } from './verify/vectors-path';
-import { actionTypeOf, tagOf } from './wire/action-tags';
-import { decodeExternalMessage } from './wire/messages';
 import { encodeEdpk, sequencerSigningPreimage, type SigningDomain } from './wire/signature';
 import {
     commandFrame,
@@ -378,8 +384,8 @@ function action(actionType: string, payload: Uint8Array = new Uint8Array()): Wir
 }
 
 /** `borsh(plinko::Config { rows: u32, risk: enum })` — 5 bytes. */
-function plinkoConfig(rows: number, risk: plinko.Risk): Uint8Array {
-    return new Uint8Array([...u32(rows), plinko.RISK_BORSH_TAG[risk]]);
+function plinkoConfig(rows: number, risk: plinko.v1.Risk): Uint8Array {
+    return new Uint8Array([...u32(rows), plinko.v1.RISK_BORSH_TAG[risk]]);
 }
 
 /**
@@ -410,16 +416,16 @@ interface RoundOptions {
 /**
  * The payout an honest sequencer would claim, straight from the replayer the
  * verifier itself calls. Deliberately not a hard-coded number: the maths is
- * pinned against the golden vectors in hilo.test.ts / plinko.test.ts, and
+ * pinned against the golden vectors in hilo/v1.test.ts / plinko/v1.test.ts, and
  * restating it here would only pin this file to itself.
  */
 function honestPayout(gameType: string, options: RoundOptions = {}): bigint {
     const replayers: Record<string, Replayer> = {
-        [crash.GAME_TYPE]: crash.replay,
-        [hilo.GAME_TYPE]: hilo.replay,
-        [hydra.GAME_TYPE]: hydra.replay,
-        [mines.GAME_TYPE]: mines.replay,
-        [plinko.GAME_TYPE]: plinko.replay,
+        [crash.v1.GAME_TYPE]: crash.v1.replay,
+        [hilo.v1.GAME_TYPE]: hilo.v1.replay,
+        [hydra.v1.GAME_TYPE]: hydra.v1.replay,
+        [mines.v1.GAME_TYPE]: mines.v1.replay,
+        [plinko.v1.GAME_TYPE]: plinko.v1.replay,
     };
     const wireActions = options.actions ?? HILO_ACTIONS;
     const replayed = replayers[gameType](
@@ -443,7 +449,7 @@ function transcriptBody(options: RoundOptions, claimedPayout: bigint): number[] 
         ...u8(0x01), // SequencerMessage::RoundTranscript
         ...uuid(ROUND_ID),
         ...uuid(SESSION_ID),
-        ...str(options.gameType ?? hilo.GAME_TYPE),
+        ...str(options.gameType ?? hilo.v1.GAME_TYPE),
         ...u128(STAKE_MUTEZ),
         ...Array.from(options.clientSeed ?? CLIENT_SEED),
         ...Array.from(options.serverSeed ?? SERVER_SEED),
@@ -462,7 +468,7 @@ function buildRound(options: RoundOptions = {}): InboxMessage[] {
         i === Number(SEED_INDEX - BATCH_START) ? seedHash : new Uint8Array(32).fill(i),
     );
     const claimedPayout =
-        options.claimedPayout ?? honestPayout(options.gameType ?? hilo.GAME_TYPE, options);
+        options.claimedPayout ?? honestPayout(options.gameType ?? hilo.v1.GAME_TYPE, options);
 
     return [
         frame(
@@ -566,7 +572,7 @@ describe('verifyRound', () => {
         // dedups on durable storage and applies the FIRST occurrence, so a
         // later transcript claiming a bigger payout must be ignored, not
         // averaged in and not preferred.
-        const inflated = honestPayout(hilo.GAME_TYPE) + 1_000_000n;
+        const inflated = honestPayout(hilo.v1.GAME_TYPE) + 1_000_000n;
         const report = verify(
             buildRound({ extraTranscripts: [{ level: TRANSCRIPT_LEVEL + 3, claimedPayout: inflated }] }),
         );
@@ -597,7 +603,7 @@ describe('verifyRound', () => {
     });
 
     it('prefers the authenticated transcript over an EARLIER foreign-signed one for the same round', () => {
-        const inflated = honestPayout(hilo.GAME_TYPE) + 1_000_000n;
+        const inflated = honestPayout(hilo.v1.GAME_TYPE) + 1_000_000n;
         const [, forged] = buildRound({
             signingSeed: new Uint8Array(32).fill(7),
             transcriptLevel: BATCH_LEVEL + 1,
@@ -618,7 +624,7 @@ describe('verifyRound', () => {
     });
 
     it('fails when the claimed payout is inflated', () => {
-        const report = verify(buildRound({ claimedPayout: honestPayout(hilo.GAME_TYPE) + 1n }));
+        const report = verify(buildRound({ claimedPayout: honestPayout(hilo.v1.GAME_TYPE) + 1n }));
 
         expect(report.verdict).toBe('failed');
         expect(statusOf(report, 'replay-payout')).toBe('fail');
@@ -777,7 +783,7 @@ describe('verifyRound', () => {
         // payload changes the multiplier the round should have paid — the one
         // action field a transcript can carry that is not a bare tag.
         const honestActions = [action('place-bet', plinkoConfig(8, 'low')), action('cashout')];
-        const claimed = honestPayout(plinko.GAME_TYPE, { gameType: plinko.GAME_TYPE, actions: honestActions });
+        const claimed = honestPayout(plinko.v1.GAME_TYPE, { gameType: plinko.v1.GAME_TYPE, actions: honestActions });
         const shape = {
             bet: betCommand({ game: 'plinko', rows: 8, risk: 1 }),
             cashOut: cashOutCommand({ game: 'plinko' }),
@@ -785,7 +791,7 @@ describe('verifyRound', () => {
         const receipts: ReceiptsInput = { status: 'ok', receipts: buildReceipts({}, shape) };
         const green = verify(
             buildRound({
-                gameType: plinko.GAME_TYPE,
+                gameType: plinko.v1.GAME_TYPE,
                 actions: honestActions,
                 playerCommitment: commitmentOf(shape),
             }),
@@ -796,7 +802,7 @@ describe('verifyRound', () => {
 
         const report = verify(
             buildRound({
-                gameType: plinko.GAME_TYPE,
+                gameType: plinko.v1.GAME_TYPE,
                 actions: [action('place-bet', plinkoConfig(16, 'high')), action('cashout')],
                 claimedPayout: claimed,
                 playerCommitment: commitmentOf(shape),
@@ -827,7 +833,7 @@ describe('verifyRound', () => {
         // built for the honest one.
         const tampered = frame(
             TRANSCRIPT_LEVEL,
-            transcriptBody({ serverSeed: new Uint8Array(32).fill(8) }, honestPayout(hilo.GAME_TYPE)),
+            transcriptBody({ serverSeed: new Uint8Array(32).fill(8) }, honestPayout(hilo.v1.GAME_TYPE)),
         );
         const report = verify([messages[0], tampered]);
 
@@ -879,9 +885,9 @@ describe('verifyRound', () => {
 
         function plinkoRound(transcriptSeedText: string, commitment: Uint8Array): InboxMessage[] {
             const clientSeed = blake2b(new TextEncoder().encode(transcriptSeedText), { dkLen: 32 });
-            const options = { gameType: plinko.GAME_TYPE, actions: PLINKO_ACTIONS, clientSeed, playerCommitment: commitment };
+            const options = { gameType: plinko.v1.GAME_TYPE, actions: PLINKO_ACTIONS, clientSeed, playerCommitment: commitment };
 
-            return buildRound({ ...options, claimedPayout: honestPayout(plinko.GAME_TYPE, options) });
+            return buildRound({ ...options, claimedPayout: honestPayout(plinko.v1.GAME_TYPE, options) });
         }
 
         it('reads the seed from the signed PlaceBet command when none is typed', () => {
@@ -978,7 +984,7 @@ describe('verifyRound', () => {
         // bound to it, and a system step needs none, so the projection passes
         // and this check is the only one that sees it.
         const padded = [...HILO_ACTIONS, action('abandon')];
-        const report = verify(buildRound({ actions: padded, claimedPayout: honestPayout(hilo.GAME_TYPE) }));
+        const report = verify(buildRound({ actions: padded, claimedPayout: honestPayout(hilo.v1.GAME_TYPE) }));
         const detail = report.checks.find((c) => c.id === ACTIONS_AFTER_SETTLE_CHECK_ID)?.detail;
 
         expect(statusOf(report, ACTIONS_AFTER_SETTLE_CHECK_ID)).toBe('fail');
@@ -994,7 +1000,7 @@ describe('verifyRound', () => {
 
     it('never reads an unknown tag after the settle, but still fails the round for it', () => {
         const padded = [...HILO_ACTIONS, { tag: 0x7f, payload: new Uint8Array([0xde, 0xad]) }];
-        const report = verify(buildRound({ actions: padded, claimedPayout: honestPayout(hilo.GAME_TYPE) }));
+        const report = verify(buildRound({ actions: padded, claimedPayout: honestPayout(hilo.v1.GAME_TYPE) }));
 
         // Not the kernel's reject-unknown-action-tag: the walk never reaches it.
         expect(statusOf(report, 'replay')).toBeUndefined();
@@ -1009,7 +1015,7 @@ describe('verifyRound', () => {
         // trails a settle.
         const report = verify(
             buildRound({
-                gameType: hydra.GAME_TYPE,
+                gameType: hydra.v1.GAME_TYPE,
                 actions: [action('place-bet', new Uint8Array([2, 0, 0, 0])), action('cashout'), action('abandon')],
                 claimedPayout: 0n,
             }),
@@ -1030,7 +1036,7 @@ describe('verifyRound', () => {
         // the round first; only a replay could say.
         const report = verify(
             buildRound({
-                gameType: hydra.GAME_TYPE,
+                gameType: hydra.v1.GAME_TYPE,
                 actions: [action('place-bet', new Uint8Array([2, 0, 0, 0])), action('physical-attack'), action('cashout')],
                 claimedPayout: 0n,
             }),
@@ -1046,8 +1052,8 @@ describe('verifyRound', () => {
         // The `higher` must WIN, or the round would settle as a loss and this
         // would not be an unfinished transcript at all. The scenario's
         // predicate guarantees it; restate it so a drifted row fails HERE.
-        const opening = hilo.hiloStep(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), 0);
-        const next = hilo.hiloStep(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), 1);
+        const opening = hilo.v1.hiloStep(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), 0);
+        const next = hilo.v1.hiloStep(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), 1);
 
         expect(next.rankNumeric).toBeGreaterThanOrEqual(opening.rankNumeric);
         expect(HILO_SCENARIO.winning_direction_at_1).toBe('higher');
@@ -1365,7 +1371,7 @@ describe('verifyRound', () => {
             ...u8(0x01), // SequencerMessage::RoundTranscript
             ...uuid(SIBLING_ROUND_ID),
             ...uuid(SESSION_ID),
-            ...str(hilo.GAME_TYPE),
+            ...str(hilo.v1.GAME_TYPE),
             ...u128(STAKE_MUTEZ),
             ...Array.from(CLIENT_SEED),
             ...Array.from(SERVER_SEED),
@@ -1495,7 +1501,7 @@ describe('a cashout the server answered with nothing', () => {
     /** A manual crash round that ran to its bust with no cashout recorded. */
     function expiredRound(): InboxMessage[] {
         return buildRound({
-            gameType: crash.GAME_TYPE,
+            gameType: crash.v1.GAME_TYPE,
             actions: [action('place-bet', new Uint8Array([0x00])), action('expire')],
             playerCommitment: COMMITMENT,
         });
@@ -1536,7 +1542,7 @@ describe('a refusal the round’s own seed contradicts', () => {
     /** The commitment of THIS block's seed — what its honest opener and echoes state. */
     const CRASH_SEED_COMMITMENT = serverSeedCommitment(bytesToHex(CRASH_SERVER_SEED));
     const CRASH_OPENER_SEED = { hash: CRASH_SEED_COMMITMENT, index: SEED_INDEX };
-    const CRASH_TICK = crash.crashRound(bytesToHex(CRASH_SERVER_SEED), bytesToHex(CRASH_CLIENT_SEED)).crashTick;
+    const CRASH_TICK = crash.v1.crashRound(bytesToHex(CRASH_SERVER_SEED), bytesToHex(CRASH_CLIENT_SEED)).crashTick;
     const ANCHOR = 1_700_000_000_000n;
     const QUANTUM = 50n;
     const PEER_CASHOUT = '33333333-3333-4333-8333-333333333333';
@@ -1650,7 +1656,7 @@ describe('a refusal the round’s own seed contradicts', () => {
     function verifyCrash(receipts: ReceiptsInput) {
         return verify(
             buildRound({
-                gameType: crash.GAME_TYPE,
+                gameType: crash.v1.GAME_TYPE,
                 serverSeed: CRASH_SERVER_SEED,
                 clientSeed: CRASH_CLIENT_SEED,
                 actions: CRASH_ACTIONS,
@@ -1756,7 +1762,7 @@ describe('a refusal the round’s own seed contradicts', () => {
     function verifyExpired(receipts: ReceiptsInput) {
         return verify(
             buildRound({
-                gameType: crash.GAME_TYPE,
+                gameType: crash.v1.GAME_TYPE,
                 serverSeed: CRASH_SERVER_SEED,
                 clientSeed: CRASH_CLIENT_SEED,
                 actions: EXPIRE_ACTIONS,
@@ -1835,8 +1841,8 @@ describe('a refusal the round’s own seed contradicts', () => {
  * the settle.
  *
  * Every number here is derived, never stated: the safe tile comes from the
- * same `verify/mines.ts` layout derivation the verifier itself calls (pinned
- * against the shared golden vectors by `mines.test.ts`), and the claimed
+ * same `verify/mines/v1.ts` layout derivation the verifier itself calls (pinned
+ * against the shared golden vectors by `mines/v1.test.ts`), and the claimed
  * payout comes from the replayer. A hard-coded tile would pin this file to
  * itself, and would break silently the day the seed constants change.
  */
@@ -1858,10 +1864,10 @@ describe('a clean round of each remaining replayable game', () => {
          * construction under whatever seeds this file happens to use.
          */
         const SAFE_TILES = (() => {
-            const layout = mines.deriveLayout(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), MINE_COUNT);
+            const layout = mines.v1.deriveLayout(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), MINE_COUNT);
             const mineSet = new Set(layout.minePositions);
 
-            return [...Array(mines.TOTAL_TILES).keys()].filter((candidate) => !mineSet.has(candidate));
+            return [...Array(mines.v1.TOTAL_TILES).keys()].filter((candidate) => !mineSet.has(candidate));
         })();
         const [SAFE_TILE, OTHER_SAFE_TILE] = SAFE_TILES;
 
@@ -1960,7 +1966,7 @@ describe('a clean round of each remaining replayable game', () => {
 
         function round() {
             return buildRound({
-                gameType: mines.GAME_TYPE,
+                gameType: mines.v1.GAME_TYPE,
                 actions: ACTIONS,
                 playerCommitment: COMMITMENT,
             });
@@ -1971,7 +1977,7 @@ describe('a clean round of each remaining replayable game', () => {
             // would end the round at the reveal, leaving the cashout after the
             // settle, and the case would test that rather than the proof it is
             // about.
-            const layout = mines.deriveLayout(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), MINE_COUNT);
+            const layout = mines.v1.deriveLayout(bytesToHex(SERVER_SEED), bytesToHex(CLIENT_SEED), MINE_COUNT);
 
             expect(SAFE_TILES.length).toBeGreaterThanOrEqual(2);
             expect(layout.minePositions).not.toContain(SAFE_TILE);
@@ -2007,7 +2013,7 @@ describe('a clean round of each remaining replayable game', () => {
             // which is precisely the gap that proof exists to close.
             const swapped = [ACTIONS[0], action('reveal', new Uint8Array(u32(OTHER_SAFE_TILE))), ACTIONS[2]];
             const report = verify(
-                buildRound({ gameType: mines.GAME_TYPE, actions: swapped, playerCommitment: COMMITMENT }),
+                buildRound({ gameType: mines.v1.GAME_TYPE, actions: swapped, playerCommitment: COMMITMENT }),
                 { receipts: { status: 'ok', receipts: receipts() } },
             );
 
@@ -2022,7 +2028,7 @@ describe('a clean round of each remaining replayable game', () => {
     describe('hydra:v1', () => {
         const ATTACK_REQUEST = '55555555-5555-4555-8555-555555555555';
         const replayHydra = (actions: WireAction[]) =>
-            hydra.replay(
+            hydra.v1.replay(
                 bytesToHex(SERVER_SEED),
                 bytesToHex(CLIENT_SEED),
                 actions.map((a, actionIndex) => ({ actionIndex, actionType: actionTypeOf(a.tag) ?? '', payload: a.payload })),
@@ -2031,10 +2037,10 @@ describe('a clean round of each remaining replayable game', () => {
         /**
          * The first hero whose physical attack SURVIVES under this file's
          * seeds without clearing the round, taken from the replayer itself
-         * (pinned against the shared vectors by `hydra.test.ts`). A death would
+         * (pinned against the shared vectors by `hydra/v1.test.ts`). A death would
          * settle at the attack and leave the cashout trailing the settle.
          */
-        const HERO = hydra.HEROES.findIndex((_, hero) => {
+        const HERO = hydra.v1.HEROES.findIndex((_, hero) => {
             const result = replayHydra([action('place-bet', new Uint8Array([hero, 0, 0, 0])), action('physical-attack')]);
 
             return !result.settled;
@@ -2121,7 +2127,7 @@ describe('a clean round of each remaining replayable game', () => {
         }
 
         function round(actions: WireAction[] = ACTIONS) {
-            return buildRound({ gameType: hydra.GAME_TYPE, actions, playerCommitment: COMMITMENT });
+            return buildRound({ gameType: hydra.v1.GAME_TYPE, actions, playerCommitment: COMMITMENT });
         }
 
         it('finds a hero whose attack survives, or the round below is a loss', () => {
@@ -2140,10 +2146,10 @@ describe('a clean round of each remaining replayable game', () => {
         });
 
         it('fails when the claimed payout is not what the attack paid', () => {
-            const honest = honestPayout(hydra.GAME_TYPE, { gameType: hydra.GAME_TYPE, actions: ACTIONS });
+            const honest = honestPayout(hydra.v1.GAME_TYPE, { gameType: hydra.v1.GAME_TYPE, actions: ACTIONS });
             const report = verify(
                 buildRound({
-                    gameType: hydra.GAME_TYPE,
+                    gameType: hydra.v1.GAME_TYPE,
                     actions: ACTIONS,
                     playerCommitment: COMMITMENT,
                     claimedPayout: honest + 1n,
@@ -2163,7 +2169,7 @@ describe('a clean round of each remaining replayable game', () => {
             const replayed = replayHydra(swapped);
             const report = verify(
                 buildRound({
-                    gameType: hydra.GAME_TYPE,
+                    gameType: hydra.v1.GAME_TYPE,
                     actions: swapped,
                     playerCommitment: COMMITMENT,
                     // Keep the payout honest for whatever the swap replays to, so
@@ -2186,7 +2192,7 @@ describe('a clean round of each remaining replayable game', () => {
         const BET_ARM: CommandGameSpec = { game: 'plinko', rows: ROWS, risk: 1 };
 
         function round(commitment: Uint8Array) {
-            return buildRound({ gameType: plinko.GAME_TYPE, actions: ACTIONS, playerCommitment: commitment });
+            return buildRound({ gameType: plinko.v1.GAME_TYPE, actions: ACTIONS, playerCommitment: commitment });
         }
 
         it('verifies a clean plinko round the player cashed out', () => {

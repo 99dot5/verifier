@@ -16,8 +16,7 @@
  *
  * Both endpoints are user-configurable; neither belongs to 99dot5.
  */
-import { hexToBytes } from '../verify/seed';
-import { decodeExternalMessage, type DecodedEnvelope } from '../wire/messages';
+import { type DecodedEnvelope, decodeExternalMessage, hexToBytes } from '@99dot5/round-replay';
 
 export interface InboxMessage {
     level: number;

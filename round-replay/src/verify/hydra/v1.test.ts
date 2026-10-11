@@ -5,11 +5,11 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { vectorsUrl } from './vectors-path';
-import { decimalStringToUnits, unitsToDecimalString } from './ints';
-import { bytesToHex, hexToBytes, SeedStream } from './seed';
-import { ARMOURS, GAME_TYPE, HEROES, SPRITES, WEAPONS, hydraRolls, replay } from './hydra';
-import { ReplayError, type TranscriptAction } from './types';
+import { vectorsUrl } from '../vectors-path';
+import { decimalStringToUnits, unitsToDecimalString } from '../ints';
+import { bytesToHex, hexToBytes, SeedStream } from '../seed';
+import { ARMOURS, GAME_TYPE, HEROES, SPRITES, WEAPONS, hydraRolls, replay } from './v1';
+import { ReplayError, type TranscriptAction } from '../types';
 
 interface RollVector {
     server_seed: string;

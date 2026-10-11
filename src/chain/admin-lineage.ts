@@ -30,7 +30,7 @@
  *
  * Everything below reads PUBLIC chain data through a user-supplied indexer.
  */
-import { hexToBytes } from '../verify/seed';
+import { hexToBytes } from '@99dot5/round-replay';
 import { encodeEdpk, encodeKt1 } from '../wire/signature';
 
 /** Class byte for administrator→rollup internal messages (`CLASS_ADMIN`). */

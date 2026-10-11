@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { bytesToHex, hexToBytes, serverSeedCommitment } from '../verify/seed';
 import { decodeExternalMessage, uuidFromBytes } from './messages';
-import { decodeEdpk } from './signature';
 import { wireVectorsUrl } from './wire-vectors-path';
 
 /**
@@ -135,20 +134,6 @@ describe('external message decoder', () => {
         expect(uuidFromBytes(hexToBytes('550e8400e29b41d4a716446655440000'))).toBe(
             '550e8400-e29b-41d4-a716-446655440000',
         );
-    });
-});
-
-describe('edpk decoding', () => {
-    it('decodes a known edpk to 32 raw bytes (round-trips through the checksum)', () => {
-        // The all-zeros Ed25519 public key in Tezos base58check form.
-        const raw = decodeEdpk('edpkteDwHwoNPB18tKToFKeSCykvr1ExnoMV5nawTJy9Y9nLTfQ541');
-
-        expect(raw).toHaveLength(32);
-        expect(bytesToHex(raw)).toBe('0'.repeat(64));
-    });
-
-    it('rejects a corrupted key', () => {
-        expect(() => decodeEdpk('edpkteDwHwoNPB18tKToFKeSCykvr1ExnoMV5nawTJy9Y9nLTfQ542')).toThrow();
     });
 });
 

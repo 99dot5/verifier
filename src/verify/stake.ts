@@ -29,8 +29,12 @@
  * treating a producer's silence as an assertion would let the tool accuse an
  * honest server.
  */
-import { TRANSCRIPT_ASSET, TRANSCRIPT_DECIMALS } from './assets';
-import { decimalStringToUnits, unitsToDecimalString } from './ints';
+import {
+    decimalStringToUnits,
+    TRANSCRIPT_ASSET,
+    TRANSCRIPT_DECIMALS,
+    unitsToDecimalString,
+} from '@99dot5/round-replay';
 import type { DecodedMoney } from '../wire/proto-reader';
 
 /** Stable id, so "did not run" stays distinguishable from "ran and passed". */

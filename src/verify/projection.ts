@@ -109,8 +109,7 @@ import type { Check } from '../verifier';
 import { decodeClientEnvelope, type DecodedCommandBody, type RoundEndCause } from '../wire/proto-reader';
 import { CLIENT_FRAME_TAG, splitSignedFrame } from '../wire/signature';
 import { classifyRefusalReason, reasonName, settlingAction, trustRejectionRoundId } from './rejections';
-import * as crash from './crash';
-import { bytesEqual, bytesToHex } from './seed';
+import { bytesEqual, bytesToHex, crash } from '@99dot5/round-replay';
 
 /**
  * Stable id, pushed on EVERY status including `unavailable`.
@@ -795,15 +794,15 @@ const HYDRA_ARM_TAGS: Record<string, string> = {
 export function autoCashoutTickFromPpm(ppm: number): { ok: true; tick: bigint } | { ok: false; reason: string } {
     const value = BigInt(ppm);
 
-    if (value <= crash.multiplierPpm(0n)) {
-        return { ok: false, reason: `an auto-cashout target of ${ppm} ppm is at or below m(0) = ${crash.multiplierPpm(0n)} ppm, which the sequencer refuses as INVALID_PAYLOAD` };
+    if (value <= crash.v1.multiplierPpm(0n)) {
+        return { ok: false, reason: `an auto-cashout target of ${ppm} ppm is at or below m(0) = ${crash.v1.multiplierPpm(0n)} ppm, which the sequencer refuses as INVALID_PAYLOAD` };
     }
 
-    if (value > crash.MAX_MULTIPLIER_CAP_PPM) {
-        return { ok: false, reason: `an auto-cashout target of ${ppm} ppm is above the ${crash.MAX_MULTIPLIER_CAP_PPM} ppm (1000×) house cap, which the sequencer refuses as INVALID_PAYLOAD` };
+    if (value > crash.v1.MAX_MULTIPLIER_CAP_PPM) {
+        return { ok: false, reason: `an auto-cashout target of ${ppm} ppm is above the ${crash.v1.MAX_MULTIPLIER_CAP_PPM} ppm (1000×) house cap, which the sequencer refuses as INVALID_PAYLOAD` };
     }
 
-    return { ok: true, tick: crash.crashTick(value) };
+    return { ok: true, tick: crash.v1.crashTick(value) };
 }
 
 function crashPlaceBetExpectation(ppm: number | null): Expectation {

@@ -2,9 +2,10 @@
  * Reconstructing a round's player commitment from an imported export.
  *
  * A PORT of `libs/casino-client/src/receipts/recompute.ts`, not an import: the
- * published verifier must reach into no `@99dot5/*` package, so the algorithm
- * is reproduced here and the two are held to the same answers by the shared
- * fixture. Same five steps, same reason names — a divergence in either would
+ * published verifier imports exactly one workspace package,
+ * `@99dot5/round-replay`, which the export ships as source, and it reaches
+ * into no other `@99dot5/*` package. So the algorithm is reproduced here and
+ * the two are held to the same answers by the shared fixture. Same five steps, same reason names — a divergence in either would
  * mean the play client and the verifier disagree about what a round was, which
  * is precisely the disagreement the commitment exists to settle.
  *

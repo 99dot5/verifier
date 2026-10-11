@@ -113,8 +113,15 @@ export function decodeExternalMessage(bytes: Uint8Array): DecodedEnvelope | null
         return null;
     }
 
-    const signature = bytes.slice(2, 66);
-    const signedPayload = bytes.slice(66);
+    return { ...decodeEnvelopePayload(bytes.slice(66)), signature: bytes.slice(2, 66) };
+}
+
+/**
+ * Decode the bare `borsh(VersionedEnvelope)` blob a frame's signature covers,
+ * with no prefix and no signature in front of it: what a sequencer holds for a
+ * message before (or without) signing it. Malformed blobs throw.
+ */
+export function decodeEnvelopePayload(signedPayload: Uint8Array): Omit<DecodedEnvelope, 'signature'> {
     const reader = new BorshReader(signedPayload);
     const version = reader.u8();
 
@@ -178,5 +185,5 @@ export function decodeExternalMessage(bytes: Uint8Array): DecodedEnvelope | null
 
     reader.expectEnd();
 
-    return { tenantId, poolId, message, signature, signedPayload };
+    return { tenantId, poolId, message, signedPayload };
 }

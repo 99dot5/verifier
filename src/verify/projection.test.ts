@@ -25,8 +25,7 @@ import {
     type ProjectionAction,
     type ProjectionInput,
 } from './projection';
-import * as crash from './crash';
-import { bytesToHex, hexToBytes } from './seed';
+import { bytesToHex, crash, hexToBytes } from '@99dot5/round-replay';
 import { vectorsUrl } from './vectors-path';
 import { commandFrame, serverFrame, type CommandGameSpec } from '../receipts/fixtures';
 import { decodeReceiptFrame, type ReceiptFrame } from '../receipts/recompute';
@@ -906,7 +905,7 @@ describe('a PlayerAction whose kind oneof carries two arms', () => {
 
 /**
  * One settled round, as the shipped Rust engine and adapter produce it —
- * the same `transcript_vectors` array `crash.test.ts` replays.
+ * the same `transcript_vectors` array `crash/v1.test.ts` replays.
  */
 interface TranscriptVector {
     name: string;
@@ -922,7 +921,7 @@ const TRANSCRIPT_VECTORS: TranscriptVector[] = JSON.parse(
 ).transcript_vectors;
 
 describe('the projection reproduces the Rust adapter’s payload bytes', () => {
-    // `crash.test.ts` proves the REPLAYER agrees with these rows. This proves
+    // `crash/v1.test.ts` proves the REPLAYER agrees with these rows. This proves
     // the other direction of the fourth proof: that the bytes the projection
     // expects from a signed command are the bytes `encode_action_borsh`
     // actually writes. Without it the projection could be self-consistently
@@ -949,19 +948,19 @@ describe('the projection reproduces the Rust adapter’s payload bytes', () => {
         }
 
         const ppm = BigInt(vector.expected_cumulative_ppm);
-        const tick = crash.crashTick(ppm);
+        const tick = crash.v1.crashTick(ppm);
 
         // `crashTick` is the curve inverse, so this holds only if the payout
         // really is a multiplier the curve reaches exactly. If a future row
         // ever paid something else, the anchor would be wrong and silent.
-        expect(crash.multiplierPpm(tick)).toBe(ppm);
+        expect(crash.v1.multiplierPpm(tick)).toBe(ppm);
 
         return tick;
     }
 
     /** The auto target in ppm whose shared ppm→tick policy yields `tick`. */
     function ppmForTick(tick: bigint): number {
-        const ppm = crash.multiplierPpm(tick);
+        const ppm = crash.v1.multiplierPpm(tick);
         const roundTrip = autoCashoutTickFromPpm(Number(ppm));
 
         expect(roundTrip.ok).toBe(true);
@@ -1041,13 +1040,13 @@ describe('the projection reproduces the Rust adapter’s payload bytes', () => {
                     // round paid nothing and the payout names no tick). Shape,
                     // plus the semantics the row's own name claims.
                     const payload = hexToBytes(action.payload_hex);
-                    const target = crash.decodeConfig(payload).autoCashoutTick;
+                    const target = crash.v1.decodeConfig(payload).autoCashoutTick;
 
                     expect(payload[0]).toBe(0x01);
                     expect(payload).toHaveLength(5);
                     expect(target).not.toBeNull();
                     expect(target as bigint).toBeGreaterThan(
-                        crash.crashRound(vector.server_seed, vector.client_seed).crashTick,
+                        crash.v1.crashRound(vector.server_seed, vector.client_seed).crashTick,
                     );
 
                     continue;
@@ -1068,7 +1067,7 @@ describe('the projection reproduces the Rust adapter’s payload bytes', () => {
                     // Unanchored: a losing claim. The width is still a fact
                     // worth pinning — `borsh(u32)` is four bytes, and the rule
                     // must produce four for whatever tick it is handed.
-                    const claimed = crash.decodeCashoutTick(hexToBytes(action.payload_hex));
+                    const claimed = crash.v1.decodeCashoutTick(hexToBytes(action.payload_hex));
                     const rule = projectionRuleFor({ case: 'cashOut', game: 'crash', tick: Number(claimed) });
 
                     expect(action.payload_hex).toHaveLength(8);

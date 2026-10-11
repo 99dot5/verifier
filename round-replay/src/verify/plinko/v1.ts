@@ -8,9 +8,9 @@
  * is a settle trigger only — it cannot change the payout, which is why a
  * deadline-swept round pays identically to a player-collected one.
  */
-import { payoutUnits, ppmToMultiplierString } from './ints';
-import { SeedStream, bytesToHex } from './seed';
-import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
+import { payoutUnits, ppmToMultiplierString } from '../ints';
+import { SeedStream, bytesToHex } from '../seed';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from '../types';
 
 export const GAME_TYPE = 'plinko:v1';
 

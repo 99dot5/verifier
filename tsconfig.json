@@ -13,9 +13,15 @@
         ],
         "strict": true,
         "noEmit": true,
-        "skipLibCheck": true
+        "skipLibCheck": true,
+        "paths": {
+            "@99dot5/round-replay": [
+                "./round-replay/src/index.ts"
+            ]
+        }
     },
     "include": [
-        "src/**/*.ts"
+        "src/**/*.ts",
+        "round-replay/src/**/*.ts"
     ]
 }

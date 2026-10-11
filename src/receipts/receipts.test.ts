@@ -19,7 +19,7 @@ import { commandFrame, serverFrame, type ServerFrameSpec } from './fixtures';
 import { importReceipts, RECEIPTS_SCHEMA, type ImportedFrame } from './import';
 import { decodeReceiptFrame, labelFindings, recomputeRoundCommitment } from './recompute';
 import { receiptsExportFixtureUrl, receiptVectorsUrl } from './receipt-vectors-path';
-import { bytesToHex, hexToBytes } from '../verify/seed';
+import { bytesToHex, hexToBytes } from '@99dot5/round-replay';
 import { decodeClientEnvelope, decodeServerEnvelope, ProtoError, uuidFromParts } from '../wire/proto-reader';
 import { encodeUuid, ProtoWriter } from '../wire/proto-writer';
 import {

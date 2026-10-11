@@ -27,11 +27,11 @@
  * value directly instead of mirroring a `Result` that can only ever be `Ok` —
  * the input-range guard below is what keeps that reasoning true.
  */
-import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
-import { divHalfUp, payoutUnits, ppmToMultiplierString } from './ints';
-import { SeedStream, bytesToHex, rawU64 } from './seed';
-import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
-import { BorshError, BorshReader } from '../wire/borsh';
+import { HOUSE_EDGE_PPM, SCALE_PPM } from '../constants';
+import { divHalfUp, payoutUnits, ppmToMultiplierString } from '../ints';
+import { SeedStream, bytesToHex, rawU64 } from '../seed';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from '../types';
+import { BorshError, BorshReader } from '../../wire/borsh';
 
 export const GAME_TYPE = 'crash:v1';
 

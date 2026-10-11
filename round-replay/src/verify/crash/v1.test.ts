@@ -4,9 +4,9 @@
 // independent python3 reference libs/games/scripts/gen_vectors.py).
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { vectorsUrl } from './vectors-path';
+import { vectorsUrl } from '../vectors-path';
 import { describe, expect, it } from 'vitest';
-import { bytesToHex, deriveSeed, hexToBytes, rawU64 } from './seed';
+import { bytesToHex, deriveSeed, hexToBytes, rawU64 } from '../seed';
 import {
     FRACTIONAL_POW2_PPM,
     GAME_TYPE,
@@ -19,10 +19,10 @@ import {
     decodeConfig,
     multiplierPpm,
     replay,
-} from './crash';
-import { payoutUnits } from './ints';
-import { ReplayError, type TranscriptAction } from './types';
-import { supportedGameTypes } from '../verifier';
+} from './v1';
+import { payoutUnits } from '../ints';
+import { ReplayError, type TranscriptAction } from '../types';
+import { supportedGameTypes } from '../../replay';
 
 /** The seed rule every listed deployment selects today. */
 

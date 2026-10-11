@@ -7,7 +7,7 @@ import {
     decodePartialCashout,
 } from './partial-cashout';
 import { TRANSCRIPT_DECIMALS } from './assets';
-import { hiloStep, replay } from './hilo';
+import { hiloStep, replay } from './hilo/v1';
 import { ReplayError, type TranscriptAction } from './types';
 
 /** The seed rule every listed deployment selects today. */

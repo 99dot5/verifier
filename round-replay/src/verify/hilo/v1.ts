@@ -28,10 +28,10 @@
  * `floor(stake × cumulative)`: the live part rounds at the asset grain on
  * every winning step, so the two differ on any round of two or more guesses.
  */
-import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
-import { mulPpm, ppmToMultiplierString, toPpmRatio } from './ints';
-import { SeedStream, bytesToHex, rawU64 } from './seed';
-import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
+import { HOUSE_EDGE_PPM, SCALE_PPM } from '../constants';
+import { mulPpm, ppmToMultiplierString, toPpmRatio } from '../ints';
+import { SeedStream, bytesToHex, rawU64 } from '../seed';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from '../types';
 import {
     ZERO_BANKED,
     addBanked,
@@ -45,7 +45,7 @@ import {
     positionString,
     positionValue,
     type Position,
-} from './partial-cashout';
+} from '../partial-cashout';
 
 export const GAME_TYPE = 'hilo:v1';
 

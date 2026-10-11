@@ -8,8 +8,8 @@
  * nothing is a paraphrase of the wire.
  *
  * The round's crash tick is DERIVED, never stated: it comes from the same
- * `verify/crash.ts` replayer the verifier itself calls, which is pinned
- * against the golden vectors by `crash.test.ts`. A hard-coded tick here would
+ * `verify/crash/v1.ts` replayer the verifier itself calls, which is pinned
+ * against the golden vectors by `crash/v1.test.ts`. A hard-coded tick here would
  * pin this file to itself.
  */
 import { readFileSync } from 'node:fs';
@@ -18,8 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { commandFrame, serverFrame, type ServerFrameSpec } from '../receipts/fixtures';
 import type { ImportedCommand, ImportedFrame } from '../receipts/import';
 import { decodeReceiptFrame, type ReceiptFrame } from '../receipts/recompute';
-import * as crash from './crash';
-import * as hilo from './hilo';
+import { crash, hilo } from '@99dot5/round-replay';
 import { vectorsUrl } from './vectors-path';
 import {
     RACE_BAND_TICKS,
@@ -78,7 +77,7 @@ function crashHexScenario(name: string): HexScenario {
 const SCENARIO = crashHexScenario('crash-mid-curve-53');
 const SERVER_SEED_HEX = SCENARIO.server_seed_hex;
 const CLIENT_SEED_HEX = SCENARIO.effective_client_seed_hex;
-const CRASH_TICK = crash.crashRound(SERVER_SEED_HEX, CLIENT_SEED_HEX).crashTick;
+const CRASH_TICK = crash.v1.crashRound(SERVER_SEED_HEX, CLIENT_SEED_HEX).crashTick;
 
 /**
  * A stamp far outside the race band — the shape the check must still call a
@@ -203,7 +202,7 @@ const CLAIM_SETTLED: readonly TranscriptActionSummary[] = [
 function input(overrides: Partial<RejectionInput> = {}): RejectionInput {
     return {
         roundIdHex: ROUND,
-        gameType: crash.GAME_TYPE,
+        gameType: crash.v1.GAME_TYPE,
         serverSeedHex: SERVER_SEED_HEX,
         clientSeedHex: CLIENT_SEED_HEX,
         deploymentListed: true,
@@ -728,13 +727,13 @@ describe('analyseRejections', () => {
             const report = analyseRejections(
                 withRejection(
                     rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-                    { gameType: hilo.GAME_TYPE },
+                    { gameType: hilo.v1.GAME_TYPE },
                 ),
             );
             const check = only(report);
 
             expect(check.status).toBe('unavailable');
-            expect(check.detail).toContain(`${hilo.GAME_TYPE} has no tick model`);
+            expect(check.detail).toContain(`${hilo.v1.GAME_TYPE} has no tick model`);
         });
 
         it('is unavailable when no transcript revealed the seed', () => {

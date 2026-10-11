@@ -19,7 +19,7 @@
  *     is broken and get an `incomplete` verdict — not a stack trace, and never
  *     a verdict computed from half a document.
  */
-import { hexToBytes } from '../verify/seed';
+import { hexToBytes } from '@99dot5/round-replay';
 
 export const RECEIPTS_SCHEMA = '99dot5.receipts.v1';
 

@@ -4,11 +4,11 @@
 // independent python3 reference libs/games/scripts/gen_vectors.py).
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { vectorsUrl } from './vectors-path';
+import { vectorsUrl } from '../vectors-path';
 import { describe, expect, it } from 'vitest';
-import { decimalStringToUnits, unitsToDecimalString } from './ints';
-import { bytesToHex, deriveSeed, hexToBytes } from './seed';
-import { GAME_TYPE, binIndex, derivePath, exactRtp, multipliers, replay, type Risk } from './plinko';
+import { decimalStringToUnits, unitsToDecimalString } from '../ints';
+import { bytesToHex, deriveSeed, hexToBytes } from '../seed';
+import { GAME_TYPE, binIndex, derivePath, exactRtp, multipliers, replay, type Risk } from './v1';
 
 /** The seed rule every listed deployment selects today. */
 

@@ -20,7 +20,7 @@ import {
     vaultsForPool,
     type AdminLineage,
 } from './admin-lineage';
-import { bytesToHex, hexToBytes } from '../verify/seed';
+import { bytesToHex, hexToBytes } from '@99dot5/round-replay';
 import { decodeEdpk, encodeEdpk, encodeKt1 } from '../wire/signature';
 
 // ── Live payloads ───────────────────────────────────────────────────────

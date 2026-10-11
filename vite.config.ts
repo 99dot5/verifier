@@ -1,10 +1,17 @@
 /// <reference types='vitest' />
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
     // Relative base: the same bundle serves at the domain root AND under the
     // GitHub Pages /<repo>/ subpath.
     base: './',
+    resolve: {
+        // The engine ports ship as source in round-replay/, not as a package.
+        alias: {
+            '@99dot5/round-replay': fileURLToPath(new URL('./round-replay/src/index.ts', import.meta.url)),
+        },
+    },
     build: {
         // Deliberately UNMINIFIED: the deployed page's JS stays readable and
         // diffable against this repository's source. A minified artifact is
@@ -21,6 +28,6 @@ export default defineConfig({
         // The monorepo's own config says the same thing; leaving it implicit
         // here made the exported tree pass by accident.
         environment: 'node',
-        include: ['src/**/*.{test,spec}.ts'],
+        include: ['src/**/*.{test,spec}.ts', 'round-replay/src/**/*.test.ts'],
     },
 });

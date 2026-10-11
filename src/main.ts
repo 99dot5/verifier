@@ -19,8 +19,7 @@ import {
     type ScanContext,
     type VerificationReport,
 } from './verifier';
-import { decodeExternalMessage } from './wire/messages';
-import { hexToBytes } from './verify/seed';
+import { decodeExternalMessage, hexToBytes } from '@99dot5/round-replay';
 import { importReceipts } from './receipts/import';
 import { readReceiptsHandoff, readRoundHandoff } from './receipts/handoff';
 import { decodeReceiptFrame } from './receipts/recompute';

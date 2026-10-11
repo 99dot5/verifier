@@ -43,16 +43,20 @@ import {
     type ReceiptFrame,
 } from './receipts/recompute';
 import { splitSignedFrame, verifyServerFrameSignature, CLIENT_FRAME_TAG } from './wire/signature';
-import { TRANSCRIPT_DECIMALS } from './verify/assets';
-import { unitsToDecimalString } from './verify/ints';
-import { bytesEqual, bytesToHex, seedRuleForGame, serverSeedCommitment } from './verify/seed';
-import * as crash from './verify/crash';
-import * as hilo from './verify/hilo';
-import * as hydra from './verify/hydra';
-import * as mines from './verify/mines';
-import * as plinko from './verify/plinko';
-import { ReplayError, type ReplayResult, type Replayer, type TranscriptAction } from './verify/types';
-import type { RoundTranscriptMessage } from './wire/messages';
+import {
+    bytesEqual,
+    bytesToHex,
+    ReplayError,
+    type ReplayResult,
+    replayTranscript,
+    type RoundTranscriptMessage,
+    seedRuleForGame,
+    serverSeedCommitment,
+    supportedGameTypes,
+    TRANSCRIPT_DECIMALS,
+    UnknownActionTagError,
+    unitsToDecimalString,
+} from '@99dot5/round-replay';
 import { decodeEdpk, type SigningDomain, verifyInboxSignature, verifyPrehashedSignature } from './wire/signature';
 import {
     decodeClientEnvelope,
@@ -224,26 +228,14 @@ export interface VerificationReport {
     verdict: Verdict;
 }
 
-
 /**
- * The replayers, by the `game_type` the transcript states.
- *
- * Every game version in `GAME_SEED_DERIVATIONS` has one (pinned by
- * `verifier.test.ts`), so the "not implemented" branch below is reached only
- * by a game this table has not caught up with. A game without a replayer can
- * never be `verified`: `replay-payout` does not run, so `allProofsRan` is false.
+ * The game types the replay library has a replayer for. Every game version in
+ * `GAME_SEED_DERIVATIONS` has one (pinned by `verifier.test.ts`), so the "not
+ * implemented" branch below is reached only by a game the library has not
+ * caught up with. A game without a replayer can never be `verified`:
+ * `replay-payout` does not run, so `allProofsRan` is false.
  */
-const REPLAYERS: Record<string, Replayer> = {
-    [crash.GAME_TYPE]: crash.replay,
-    [hilo.GAME_TYPE]: hilo.replay,
-    [hydra.GAME_TYPE]: hydra.replay,
-    [plinko.GAME_TYPE]: plinko.replay,
-    [mines.GAME_TYPE]: mines.replay,
-};
-
-export function supportedGameTypes(): string[] {
-    return Object.keys(REPLAYERS);
-}
+export { supportedGameTypes };
 
 export interface VerifyInput {
     roundId: string;
@@ -581,10 +573,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
 
     // ── Half 1: replay the round and recompute the payout ───────────────
     let replayResult: ReplayResult | null = null;
-    const replayer = REPLAYERS[transcript.gameType];
-    const unknownTags = transcript.actions
-        .map((a, i) => ({ index: i, tag: a.tag, actionType: a.actionType }))
-        .filter((a) => a.actionType === null);
+    const replayable = supportedGameTypes().includes(transcript.gameType);
     // The seed rule is SELECTED by the round's game version, never a global
     // default; the replayers resolve it themselves from the game type.
     const replayRefusal = refuseReplay(input.deploymentListed, transcript.gameType);
@@ -596,7 +585,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             status: 'unavailable',
             detail: replayRefusal,
         });
-    } else if (!replayer) {
+    } else if (!replayable) {
         checks.push({
             id: 'replay',
             title: 'Round replays to the claimed payout',
@@ -604,41 +593,11 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             detail: `game ${transcript.gameType} is not implemented in this verifier yet (supported: ${supportedGameTypes().join(', ')})`,
         });
     } else {
-        // The action's index IS its position in the transcript, so index 0 is
-        // always the place-bet. The seed derivation is keyed by DECISION, which
-        // each replayer counts itself from these actions, so it needs nothing
-        // else off the wire.
-        //
-        // Only the prefix before the first unknown tag is replayed. The kernel
-        // tag-checks an entry only when its walk reaches it and stops at the
-        // first settle, so an unknown tag AFTER the settle is never read.
-        const firstUnknown = unknownTags.length > 0 ? unknownTags[0].index : transcript.actions.length;
-        const actions: TranscriptAction[] = transcript.actions.slice(0, firstUnknown).map((a, index) => ({
-            actionIndex: index,
-            actionType: a.actionType as string,
-            payload: a.payload,
-        }));
-
         try {
-            // An unknown tag at index 0 leaves nothing to replay; an empty
-            // transcript still goes to the replayer, which refuses it.
-            const replayed =
-                unknownTags.length === 0 || actions.length > 0
-                    ? replayer(serverSeedHex, clientSeedHex, actions, transcript.stake)
-                    : null;
-
-            if (unknownTags.length > 0 && !replayed?.settled) {
-                // Mirrors the kernel's `reject-unknown-action-tag`: the message
-                // decodes in full, but the walk reaches a tag this table
-                // version does not know before the round settles.
-                throw new UnknownActionTags(
-                    `transcript carries action tag(s) this verifier does not know: ${unknownTags
-                        .map((a) => `#${a.index} = 0x${a.tag.toString(16).padStart(2, '0')}`)
-                        .join(', ')} — the kernel rejects such a round as reject-unknown-action-tag`,
-                );
-            }
-
-            replayResult = replayed as ReplayResult;
+            // The replay library owns which actions are replayed (the prefix
+            // before the first unknown tag) and refuses a round whose walk
+            // reaches an unknown tag before it settles.
+            replayResult = replayTranscript(transcript);
 
             // The replayer carries the payout itself: for the compounding
             // games it is the banked/live fold (live rounded at the asset
@@ -663,7 +622,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                 title: 'Transcript settles, and to this outcome',
                 status: replayResult.settled ? 'pass' : 'fail',
                 detail: replayResult.settled
-                    ? `replayed → ${replayResult.outcome} over ${actions.length} action(s). The wire carries no claimed outcome: the kernel derives the ending (its SettlementEntry.outcome) from this same replay, and the payout above is the only number the sequencer asserts.`
+                    ? `replayed → ${replayResult.outcome} over ${(replayResult.settledAtIndex ?? 0) + 1} action(s). The wire carries no claimed outcome: the kernel derives the ending (its SettlementEntry.outcome) from this same replay, and the payout above is the only number the sequencer asserts.`
                     : `the transcript ends without a settling action, so the round never closes — the kernel rejects this as reject-round-unfinished`,
             });
         } catch (error) {
@@ -672,7 +631,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                 title: 'Round replays to the claimed payout',
                 status: 'fail',
                 detail:
-                    error instanceof UnknownActionTags
+                    error instanceof UnknownActionTagError
                         ? error.message
                         : error instanceof ReplayError
                           ? `transcript rejected: ${error.message}`
@@ -681,7 +640,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         }
     }
 
-    checks.push(actionsAfterSettle(transcript.actions, replayResult, replayer !== undefined && replayRefusal === null));
+    checks.push(actionsAfterSettle(transcript.actions, replayResult, replayable && replayRefusal === null));
 
     // ── The third proof group: the player's own receipts ────────────────
     const receipts = runReceiptProofs(
@@ -841,9 +800,6 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                   : 'incomplete',
     };
 }
-
-/** The kernel's `reject-unknown-action-tag`, raised inside the replay block. */
-class UnknownActionTags extends Error {}
 
 export const ACTIONS_AFTER_SETTLE_CHECK_ID = 'actions-after-settle';
 

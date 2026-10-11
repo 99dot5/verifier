@@ -21,11 +21,11 @@
  * part rounds at the asset grain on every safe reveal — not
  * `floor(stake × cumulative)`.
  */
-import { HOUSE_EDGE_PPM, SCALE_PPM } from './constants';
-import { divHalfUp, mulPpm, ppmToMultiplierString } from './ints';
-import { SeedStream } from './seed';
-import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from './types';
-import { abandonStep } from './hilo';
+import { HOUSE_EDGE_PPM, SCALE_PPM } from '../constants';
+import { divHalfUp, mulPpm, ppmToMultiplierString } from '../ints';
+import { SeedStream } from '../seed';
+import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from '../types';
+import { abandonStep } from '../hilo/v1';
 import {
     ZERO_BANKED,
     addBanked,
@@ -38,7 +38,7 @@ import {
     partialCashoutStep,
     positionValue,
     type Position,
-} from './partial-cashout';
+} from '../partial-cashout';
 
 export const GAME_TYPE = 'mines:v1';
 export const TOTAL_TILES = 25;

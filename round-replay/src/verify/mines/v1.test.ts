@@ -4,13 +4,13 @@
 // independent python3 reference libs/games/scripts/gen_vectors.py).
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { vectorsUrl } from './vectors-path';
+import { vectorsUrl } from '../vectors-path';
 import { describe, expect, it } from 'vitest';
-import { decimalStringToUnits, unitsToDecimalString } from './ints';
-import { hexToBytes } from './seed';
-import { deriveLayout, replay, stepMultiplierPpm, TOTAL_TILES } from './mines';
-import { mulPpm, SCALE_PPM } from './ints';
-import type { TranscriptAction } from './types';
+import { decimalStringToUnits, unitsToDecimalString } from '../ints';
+import { hexToBytes } from '../seed';
+import { deriveLayout, replay, stepMultiplierPpm, TOTAL_TILES } from './v1';
+import { mulPpm, SCALE_PPM } from '../ints';
+import type { TranscriptAction } from '../types';
 
 /** The seed rule every listed deployment selects today. */
 

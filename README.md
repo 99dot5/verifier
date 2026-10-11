@@ -15,15 +15,28 @@ trust this tool exists to remove.
 
 | Path | What it is |
 |---|---|
-| `vectors/*.json` | Golden test vectors for `crash:v1`, `hilo:v1`, `plinko:v1`, `mines:v1`, `hydra:v1`, one file per game, each pinning that game's replayer in `src/verify/`. Each file carries a complete, self-contained `algorithm` spec plus vectors, reproducible by any runtime in exact integer arithmetic (no floats anywhere). These are the SAME files the production Rust engine and the wasm rollup kernel pin against. |
-| `src/verify/` | TypeScript implementations of the game algorithms (pure `bigint`), asserted against the vectors by the test suite. |
-| `src/wire/` | Decoder for the sequencer→rollup wire format (Borsh) and Ed25519 signature verification (`ed25519(blake2b-256(payload))`), pinned by a golden message captured from a real on-chain injection. |
+| `vectors/*.json` | Golden test vectors for `crash:v1`, `hilo:v1`, `plinko:v1`, `mines:v1`, `hydra:v1`, one file per game, each pinning that game's replayer in `round-replay/src/verify/`. Each file carries a complete, self-contained `algorithm` spec plus vectors, reproducible by any runtime in exact integer arithmetic (no floats anywhere). These are the SAME files the production Rust engine and the wasm rollup kernel pin against. |
+| `round-replay/` | The engine ports: TypeScript implementations of the game algorithms (pure `bigint`), the sequencer→rollup wire decoder (Borsh), and the rule for which actions of a transcript are replayed. Asserted against the same vectors by its own test suite. |
+| `src/verify/` | The checks built on the replay: stake and seed-commitment checks, rejection classification, and the round projection. |
+| `src/wire/` | Ed25519 signature verification (`ed25519(blake2b-256(payload))`), pinned by a golden message captured from a real on-chain injection, and the protobuf reader/writer for play receipts. |
 | `src/chain/` | Readers for public chain sources: TzKT (locates `smart_rollup_add_messages` operations), a Tezos archive node RPC (supplies the message bytes), the **administrator lineage walk** (derives the tenant's signing keys from L1), and the deposit lookup that derives the scan's lower bound from L1. |
 | `src/receipts/` | Importing a player's exported receipts, and reconstructing a round's `player_commitment` from them. A port of the play client's own algorithm, held to it by the shared fixture. |
 | `src/verifier.ts` | The orchestrator: gathers a round's messages, proves the seed commitment ordering, replays the game, recomputes the payout. |
 | `index.html`, `src/main.ts`, `src/styles.css` | The verifier web app itself — the page this repository deploys to GitHub Pages. |
 | `.github/workflows/deploy-pages.yml` | The Pages deployment. It living here is the provenance story (see below). |
 | `docs/wire-format.md` | Byte-level wire specification — enough to re-implement all of this from scratch in any language. |
+
+## The engine ports (`round-replay/`)
+
+`round-replay/` holds the code that recomputes a round from its on-chain
+`RoundTranscript`: one bigint port per game engine, the transcript decoder,
+and `replayTranscript`, the single rule for which of a transcript's actions are
+replayed. It is pinned to the same `vectors/` files as the rest of this
+repository, so `npm test` runs its suite beside the verifier's. The verifier
+imports it as `@99dot5/round-replay`; the name resolves to this directory
+through `tsconfig.json` `paths` and the `vite.config.ts` alias, not through a
+package download. In the 99dot5 monorepo the same source is a shared library
+that other tools reuse.
 
 ## The hosted verifier, and why you can trust it
 

@@ -35,7 +35,7 @@
  * whole unless the player pinned one — a choice the report names when the
  * receipts show the same seed on consecutive bets.
  */
-import { bytesEqual, bytesToHex } from './seed';
+import { bytesEqual, bytesToHex } from '@99dot5/round-replay';
 
 /** Stable ids, so "did not run" stays distinguishable from "ran and passed". */
 export const OPENER_SEED_CHECK_ID = 'opener-seed-binding';

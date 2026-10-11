@@ -112,7 +112,7 @@ import type { ReceiptFrame } from '../receipts/recompute';
 import type { Check } from '../verifier';
 import { decodeClientEnvelope } from '../wire/proto-reader';
 import { CLIENT_FRAME_TAG, splitSignedFrame } from '../wire/signature';
-import * as crash from './crash';
+import { crash } from '@99dot5/round-replay';
 
 /** Stable id, pushed even when the status is `unavailable` (§P3.1's rule). */
 export const REJECTION_CHECK_ID = 'rejection-liveness';
@@ -449,7 +449,7 @@ function crashAnchor(input: RejectionInput): Anchor {
         };
     }
 
-    if (input.gameType !== crash.GAME_TYPE) {
+    if (input.gameType !== crash.v1.GAME_TYPE) {
         // Not a gap in the evidence — a gap in the MODEL. Only crash maps a
         // wall-clock instant onto an adjudicable position in the round; a HiLo
         // round has no notion of being alive at a millisecond.
@@ -496,7 +496,7 @@ function crashAnchor(input: RejectionInput): Anchor {
     let crashTick: bigint;
 
     try {
-        crashTick = crash.crashRound(input.serverSeedHex, input.clientSeedHex).crashTick;
+        crashTick = crash.v1.crashRound(input.serverSeedHex, input.clientSeedHex).crashTick;
     } catch (error) {
         return {
             status: 'unavailable',

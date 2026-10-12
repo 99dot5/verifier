@@ -24,6 +24,19 @@ import { isLocatorLevel, isOperationHash, type LocatorHints } from './handoff';
 
 export const RECEIPTS_SCHEMA = '99dot5.receipts.v1';
 
+/**
+ * Who built a receipts document: the player's own browser, or the sequencer
+ * on request from its stored rows (ADR 0029). An UNSIGNED self-label.
+ */
+export type ReceiptsSource = 'client' | 'sequencer';
+
+/** The provenance line the receipts section leads with. */
+export function receiptsSourceLine(source: ReceiptsSource): string {
+    return source === 'sequencer'
+        ? 'Receipts source: the sequencer (built on request; frames signed at export time)'
+        : 'Receipts source: your browser';
+}
+
 export interface ImportedCommand {
     /** Hyphenated `ClientEnvelope.request_id`, as LABELLED by the exporter. */
     requestId: string;
@@ -71,6 +84,14 @@ export interface ImportedReceipts {
     sessionPublicKey: string;
     /** L1 level of the session's deposit; a hint the verifier confirms. */
     depositOperationLevel: number | null;
+    /**
+     * Who built the document, as the document SAYS — `client` when it says
+     * nothing. Advisory: the label is unsigned, so a `sequencer` document
+     * relabelled (or stripped) reads as browser-held and nothing
+     * cryptographic tells the two apart. It caps a verdict at `attested`; it
+     * never lifts one.
+     */
+    source: ReceiptsSource;
     /**
      * Where the round's transcript and seed batch sit on L1, as the exporter
      * reported them, or `null` when the document carries none (or none that
@@ -164,6 +185,16 @@ function readDocument(document: unknown, findings: string[]): ImportedReceipts {
     });
 
     const depositLevel = root.depositOperationLevel;
+    const source = root.source;
+
+    // An unknown provenance is REFUSED, not dropped like a malformed hint: the
+    // label decides a verdict ceiling, and reading a value this build does not
+    // know as `client` would lift the ceiling a newer builder meant to impose.
+    if (source !== undefined && source !== null && source !== 'client' && source !== 'sequencer') {
+        throw new Error(
+            `source: unknown provenance ${JSON.stringify(source)} — this build reads "client" (or no source) and "sequencer"`,
+        );
+    }
 
     return {
         tenantId: asString(root.tenantId, 'tenantId'),
@@ -177,6 +208,7 @@ function readDocument(document: unknown, findings: string[]): ImportedReceipts {
                 ? null
                 : asNumber(depositLevel, 'depositOperationLevel'),
         locatorHints: readLocatorHints(root.locatorHints, findings),
+        source: source === 'sequencer' ? 'sequencer' : 'client',
         commands,
         frames,
         roundEndedFrame: asHex(root.roundEndedFrameHex, 'roundEndedFrameHex'),

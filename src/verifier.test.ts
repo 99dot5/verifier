@@ -340,6 +340,7 @@ function buildReceipts(overrides: Partial<ImportedReceipts> = {}, shape: Receipt
         sessionPublicKey: encodeEdpk(SESSION_PUBLIC_KEY),
         depositOperationLevel: BATCH_LEVEL - 10,
         locatorHints: null,
+        source: 'client',
         commands: [
             { requestId: BET_REQUEST, payloadCase: 'placeBet', frame: bet, sentAtUnixMs: 1, sendCount: 1 },
             { requestId: CASHOUT_REQUEST, payloadCase: 'cashOut', frame: cashOut, sentAtUnixMs: 2, sendCount: 1 },

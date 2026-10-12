@@ -13,3 +13,7 @@ export function receiptVectorsUrl(): URL {
 export function receiptsExportFixtureUrl(): URL {
     return new URL('../../vectors/receipts-export-fixture.json', import.meta.url);
 }
+
+export function receiptsExportServerFixtureUrl(): URL {
+    return new URL('../../vectors/receipts-export-server-fixture.json', import.meta.url);
+}

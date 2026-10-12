@@ -26,7 +26,7 @@ import {
     type VerifyInput,
 } from './verifier';
 import { decodeExternalMessage, hexToBytes } from '@99dot5/round-replay';
-import { importReceipts } from './receipts/import';
+import { importReceipts, receiptsSourceLine, type ReceiptsSource } from './receipts/import';
 import { type HintHandoff, readHintHandoff, readReceiptsHandoff, readRoundHandoff } from './receipts/handoff';
 import { type DepositChain, fetchBigMapHas, fetchContractStorage, locateSessionDeposit } from './chain/deposit';
 import {
@@ -153,6 +153,7 @@ app.innerHTML = `
         </p>
         <details open>
             <summary>Your play receipts (optional — adds the third proof)</summary>
+            <p class="note" id="receipts-source" hidden></p>
             <p class="note">
                 Your game client stores every command it sent and every signed frame it received. Exporting
                 them and loading the JSON here adds the proof the chain alone cannot give: that the round
@@ -236,6 +237,7 @@ const toLevelInput = el<HTMLInputElement>('to-level');
 const receiptsFileInput = el<HTMLInputElement>('receipts-file');
 const receiptsTextarea = el<HTMLTextAreaElement>('receipts-json');
 const receiptsStatus = el<HTMLParagraphElement>('receipts-status');
+const receiptsSource = el<HTMLParagraphElement>('receipts-source');
 const fetchButton = el<HTMLButtonElement>('fetch-verify');
 const abortButton = el<HTMLButtonElement>('abort');
 const progress = el<HTMLSpanElement>('progress');
@@ -599,6 +601,16 @@ function adoptHandedOverRound(): void {
 
 void adoptHandedOverReceipts();
 
+/**
+ * The provenance line at the top of the receipts section, or hidden when no
+ * document is loaded. It states what the DOCUMENT says about itself — an
+ * unsigned label — which is also what the verdict ceiling reads.
+ */
+function showReceiptsSource(source: ReceiptsSource | null): void {
+    receiptsSource.hidden = source === null;
+    receiptsSource.textContent = source === null ? '' : receiptsSourceLine(source);
+}
+
 /** Parse whatever is in the receipts box; an empty box is `absent`, not an error. */
 function readReceipts(): ReceiptsInput {
     return readReceiptsWithFindings().input;
@@ -609,16 +621,21 @@ function readReceiptsWithFindings(): { input: ReceiptsInput; findings: string[] 
     const text = receiptsTextarea.value.trim();
 
     if (!text) {
+        showReceiptsSource(null);
+
         return { input: { status: 'absent' }, findings: [] };
     }
 
     const result = importReceipts(text);
 
     if (result.status === 'error') {
+        showReceiptsSource(null);
         receiptsStatus.textContent = `receipts rejected: ${result.message}`;
 
         return { input: { status: 'error', message: result.message }, findings: [] };
     }
+
+    showReceiptsSource(result.receipts.source);
 
     receiptsStatus.textContent = [
         `receipts read: ${result.receipts.commands.length} command(s), ${result.receipts.frames.length} frame(s), ` +
@@ -844,6 +861,7 @@ function adoptReceiptsScope(statusPrefix: string): void {
 
     if (!text) {
         receiptsScope = null;
+        showReceiptsSource(null);
 
         return;
     }
@@ -852,10 +870,13 @@ function adoptReceiptsScope(statusPrefix: string): void {
 
     if (result.status !== 'ok') {
         receiptsScope = null;
+        showReceiptsSource(null);
         receiptsStatus.textContent = `receipts rejected: ${result.message}`;
 
         return;
     }
+
+    showReceiptsSource(result.receipts.source);
 
     const { tenantId, poolId } = result.receipts;
     const roundId = hyphenateUuid(result.receipts.roundIdHex);

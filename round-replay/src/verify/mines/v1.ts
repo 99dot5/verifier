@@ -96,7 +96,7 @@ export function stepMultiplierPpm(mineCount: number, revealedCount: number): big
     const safe = TOTAL_TILES - mineCount;
 
     if (revealedCount >= safe) {
-        throw new ReplayError(`no safe tiles left: mines=${mineCount} revealed=${revealedCount}`);
+        throw new ReplayError(`no safe tiles left: ${mineCount} mines, ${revealedCount} revealed`);
     }
 
     const fairStepPpm = divHalfUp(BigInt(TOTAL_TILES - revealedCount) * SCALE_PPM, BigInt(safe - revealedCount));

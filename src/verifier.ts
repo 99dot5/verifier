@@ -189,15 +189,20 @@ export type ReceiptsInput =
  * collapsing any two would either hide a real finding or manufacture one.
  *
  *   `verified`     every proof ran and passed.
- *   `attested`     checked, but weakly — the reconstruction was unavailable,
- *                  so only the server's own signed statement was compared.
+ *   `attested`     checked, but weakly — either the reconstruction was
+ *                  unavailable, so only the server's own signed statement
+ *                  was compared, or the receipts were built by the sequencer
+ *                  (`source: 'sequencer'`), so the round reconstructs but
+ *                  the document's completeness is the server's choice.
  *   `inconclusive` this verifier cannot answer as asked: the scanned range
  *                  does not bracket the round (widening it may change the
  *                  answer), or the round's rollup is not a listed
  *                  deployment, or the round's game version names a seed
  *                  derivation this build does not implement.
  *   `undetermined` cannot tell yet: no transcript on chain and no evidence the
- *                  injector ever drained past this round's outbox row.
+ *                  injector ever drained past this round's outbox row — or
+ *                  there is, but the only receipts are sequencer-built,
+ *                  which never ground the accusation below.
  *   `suppressed`   the round is missing from L1 and the injector demonstrably
  *                  moved past it. The ONE accusatory verdict.
  *   `incomplete`   a proof had no inputs.
@@ -209,6 +214,15 @@ export type ReceiptsInput =
  * `attested`. And, accepted: an indexer or node outage turns a round with
  * complete receipts that used to read `verified` into `incomplete`, until a
  * re-run can reach them.
+ *
+ * The server-built ceiling is ADVISORY. `source` is an unsigned self-label in
+ * an unsigned document: strip it and the same document reads as browser-held
+ * and can reach `verified`, because every frame in it really is server-signed
+ * and nothing cryptographic distinguishes who assembled them. What the label
+ * carries is the completeness claim — a browser kept every frame it was sent,
+ * a server serves only the rows it chose to keep — so the cap protects an
+ * honest reader and cannot stop a relabelling. `server-receipts.test.ts` pins
+ * both halves.
  */
 export type Verdict =
     | 'verified'
@@ -812,6 +826,18 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         receipts.reconstruction === 'unavailable' &&
         checks.find((c) => c.id === 'receipt-vs-chain')?.status === 'pass';
 
+    // The server-built ceiling: a sequencer-built document that would verify
+    // reads `attested` (see the verdict definitions — advisory, because the
+    // label is unsigned).
+    if (receipts.serverBuilt && !anyFail && replayRefusal === null && allProofsRan) {
+        findings.push(
+            'Verdict capped at ATTESTED: these receipts were built by the sequencer on request (source "sequencer"), ' +
+                'not kept by your browser. Every frame is server-signed and the round reconstructs from them, but ' +
+                'which commands and frames a server-built document contains is the server\'s choice, so it cannot ' +
+                'show that nothing was left out. The label is unsigned: it can lower a verdict, never raise one.',
+        );
+    }
+
     return {
         roundId,
         gameType: transcript.gameType,
@@ -829,7 +855,9 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             : replayRefusal !== null
               ? 'inconclusive'
               : allProofsRan
-                ? 'verified'
+                ? receipts.serverBuilt
+                    ? 'attested'
+                    : 'verified'
                 : attested
                   ? 'attested'
                   : 'incomplete',
@@ -1282,7 +1310,23 @@ interface ReceiptState {
      * straight to `suppressed` for a round that never existed.
      */
     namesRoundUnderVerification: boolean;
+    /**
+     * The document says the sequencer built it (`source: 'sequencer'`). An
+     * unsigned label, so it only ever LOWERS a verdict: `verified` reads
+     * `attested`, and the suppression ladder never reaches `suppressed`.
+     */
+    serverBuilt: boolean;
 }
+
+/**
+ * Why the refusal and suppression analysis does not run on a sequencer-built
+ * document. A finding, not a check: the analysis is outside `allProofsRan`
+ * (its absence is normal), and stating it keeps "nothing was refused" from
+ * reading as "nothing was looked for".
+ */
+export const SERVER_BUILT_SUPPRESSION_FINDING =
+    'Suppression and refusal analysis: not applicable: a sequencer-built document contains only commands the ' +
+    'server accepted; refusals are never stored and dropped commands cannot appear.';
 
 /**
  * What the CHAIN says about the round, for the proofs that need more than the
@@ -1350,6 +1394,7 @@ function runReceiptProofs(
             framesAuthentic: false,
             sessionIdHex: null,
             namesRoundUnderVerification: false,
+            serverBuilt: false,
         };
     };
 
@@ -1369,6 +1414,7 @@ function runReceiptProofs(
     }
 
     const document = receipts.receipts;
+    const serverBuilt = document.source === 'sequencer';
     const decoded = decodeReceiptFrames(document.frames);
 
     if (decoded.status === 'error') {
@@ -1469,23 +1515,30 @@ function runReceiptProofs(
     // one. It is deliberately outside `allProofsRan` for the same reason — a
     // missing refusal must not degrade an honest round — while a `fail` still
     // reaches the verdict through `anyFail`.
-    const rejections = analyseRejections({
-        roundIdHex: roundId,
-        gameType: chainRound?.gameType ?? null,
-        serverSeedHex: chainRound?.serverSeedHex ?? null,
-        clientSeedHex: chainRound?.clientSeedHex ?? null,
-        // The crash tick is derived only where the replay runs: on an unlisted
-        // rollup the check reports `unavailable` instead of contradicting the
-        // server with a tick the replay refused to derive.
-        deploymentListed: input.deploymentListed,
-        // How the round SETTLED, from the chain: a liveness refusal on a round
-        // that already ended by a claim is the correct answer, so only the
-        // expire shape is eligible to contradict the seed.
-        actions: chainRound?.actions ?? [],
-        settledAtIndex: chainRound?.settledAtIndex ?? null,
-        frames: decoded.frames,
-        commands: document.commands,
-    });
+    //
+    // Not run on a sequencer-built document: its commands come from the rows
+    // of accepted commands and its frames from the session outbox, where a
+    // refusal is never written, so there is nothing for it to read and its
+    // silence would claim a search that could not happen.
+    const rejections = serverBuilt
+        ? { checks: [], findings: [SERVER_BUILT_SUPPRESSION_FINDING] }
+        : analyseRejections({
+              roundIdHex: roundId,
+              gameType: chainRound?.gameType ?? null,
+              serverSeedHex: chainRound?.serverSeedHex ?? null,
+              clientSeedHex: chainRound?.clientSeedHex ?? null,
+              // The crash tick is derived only where the replay runs: on an unlisted
+              // rollup the check reports `unavailable` instead of contradicting the
+              // server with a tick the replay refused to derive.
+              deploymentListed: input.deploymentListed,
+              // How the round SETTLED, from the chain: a liveness refusal on a round
+              // that already ended by a claim is the correct answer, so only the
+              // expire shape is eligible to contradict the seed.
+              actions: chainRound?.actions ?? [],
+              settledAtIndex: chainRound?.settledAtIndex ?? null,
+              frames: decoded.frames,
+              commands: document.commands,
+          });
 
     checks.push(...rejections.checks);
     findings.push(...rejections.findings);
@@ -1528,6 +1581,7 @@ function runReceiptProofs(
         framesAuthentic,
         sessionIdHex,
         namesRoundUnderVerification: roundEnded.envelope.roundId === roundId,
+        serverBuilt,
     };
 }
 
@@ -1850,6 +1904,19 @@ function resolveMissingTranscript(
         operationHash: endSession.operationHash,
         summary: `EndSession for session ${sessionId} — the injector drained past every outbox row of this session, this round's transcript included`,
     });
+
+    // The one accusatory verdict is never reached on sequencer-built receipts:
+    // an accusation against the server cannot rest on a document whose
+    // contents the server chose.
+    if (receipts.serverBuilt) {
+        findings.push(
+            'Not escalated to SUPPRESSED: these receipts were built by the sequencer (source "sequencer"), and the ' +
+                'one accusatory verdict never rests on a document whose contents the server chose. Load the receipts ' +
+                'your browser kept for this round to run the full ladder.',
+        );
+
+        return 'undetermined';
+    }
 
     return 'suppressed';
 }

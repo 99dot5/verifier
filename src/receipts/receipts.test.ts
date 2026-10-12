@@ -16,7 +16,7 @@ import * as ed from '@noble/ed25519';
 import { describe, expect, it } from 'vitest';
 import { computeCommitment } from './commitment';
 import { commandFrame, serverFrame, type ServerFrameSpec } from './fixtures';
-import { importReceipts, RECEIPTS_SCHEMA, type ImportedFrame } from './import';
+import { importReceipts, RECEIPTS_SCHEMA, receiptsSourceLine, type ImportedFrame } from './import';
 import { decodeReceiptFrame, labelFindings, recomputeRoundCommitment } from './recompute';
 import { receiptsExportFixtureUrl, receiptVectorsUrl } from './receipt-vectors-path';
 import { bytesToHex, hexToBytes } from '@99dot5/round-replay';
@@ -506,6 +506,36 @@ describe('importReceipts', () => {
             expect(result.receipts.commands).toHaveLength(1);
         }
     });
+
+    it('reads a document with no source as browser-held', () => {
+        const result = importReceipts(JSON.stringify(document()));
+
+        expect(result.status === 'ok' && result.receipts.source).toBe('client');
+        expect(receiptsSourceLine('client')).toBe('Receipts source: your browser');
+    });
+
+    it.each(['client', 'sequencer'] as const)('reads source %s as stated', (source) => {
+        const result = importReceipts(JSON.stringify({ ...document(), source }));
+
+        expect(result.status === 'ok' && result.receipts.source).toBe(source);
+        expect(result.status === 'ok' && result.findings).toEqual([]);
+    });
+
+    it('names a sequencer-built document in its provenance line', () => {
+        expect(receiptsSourceLine('sequencer')).toBe(
+            'Receipts source: the sequencer (built on request; frames signed at export time)',
+        );
+    });
+
+    it.each([['browser'], ['Sequencer'], [''], [7], [{}]])(
+        'REFUSES an unknown source %j rather than reading it as browser-held',
+        (source) => {
+            const result = importReceipts(JSON.stringify({ ...document(), source }));
+
+            expect(result.status).toBe('error');
+            expect(result.status === 'error' && result.message).toMatch(/^source: unknown provenance/);
+        },
+    );
 
     it('rejects text that is not JSON', () => {
         const result = importReceipts('{not json');

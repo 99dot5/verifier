@@ -55,7 +55,7 @@ export function multipliers(rows: number, risk: Risk): bigint[] {
     const half = HALF_TABLES[`${rows}:${risk}`];
 
     if (!half) {
-        throw new ReplayError(`unsupported plinko config: rows=${rows} risk=${risk}`);
+        throw new ReplayError(`unsupported plinko config: ${rows} rows, ${risk} risk`);
     }
 
     return Array.from({ length: rows + 1 }, (_, k) => BigInt(half[Math.min(k, rows - k)]) * 10_000n);
@@ -71,6 +71,25 @@ export function derivePath(seed: Uint8Array, rows: number): number[] {
 
 export function binIndex(path: number[]): number {
     return path.reduce((sum, bit) => sum + bit, 0);
+}
+
+/** What the bet's seed sealed: decision 0's derived seed, the bytes drawn from it, the path and its bin. */
+export interface SealedDrop {
+    seedHex: string;
+    drawn: Uint8Array;
+    /** One entry per row: 0 = left, 1 = right. */
+    path: number[];
+    bin: number;
+}
+
+/** Derive the ball's path for a `rows`-row board from the round's seeds; nothing after the bet draws. */
+export function sealedDrop(serverSeed: string, clientSeed: string, rows: number): SealedDrop {
+    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, 0);
+    const drawn = stream.take(PATH_BYTES);
+    const seed = stream.derivedChunks()[0];
+    const path = derivePath(drawn, rows);
+
+    return { seedHex: bytesToHex(seed), drawn, path, bin: binIndex(path) };
 }
 
 /** Borsh-decode a place-bet `Config { rows: u32 LE, risk: u8 enum }`. */
@@ -135,26 +154,23 @@ export function replay(
     const { rows, risk } = decodeConfig(actions[0].payload);
 
     if (!isSupported(rows, risk)) {
-        throw new ReplayError(`unsupported plinko config: rows=${rows} risk=${risk}`);
+        throw new ReplayError(`unsupported plinko config: ${rows} rows, ${risk} risk`);
     }
 
-    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, 0);
-    const drawn = stream.take(PATH_BYTES);
-    const seed = stream.derivedChunks()[0];
-    const path = derivePath(drawn, rows);
-    const bin = binIndex(path);
+    const { seedHex, drawn, path, bin } = sealedDrop(serverSeed, clientSeed, rows);
     const multiplierPpm = multipliers(rows, risk)[bin];
     const rtp = exactRtp(rows, risk);
     const steps: StepWorking[] = [
         {
             actionIndex: 0,
             actionType: 'place-bet',
-            title: `place-bet — rows=${rows} risk=${risk}: bin ${bin} pays ${ppmToMultiplierString(multiplierPpm)}`,
+            title: `place-bet — ${rows} rows, ${risk} risk: bin ${bin} pays ${ppmToMultiplierString(multiplierPpm)}`,
             details: [
-                ['derived seed (decision 0, chunk 0)', bytesToHex(seed)],
+                ['derived seed (decision 0, chunk 0)', seedHex],
                 ['drawn bytes (the first 2 of the stream)', bytesToHex(drawn)],
                 ['path (0=left, 1=right; bit i%8 of drawn byte i/8)', path.join('')],
                 ['bin index (popcount)', String(bin)],
+                ['ladder rung (distance from the centre bin, as the game draws it)', String(Math.abs(bin - rows / 2))],
                 ['table multiplier', ppmToMultiplierString(multiplierPpm)],
                 ['table exact RTP', rtp.display],
                 ['sealed at bet time', 'the settle action cannot change this payout'],
@@ -199,7 +215,7 @@ export function replay(
                 steps.push({
                     actionIndex: action.actionIndex,
                     actionType: 'abandon',
-                    title: `abandon (system) — settles at the sealed outcome, exactly what a cashout pays (sec-28): ${ppmToMultiplierString(multiplierPpm)}`,
+                    title: `abandon (system) — settles at the sealed outcome, exactly what a cashout pays: ${ppmToMultiplierString(multiplierPpm)}`,
                     details: [
                         ['rule', 'the rollup replays a system abandon as the cashout the state admits; for plinko that is the sealed multiplier, so the abandon and the cashout pay identically'],
                     ],

@@ -8,7 +8,7 @@ import { vectorsUrl } from '../vectors-path';
 import { describe, expect, it } from 'vitest';
 import { decimalStringToUnits, unitsToDecimalString } from '../ints';
 import { bytesToHex, deriveSeed, hexToBytes } from '../seed';
-import { GAME_TYPE, binIndex, derivePath, exactRtp, multipliers, replay, type Risk } from './v1';
+import { GAME_TYPE, binIndex, derivePath, exactRtp, multipliers, replay, sealedDrop, type Risk } from './v1';
 
 /** The seed rule every listed deployment selects today. */
 
@@ -69,6 +69,12 @@ describe('plinko:v1 vectors', () => {
             expect(bytesToHex(seed)).toBe(rv.seed_hex);
             expect(derivePath(seed, rv.rows)).toEqual(rv.path);
             expect(binIndex(rv.path)).toBe(rv.bin_index);
+
+            const drop = sealedDrop(rv.server_seed, rv.client_seed, rv.rows);
+
+            expect(drop.seedHex).toBe(rv.seed_hex);
+            expect(drop.path).toEqual(rv.path);
+            expect(drop.bin).toBe(rv.bin_index);
 
             const stakeUnits = decimalStringToUnits(rv.stake, 6);
             const placeBet = {

@@ -325,7 +325,7 @@ export function replay(
                         actionType: 'abandon',
                         title: 'abandon (system) — manual round, no cashout to substitute: forfeited, pays 0',
                         details: [
-                            ['rule', "the kernel replays a system abandon as the cashout the state admits (sec-28); a manual round has no claim to substitute, so it forfeits — the same loss as the deadline sweep's expire"],
+                            ['rule', "the kernel replays a system abandon as the cashout the state admits; a manual round has no claim to substitute, so it forfeits — the same loss as the deadline sweep's expire"],
                         ],
                         cumulativePpm: 0n,
                     });
@@ -350,7 +350,7 @@ export function replay(
                     details: [
                         ['pre-committed auto target (from your signed PlaceBet config)', target.toString()],
                         ['crash tick', round.crashTick.toString()],
-                        ['rule', 'sec-28: a system abandon settles exactly as cashout(target) would — stake × m(target) iff target < crash_tick, else 0'],
+                        ['rule', 'a system abandon settles exactly as cashout(target) would — stake × m(target) iff target < crash_tick, else 0'],
                         ['multiplier', ppmToMultiplierString(cumulative)],
                     ],
                     cumulativePpm: cumulative,

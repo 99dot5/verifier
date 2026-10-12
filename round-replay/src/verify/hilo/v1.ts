@@ -278,7 +278,7 @@ export function abandonStep(actionIndex: number, position: Position, cumulativeP
         details: [
             [
                 'rule',
-                'an abandon pays banked + live, exactly what a cashout would pay here (sec-28: the one step the sequencer writes without a player signature must gain a forger nothing)',
+                'an abandon pays banked + live, exactly what a cashout would pay here (the one step the sequencer writes without a player signature must gain a forger nothing)',
             ],
             ['outcome', 'lose — the round did not end on a decision of yours; only the payout rule changed'],
         ],

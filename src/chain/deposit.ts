@@ -146,10 +146,7 @@ export async function locateSessionDeposit(options: LocateDepositOptions): Promi
 
                 page = (await response.json()) as TzktDepositOperation[];
             } catch (error) {
-                return absent(
-                    'failed',
-                    `the session's deposit could not be looked up: ${error instanceof Error ? error.message : String(error)}`,
-                );
+                return absent('failed', `the session's deposit could not be looked up: ${errorText(error)}`);
             }
 
             for (const operation of page) {

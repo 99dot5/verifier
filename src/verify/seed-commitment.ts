@@ -31,9 +31,10 @@
  * **Fresh client seeds are the player's half.** The echo proves the server
  * committed before it saw THIS bet; if the client reused a seed the server had
  * already seen on an earlier bet, the server knew it at promise time. The
- * shipped client draws a new client seed per bet by default, so the proof is
- * whole unless the player pinned one — a choice the report names when the
- * receipts show the same seed on consecutive bets.
+ * shipped client always mixes fresh randomness into the client seed (an
+ * optional player phrase joined to random bytes drawn for that bet), so the
+ * proof is whole for every bet it sends. A client that reuses a seed weakens
+ * it, which is why the pass text carries that caveat.
  */
 import { bytesEqual, bytesToHex } from '@99dot5/round-replay';
 

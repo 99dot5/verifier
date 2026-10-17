@@ -64,6 +64,7 @@ import {
     decodeServerEnvelope,
     type DecodedClientEnvelope,
     type DecodedMoney,
+    type DecodedServerEnvelope,
 } from './wire/proto-reader';
 import { evaluateStakeAgreement, STAKE_CHECK_ID } from './verify/stake';
 import {
@@ -1576,6 +1577,14 @@ function runReceiptProofs(
     checks.push(...projection.checks);
     findings.push(...projection.findings);
 
+    // ── the settled frame's seed reveal ─────────────────────────────────
+    // Only on the frame that names this round, and only against a chain
+    // transcript: a relabelled export is already reported above, and with no
+    // transcript there is no revealed seed to compare against.
+    if (chainRound !== null && roundEnded.envelope.roundId === roundId) {
+        findings.push(...settledFrameSeedFindings(roundEnded.envelope, chainRound.serverSeedHex));
+    }
+
     return {
         reconstruction: recomputed.status === 'ok' ? 'ok' : 'unavailable',
         framesAuthentic,
@@ -1583,6 +1592,42 @@ function runReceiptProofs(
         namesRoundUnderVerification: roundEnded.envelope.roundId === roundId,
         serverBuilt,
     };
+}
+
+/**
+ * Compare the seed the signed `RoundEnded` reveals with the seed the chain's
+ * transcript reveals. A finding, never a fail: the chain proofs already bind
+ * the round to the committed seed, so a disagreement here is the server
+ * contradicting itself in a signed frame, which the player can hold up as
+ * evidence but which changes nothing the chain proved. A voided round
+ * revealed no seed and is skipped.
+ */
+export function settledFrameSeedFindings(roundEnded: DecodedServerEnvelope, chainServerSeedHex: string): string[] {
+    if (roundEnded.payloadCase !== 'roundEnded' || roundEnded.roundEndedVoided) {
+        return [];
+    }
+
+    const chainSeed = chainServerSeedHex.toLowerCase();
+    const stated = roundEnded.roundEndedServerSeed;
+
+    if (stated === null) {
+        return [
+            `settled-frame-seed-reveal: the signed RoundEnded frame states no seed for a settled round, ` +
+                `while the chain's transcript reveals ${chainSeed}`,
+        ];
+    }
+
+    // Exact: the wire contract is 64 lowercase hex, and the game client
+    // treats any other spelling as malformed, so the verifier must not
+    // forgive what the client flagged.
+    if (stated !== chainSeed) {
+        return [
+            `settled-frame-seed-reveal: the signed RoundEnded frame reveals seed ${stated} ` +
+                `but the chain's transcript reveals ${chainSeed}`,
+        ];
+    }
+
+    return [];
 }
 
 const RECEIPT_CHECKS: readonly (readonly [string, string])[] = [

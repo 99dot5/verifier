@@ -205,7 +205,14 @@ export function labelFindings(frames: ReceiptFrame[], roundIdHex: string): strin
     return findings;
 }
 
-/** The payload cases that place a command at a position in the round. */
+/**
+ * The payload cases that place a command at a position in the round.
+ *
+ * `roundDeadlineReached` is deliberately absent: the advisory deadline notice
+ * is a round frame, so it is scoped in by its signed round id, but it binds no
+ * command and states no action index, so it counts for neither contiguity nor
+ * the commitment preimage.
+ */
 const INDEX_BEARING_CASES = new Set(['roundStarted', 'roundUpdated', 'roundEnded']);
 
 export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult {

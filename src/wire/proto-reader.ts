@@ -222,6 +222,7 @@ const SERVER_PAYLOAD_CASES: Record<number, ServerPayloadCase> = {
     20: 'sessionResumed',
     21: 'timeSync',
     22: 'serverSeedPromised',
+    23: 'roundDeadlineReached',
 };
 
 export type ServerPayloadCase =
@@ -236,6 +237,7 @@ export type ServerPayloadCase =
     | 'sessionCreated'
     | 'sessionResumed'
     | 'serverSeedPromised'
+    | 'roundDeadlineReached'
     | 'timeSync';
 
 /** `casino.v1.StepOrigin`, the author of the step a `RoundUpdated` reports. */
@@ -399,15 +401,26 @@ export interface DecodedServerEnvelope {
      * that folded the two would read silence as an assertion.
      */
     roundEndCause: RoundEndCause | null;
+    /**
+     * `RoundEnded.server_seed` (field 8): the revealed seed as the signed
+     * frame states it, null when the frame states none. Absent only on a
+     * voided round, which revealed no seed.
+     */
+    roundEndedServerSeed: string | null;
+    /** `RoundEnded.ending` (field 2) is `ROUND_ENDING_VOIDED`; false elsewhere. */
+    roundEndedVoided: boolean;
 }
 
-// Inner round-bearing events. `round_id` is field 1 on all four.
+// Inner round-bearing events. `round_id` is field 1 on every one of them.
 const EVENT_ROUND_ID = 1;
 const ROUND_UPDATED_ACTION_INDEX = 2;
 const ROUND_UPDATED_ORIGIN = 5;
+const ROUND_ENDED_ENDING = 2;
+const ROUND_ENDING_VOIDED = 5n;
 const ROUND_ENDED_CAUSE = 4;
 const ROUND_ENDED_PLAYER_COMMITMENT = 5;
 const ROUND_ENDED_ACTION_INDEX = 6;
+const ROUND_ENDED_SERVER_SEED = 8;
 
 // casino.v1.CommandRejected. `round_id` is field 3 — a FIFTH payload carrying
 // a round id, and the only optional one: a refusal names a round exactly when
@@ -459,6 +472,8 @@ export function decodeServerEnvelope(body: Uint8Array): DecodedServerEnvelope {
         roundStartedServerSeedCommitment: null,
         roundStartedNextServerSeedCommitment: null,
         roundEndCause: null,
+        roundEndedServerSeed: null,
+        roundEndedVoided: false,
     };
 
     forEachField(body, (field) => {
@@ -488,9 +503,14 @@ export function decodeServerEnvelope(body: Uint8Array): DecodedServerEnvelope {
         out.payloadCase = payloadCase;
 
         switch (payloadCase) {
+            // The deadline notice is advisory: it states the bust ahead of the
+            // settlement and binds no command and no action index. Only its
+            // `round_id` is read, so a notice naming another round is caught
+            // like any other round frame; nothing else in it is projected.
             case 'roundStarted':
             case 'roundUpdated':
             case 'roundEnded':
+            case 'roundDeadlineReached':
                 readRoundBearingEvent(field.bytes, out, payloadCase);
                 return;
             case 'commandRejected':
@@ -529,7 +549,7 @@ function readSeedCommitment(bytes: Uint8Array): { index: bigint; hash: Uint8Arra
 function readRoundBearingEvent(
     bytes: Uint8Array,
     out: DecodedServerEnvelope,
-    payloadCase: 'roundStarted' | 'roundUpdated' | 'roundEnded',
+    payloadCase: 'roundStarted' | 'roundUpdated' | 'roundEnded' | 'roundDeadlineReached',
 ): void {
     forEachField(bytes, (field) => {
         if (field.number === EVENT_ROUND_ID && field.wireType === WIRE_LENGTH_DELIMITED) {
@@ -601,6 +621,13 @@ function readRoundBearingEvent(
                 // over `cause` treats `unspecified` as "nothing stated", which
                 // is the only safe reading of a cause nobody here can name.
                 out.roundEndCause = ROUND_END_CAUSES[Number(field.value)] ?? 'unspecified';
+            } else if (field.number === ROUND_ENDED_SERVER_SEED && field.wireType === WIRE_LENGTH_DELIMITED) {
+                // Lenient decode on purpose: malformed bytes become text that
+                // compares unequal to the chain's seed and is reported, rather
+                // than throwing and taking the frame's scoping down with it.
+                out.roundEndedServerSeed = new TextDecoder().decode(field.bytes);
+            } else if (field.number === ROUND_ENDED_ENDING && field.wireType === WIRE_VARINT) {
+                out.roundEndedVoided = field.value === ROUND_ENDING_VOIDED;
             }
         }
     });

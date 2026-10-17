@@ -19,6 +19,8 @@ import { commandFrame, serverFrame, type ServerFrameSpec } from './fixtures';
 import { importReceipts, RECEIPTS_SCHEMA, receiptsSourceLine, type ImportedFrame } from './import';
 import { decodeReceiptFrame, labelFindings, recomputeRoundCommitment } from './recompute';
 import { receiptsExportFixtureUrl, receiptVectorsUrl } from './receipt-vectors-path';
+import { settledFrameSeedFindings } from '../verifier';
+import { wireVectorsUrl } from '../wire/wire-vectors-path';
 import { bytesToHex, hexToBytes } from '@99dot5/round-replay';
 import { decodeClientEnvelope, decodeServerEnvelope, ProtoError, uuidFromParts } from '../wire/proto-reader';
 import { encodeUuid, ProtoWriter } from '../wire/proto-writer';
@@ -1098,6 +1100,40 @@ describe('client seed in the export fixture', () => {
     });
 });
 
+describe('settled RoundEnded seed reveal in the export fixture', () => {
+    // The first `server_seed_commitment` wire vector: the seed the fixture's
+    // openers commit to, so it is what a transcript of these rounds reveals.
+    const vectorSeed = (
+        JSON.parse(readFileSync(fileURLToPath(wireVectorsUrl()), 'utf8')) as {
+            server_seed_commitment: { seed_hex: string }[];
+        }
+    ).server_seed_commitment[0].seed_hex;
+
+    it('reveals the committed seed on every settled RoundEnded, so no finding is raised', () => {
+        let settled = 0;
+
+        for (const testCase of FIXTURE.cases) {
+            const imported = importReceipts(JSON.stringify(testCase.export));
+
+            if (imported.status !== 'ok') {
+                throw new Error(`${testCase.name}: ${imported.message}`);
+            }
+
+            const ended = decodeServerEnvelope(splitSignedFrame(imported.receipts.roundEndedFrame).body);
+
+            if (ended.roundEndedVoided) {
+                continue;
+            }
+
+            expect(ended.roundEndedServerSeed, testCase.name).toBe(vectorSeed);
+            expect(settledFrameSeedFindings(ended, vectorSeed), testCase.name).toEqual([]);
+            settled += 1;
+        }
+
+        expect(settled).toBeGreaterThan(0);
+    });
+});
+
 describe('receipts export fixture', () => {
     it('is the schema this build reads', () => {
         expect(FIXTURE.schema).toBe('99dot5.receipts-export-fixture.v1');
@@ -1132,9 +1168,11 @@ describe('receipts export fixture', () => {
             if (decoded.payloadCase === 'roundStarted') {
                 // These signed bytes come from the generated protobuf encoder
                 // in casino-client, independently of this reader's fixtures.
+                // The commitment is the first `server_seed_commitment` wire
+                // vector, so the revealed seed on each settle hashes to it.
                 expect(decoded.roundStartedServerSeedCommitment).toEqual({
                     index: 137n,
-                    hash: new Uint8Array(32).fill(0x5d),
+                    hash: hexToBytes('31aa55c649173c8e5773f9670fa2ba1e356ca90d5daabd412fd9ddd6e8d6fa90'),
                 });
                 expect(decoded.roundStartedNextServerSeedCommitment).toEqual({
                     index: 138n,

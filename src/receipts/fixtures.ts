@@ -58,6 +58,9 @@ const ROUND_UPDATED_ORIGIN = 5;
 const ROUND_ENDED_CAUSE = 4;
 const ROUND_ENDED_PLAYER_COMMITMENT = 5;
 const ROUND_ENDED_ACTION_INDEX = 6;
+const ROUND_ENDED_SERVER_SEED = 8;
+const ROUND_ENDED_ENDING = 2;
+const ROUND_ENDING_VOIDED = 5;
 
 // ClientEnvelope
 const CLIENT_REQUEST_ID = 1;
@@ -198,6 +201,10 @@ export type ServerPayloadSpec =
           playerCommitment?: Uint8Array;
           /** `RoundEndedEvent.cause`; omitted entirely when absent. */
           cause?: keyof typeof CAUSE_VALUES;
+          /** `RoundEndedEvent.server_seed` (8); omitted entirely when absent. */
+          serverSeed?: string;
+          /** Writes `ending = ROUND_ENDING_VOIDED` (2). */
+          voided?: boolean;
       };
 
 export interface ServerFrameSpec {
@@ -323,6 +330,10 @@ export function serverFrame(seed: Uint8Array, spec: ServerFrameSpec): Uint8Array
         case 'roundEnded': {
             const event = roundBearing(spec.payload.roundId);
 
+            if (spec.payload.voided) {
+                event.varint(ROUND_ENDED_ENDING, ROUND_ENDING_VOIDED);
+            }
+
             if (spec.payload.playerCommitment) {
                 event.bytes(ROUND_ENDED_PLAYER_COMMITMENT, spec.payload.playerCommitment);
             }
@@ -337,6 +348,10 @@ export function serverFrame(seed: Uint8Array, spec: ServerFrameSpec): Uint8Array
 
             if (spec.payload.actionIndex !== undefined) {
                 event.varint(ROUND_ENDED_ACTION_INDEX, spec.payload.actionIndex);
+            }
+
+            if (spec.payload.serverSeed !== undefined) {
+                event.bytes(ROUND_ENDED_SERVER_SEED, new TextEncoder().encode(spec.payload.serverSeed));
             }
 
             envelope.bytes(SERVER_ROUND_ENDED, event.finish());

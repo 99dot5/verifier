@@ -21,6 +21,7 @@ import {
     describeBracket,
     evaluateSessionBeforeTranscript,
     SESSION_BEFORE_TRANSCRIPT_CHECK_ID,
+    settledFrameSeedFindings,
     supportedGameTypes,
     verifyRound,
 } from './verifier';
@@ -53,7 +54,8 @@ import {
 } from '@99dot5/round-replay';
 import { RACE_BAND_TICKS, REJECTION_CHECK_ID } from './verify/rejections';
 import { vectorsUrl, type VectorGame } from './verify/vectors-path';
-import { encodeEdpk, sequencerSigningPreimage, type SigningDomain } from './wire/signature';
+import { decodeServerEnvelope } from './wire/proto-reader';
+import { encodeEdpk, sequencerSigningPreimage, splitSignedFrame, type SigningDomain } from './wire/signature';
 import {
     commandFrame,
     serverFrame,
@@ -284,6 +286,11 @@ interface ReceiptShape {
     cause?: 'player-action' | 'system-sweep' | 'transcript-cap';
     /** Omit the cause entirely, reproducing a producer predating field 4. */
     noCause?: boolean;
+    /**
+     * `RoundEndedEvent.server_seed`; the honest default is the transcript's
+     * seed, `null` writes no field.
+     */
+    frameSeed?: string | null;
 }
 
 function roundEndedSpec(commitment: Uint8Array, shape: ReceiptShape = {}): ServerFrameSpec {
@@ -297,6 +304,7 @@ function roundEndedSpec(commitment: Uint8Array, shape: ReceiptShape = {}): Serve
             actionIndex: 1,
             playerCommitment: commitment,
             ...(shape.noCause ? {} : { cause: shape.cause ?? ('player-action' as const) }),
+            ...(shape.frameSeed === null ? {} : { serverSeed: shape.frameSeed ?? bytesToHex(SERVER_SEED) }),
         },
     };
 }
@@ -2306,6 +2314,70 @@ describe('a clean round of each remaining replayable game', () => {
             expect(report.gameType).toBe('plinko:v1');
             expect(nonPassing(report)).toEqual(OPTIONAL_CHECKS);
         });
+    });
+});
+
+describe('the seed the settled RoundEnded frame reveals', () => {
+    const FINDING = 'settled-frame-seed-reveal: ';
+    const seedFindings = (findings: string[]) => findings.filter((f) => f.startsWith(FINDING));
+
+    it('raises no finding when the frame reveals the transcript seed', () => {
+        const report = verify(buildRound());
+
+        expect(seedFindings(report.findings)).toEqual([]);
+        expect(report.verdict).toBe('verified');
+    });
+
+    it('reports a frame seed that differs from the transcript, without changing the verdict', () => {
+        const other = 'ab'.repeat(32);
+        const report = verify(buildRound(), { receipts: receiptsFor({ frameSeed: other }) });
+
+        expect(seedFindings(report.findings)).toEqual([
+            `${FINDING}the signed RoundEnded frame reveals seed ${other} but the chain's transcript reveals ${bytesToHex(SERVER_SEED)}`,
+        ]);
+        expect(report.verdict).toBe('verified');
+    });
+
+    it('reports an uppercase reveal, since the wire contract is lowercase and the client flags it', () => {
+        const upper = bytesToHex(SERVER_SEED).toUpperCase();
+        const report = verify(buildRound(), { receipts: receiptsFor({ frameSeed: upper }) });
+
+        expect(seedFindings(report.findings)).toEqual([
+            `${FINDING}the signed RoundEnded frame reveals seed ${upper} but the chain's transcript reveals ${bytesToHex(SERVER_SEED)}`,
+        ]);
+        expect(report.verdict).toBe('verified');
+    });
+
+    it('reports a settled frame that states no seed, without changing the verdict', () => {
+        const report = verify(buildRound(), { receipts: receiptsFor({ frameSeed: null }) });
+
+        expect(seedFindings(report.findings)).toHaveLength(1);
+        expect(seedFindings(report.findings)[0]).toContain('states no seed for a settled round');
+        expect(report.verdict).toBe('verified');
+    });
+
+    it('raises nothing when no transcript is on chain', () => {
+        const messages = buildRound().filter((m) => m.envelope.message.kind !== 'round-transcript');
+        const honest = verify(messages);
+        const tampered = verify(messages, { receipts: receiptsFor({ frameSeed: 'ab'.repeat(32) }) });
+
+        expect(seedFindings(honest.findings)).toEqual([]);
+        expect(seedFindings(tampered.findings)).toEqual([]);
+        expect(honest.verdict).toBe('undetermined');
+        expect(tampered.verdict).toBe('undetermined');
+    });
+
+    it('skips a voided RoundEnded, which reveals no seed', () => {
+        const body = splitSignedFrame(
+            serverFrame(SIGNING_SEED, {
+                sequence: 5,
+                sessionId: SESSION_ID,
+                relatedRequestId: CASHOUT_REQUEST,
+                payload: { case: 'roundEnded', roundId: ROUND_ID, voided: true },
+            }),
+        ).body;
+
+        expect(settledFrameSeedFindings(decodeServerEnvelope(body), bytesToHex(SERVER_SEED))).toEqual([]);
     });
 });
 

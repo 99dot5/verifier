@@ -445,21 +445,33 @@ async function checkOtherVaults(
 }
 
 /**
+ * The leaf counts of the production vault's storage, one per generation of the
+ * contract: eight fields at first, eleven with the payout ledger and signers,
+ * twelve with the deposit authoriser. Every generation keeps the same four
+ * trailing fields, which is what {@link sessionsBigMapId} relies on.
+ */
+const PRODUCTION_VAULT_LEAF_COUNTS: ReadonlySet<number> = new Set([8, 11, 12]);
+
+/**
  * The production vault's `sessions` big_map id from its storage, or null for
  * any other contract.
  *
- * The storage type is a right-comb pair of eight fields in SmartPy's
- * alphabetical order (`admin_address`, `paused`, `pending_admin_address`,
- * `pool_id`, `sessions`, `smart_rollup_address`, `tenant_id`,
- * `total_deposits`), so `sessions` is the 5th leaf and the node renders it as
- * `{ "int": "<id>" }`. The preview vault has nine fields and no big_map, so it
- * reads as null.
+ * The storage type is a right-comb pair in SmartPy's alphabetical field order,
+ * so the fields a later generation adds (`deposit_authoriser`, `paid`,
+ * `payout_signer_nonce`, `payout_signers`) all sort BEFORE `sessions`, while
+ * the three after it (`smart_rollup_address`, `tenant_id`, `total_deposits`)
+ * never change: `sessions` is always the 4th leaf from the end, and the node
+ * renders it as `{ "int": "<id>" }`. The count is checked against the known
+ * generations because the preview vault (nine fields, no big_map) carries an
+ * `int` in that place too, and must read as null.
  */
 export function sessionsBigMapId(storage: unknown): string | null {
     const leaves = combLeaves(storage);
-    const leaf = leaves[4] as { int?: unknown } | undefined;
+    const leaf = leaves[leaves.length - 4] as { int?: unknown } | undefined;
 
-    return leaves.length === 8 && typeof leaf?.int === 'string' && /^\d+$/.test(leaf.int) ? leaf.int : null;
+    return PRODUCTION_VAULT_LEAF_COUNTS.has(leaves.length) && typeof leaf?.int === 'string' && /^\d+$/.test(leaf.int)
+        ? leaf.int
+        : null;
 }
 
 /** The leaves of a right-comb pair, in either the nested or the flattened Micheline form. */

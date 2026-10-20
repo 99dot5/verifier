@@ -231,12 +231,35 @@ const firstDepositCall = firstDepositGroup.contents[0];
 const topUpCall = topUpGroup.contents[0];
 
 describe('the deposit receipt shape (captured)', () => {
-    it("reads the sessions big_map id as the 5th leaf of the production vault's storage", () => {
+    it("reads the sessions big_map id as the 4th leaf from the end of the production vault's storage", () => {
         expect(sessionsBigMapId(sessionsEntryCapture.storageAtHead)).toBe(sessionsEntryCapture.bigMapId);
         // The receipt's own storage, in the flattened sequence form, agrees.
         expect(
             sessionsBigMapId((firstDepositCall.metadata?.operation_result as unknown as { storage: unknown }).storage),
         ).toBe(sessionsEntryCapture.bigMapId);
+    });
+
+    it('reads it from the later vault generations too, whose extra fields all sort before sessions', () => {
+        const admin = { string: 'tz1dBStuxore6uR3E2s5NAhjSGc3EtpkwCp7' };
+        const key = { string: 'sppk7aMNM3xh14haqEyaxNjSt7hXanCDyoWtRcxF8wbtya859ak6yZT' };
+        const tail = [
+            { int: '4242' },
+            { string: 'sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK' },
+            { string: 'stg-99dot5-com-shadownet' },
+            { int: '0' },
+        ];
+        // paid ledger + payout signers (eleven leaves): admin, paid, paused,
+        // nonce, signers, pending admin, pool, then the unchanged tail.
+        const withSigners = [admin, { int: '4240' }, { prim: 'False' }, { int: '0' }, [key, key, key], { prim: 'None' }, { string: 'standard' }, ...tail];
+        // + deposit authoriser (twelve leaves), sorted in at the second place.
+        const withAuthoriser = [admin, key, ...withSigners.slice(1)];
+
+        expect(sessionsBigMapId(withSigners)).toBe('4242');
+        expect(sessionsBigMapId(withAuthoriser)).toBe('4242');
+        expect(sessionsBigMapId({ prim: 'Pair', args: withAuthoriser })).toBe('4242');
+        // A leaf count no generation has is some other contract.
+        expect(sessionsBigMapId([admin, ...tail])).toBeNull();
+        expect(sessionsBigMapId([admin, key, key, ...withSigners.slice(1)])).toBeNull();
     });
 
     it('pins the first deposit: a top-level big_map update of the sessions id at the session key, with a value', () => {
@@ -304,7 +327,7 @@ describe('the deposit receipt shape (captured)', () => {
         ).toBe(false);
     });
 
-    it('reads no sessions id from a preview vault (nine fields, no big_map) or any other contract', () => {
+    it('reads no sessions id from a preview vault (nine fields, no big_map, an int in the sessions place) or any other contract', () => {
         const preview = {
             prim: 'Pair',
             args: [

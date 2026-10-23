@@ -725,13 +725,13 @@ describe('what the check cannot answer', () => {
     it('is unavailable, naming the arm, for a command from a newer build', () => {
         const result = run({
             commands: [
-                command(BET, 'placeBet', { game: 'hilo', armField: 19 }),
+                command(BET, 'placeBet', { game: 'hilo', armField: 119 }),
                 command(SETTLE, 'cashOut', { game: 'hilo' }),
             ],
         });
 
         expect(result.status).toBe('unavailable');
-        expect(result.detail).toContain('field 19');
+        expect(result.detail).toContain('field 119');
     });
 
     it('is unavailable when the reconstruction declined', () => {
@@ -838,18 +838,18 @@ describe('a PlayerAction whose kind oneof carries two arms', () => {
      * frames), so the bytes under test are the protobuf and nothing else.
      */
     function twoArmHydraAction(requestId: string): ImportedCommand {
-        // hydra.v1.PlayerAction.kind — `fight` = 1 first, `magic_attack` = 3 last.
+        // hydra.v1.PlayerAction.kind — `fight` = 100 first, `magic_attack` = 102 last.
         const kinds = new ProtoWriter()
-            .bytes(1, new Uint8Array())
-            .bytes(3, new Uint8Array())
+            .bytes(100, new Uint8Array())
+            .bytes(102, new Uint8Array())
             .finish();
-        // casino.v1.PlayerActionCommand { round_id = 1, hydra_v1_action = 12 }.
-        const command = new ProtoWriter().bytes(1, encodeUuid(ROUND_ID)).bytes(12, kinds).finish();
-        // casino.v1.ClientEnvelope { request_id = 1, session_id = 2, player_action = 12 }.
+        // casino.v1.PlayerActionCommand { round_id = 1, hydra_v1_action = 104 }.
+        const command = new ProtoWriter().bytes(1, encodeUuid(ROUND_ID)).bytes(104, kinds).finish();
+        // casino.v1.ClientEnvelope { request_id = 1, session_id = 2, player_action = 102 }.
         const envelope = new ProtoWriter()
             .bytes(1, encodeUuid(requestId))
             .bytes(2, encodeUuid(SESSION_ID))
-            .bytes(12, command)
+            .bytes(102, command)
             .finish();
 
         return {

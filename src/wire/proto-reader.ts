@@ -205,24 +205,20 @@ const SERVER_SESSION_ID = 3;
  * protobuf-es's camelCase `payload.case`, which is what the play client writes
  * into its receipts store and therefore what the export's `payloadCase` says.
  */
-const SERVER_PAYLOAD_CASES: Record<number, ServerPayloadCase> = {
-    10: 'pong',
-    11: 'commandAccepted',
-    12: 'commandRejected',
-    // 13 is unassigned and free for reuse: the frame that held it was
-    // retired before any durable data existed, so no bytes anywhere carry
-    // it. A tag this table does not know decodes to a null `payloadCase`,
-    // which is the FORWARD-SKEW contract below, not a statement about 13.
-    14: 'roundStarted',
-    15: 'roundUpdated',
-    16: 'roundEnded',
-    17: 'balanceChanged',
-    18: 'sessionEnding',
-    19: 'sessionCreated',
-    20: 'sessionResumed',
-    21: 'timeSync',
-    22: 'serverSeedPromised',
-    23: 'roundDeadlineReached',
+export const SERVER_PAYLOAD_CASES: Record<number, ServerPayloadCase> = {
+    100: 'pong',
+    101: 'commandAccepted',
+    102: 'commandRejected',
+    103: 'roundStarted',
+    104: 'roundUpdated',
+    105: 'roundEnded',
+    106: 'balanceChanged',
+    107: 'sessionEnding',
+    108: 'sessionCreated',
+    109: 'sessionResumed',
+    110: 'timeSync',
+    111: 'serverSeedPromised',
+    112: 'roundDeadlineReached',
 };
 
 export type ServerPayloadCase =
@@ -433,7 +429,7 @@ const REJECTED_RECEIVED_AT_UNIX_MS = 4;
 const ACCEPTED_RECEIVED_AT_UNIX_MS = 1;
 
 // casino.v1.RoundStartedEvent.game_state, the crash arm.
-const ROUND_STARTED_CRASH_STATE = 11;
+export const ROUND_STARTED_CRASH_STATE = 101;
 /**
  * `RoundStartedEvent.stake` (2).
  *
@@ -725,15 +721,15 @@ function readCommandAccepted(bytes: Uint8Array, out: DecodedServerEnvelope): voi
 const CLIENT_REQUEST_ID = 1;
 const CLIENT_SESSION_ID = 2;
 
-const CLIENT_PAYLOAD_CASES: Record<number, ClientPayloadCase> = {
-    10: 'ping',
-    11: 'placeBet',
-    12: 'playerAction',
-    13: 'cashOut',
-    14: 'resumeSession',
-    15: 'endSession',
-    16: 'timeSync',
-    17: 'requestServerSeedPromise',
+export const CLIENT_PAYLOAD_CASES: Record<number, ClientPayloadCase> = {
+    100: 'ping',
+    101: 'placeBet',
+    102: 'playerAction',
+    103: 'cashOut',
+    104: 'resumeSession',
+    105: 'endSession',
+    106: 'timeSync',
+    107: 'requestServerSeedPromise',
 };
 
 export type ClientPayloadCase =
@@ -853,33 +849,87 @@ const PLACE_BET_CLIENT_SEED = 2;
 const PLACE_BET_SERVER_SEED_HASH = 3;
 
 /**
- * The per-game arms of the three command messages.
+ * Where a message's `oneof` lives, by field number.
  *
- * `PlaceBetCommand` and `CashOutCommand` deliberately share the numbering
- * (10..14) — "one game keeps one number across commands" — and
- * `PlayerActionCommand` has only the three games with in-round decisions.
+ * The schema numbers a message's scalars below `ONEOF_BASE` and its first
+ * `oneof` from `ONEOF_BASE`, inside a band `ONEOF_BAND` wide. That is what lets
+ * this reader classify a field it has no name for, which matters because the
+ * verifier ships separately from the play client and the sequencer:
+ *
+ * - below `ONEOF_BASE`: a scalar added after this build. Skipped.
+ * - in `[ONEOF_BASE, ONEOF_BASE + ONEOF_BAND)`: an arm of THIS oneof added
+ *   after this build. Reported, because the honest answer to "an arm I cannot
+ *   read" is to say so.
+ * - at or above `ONEOF_BASE + ONEOF_BAND`: a field of a later oneof. Skipped,
+ *   and never taken as this oneof's arm.
+ *
+ * Numbers are scoped per message, so the same base applies at every depth: a
+ * game's own `PlayerAction.kind` is its message's first oneof and starts at
+ * `ONEOF_BASE` too.
+ *
+ * Known arms are still matched through the explicit tables below; the band
+ * decides only what an UNKNOWN field means.
  */
-const PLACE_BET_ARMS: Record<number, 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra'> = {
-    10: 'hilo',
-    11: 'crash',
-    12: 'plinko',
-    13: 'mines',
-    14: 'hydra',
+export const ONEOF_BASE = 100;
+export const ONEOF_BAND = 100;
+
+type OneofBand = 'scalar' | 'arm' | 'other-oneof';
+
+function oneofBand(number: number): OneofBand {
+    if (number < ONEOF_BASE) {
+        return 'scalar';
+    }
+
+    return number < ONEOF_BASE + ONEOF_BAND ? 'arm' : 'other-oneof';
+}
+
+/** A game version, exactly as `game_type` states it (`game:vN`). */
+export type GameType = 'hilo:v1' | 'crash:v1' | 'plinko:v1' | 'mines:v1' | 'hydra:v1';
+
+type Game = 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra';
+
+/**
+ * The game table: one field number per game version, used by every per-game
+ * `oneof` that has an arm for it.
+ */
+export const GAME_ARMS: Readonly<Record<GameType, number>> = {
+    'hilo:v1': 100,
+    'crash:v1': 101,
+    'plinko:v1': 102,
+    'mines:v1': 103,
+    'hydra:v1': 104,
 };
 
-const PLAYER_ACTION_ARMS: Record<number, 'hilo' | 'mines' | 'hydra'> = {
-    10: 'hilo',
-    11: 'mines',
-    12: 'hydra',
+/**
+ * The game versions each command's `game_data` has an arm for, at the number
+ * the schema gives it.
+ *
+ * `PlaceBetCommand` and `CashOutCommand` carry every game. `PlayerActionCommand`
+ * has only the three games with in-round decisions, each at its game-table
+ * number; the numbers of the other games are left unused.
+ */
+export const COMMAND_GAME_ARMS: Readonly<
+    Record<'placeBet' | 'playerAction' | 'cashOut', Readonly<Partial<Record<GameType, number>>>>
+> = {
+    placeBet: GAME_ARMS,
+    playerAction: {
+        'hilo:v1': GAME_ARMS['hilo:v1'],
+        'mines:v1': GAME_ARMS['mines:v1'],
+        'hydra:v1': GAME_ARMS['hydra:v1'],
+    },
+    cashOut: GAME_ARMS,
 };
 
-const CASH_OUT_ARMS: Record<number, 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra'> = {
-    10: 'hilo',
-    11: 'crash',
-    12: 'plinko',
-    13: 'mines',
-    14: 'hydra',
-};
+/** Invert one message's arm table into `field number -> game`. */
+function gamesByArm(arms: Readonly<Partial<Record<GameType, number>>>): ReadonlyMap<number, Game> {
+    return new Map(
+        Object.entries(arms).map(([gameType, number]) => [number, gameType.slice(0, gameType.indexOf(':')) as Game]),
+    );
+}
+
+const PLACE_BET_GAMES = gamesByArm(COMMAND_GAME_ARMS.placeBet);
+const PLAYER_ACTION_GAMES = gamesByArm(COMMAND_GAME_ARMS.playerAction);
+const CASH_OUT_GAMES = gamesByArm(COMMAND_GAME_ARMS.cashOut);
 
 // crash.v1.PlaceBet / crash.v1.CashOut
 const CRASH_AUTO_CASHOUT_PPM = 1;
@@ -891,7 +941,7 @@ const PLINKO_RISK = 2;
 
 // mines.v1.PlaceBet / mines.v1.PlayerAction.kind / mines.v1.Reveal
 const MINES_MINE_COUNT = 1;
-const MINES_ACTION_REVEAL = 1;
+export const MINES_ACTION_REVEAL = 100;
 const MINES_REVEAL_TILE_INDEX = 1;
 
 // hydra.v1.PlaceBet
@@ -901,7 +951,7 @@ const HYDRA_ARMOUR = 3;
 const HYDRA_SPRITE = 4;
 
 /** `hilo.v1.PlayerAction.kind`. */
-const HILO_ACTION_ARMS: Record<number, 'higher' | 'lower'> = { 1: 'higher', 2: 'lower' };
+export const HILO_ACTION_ARMS: Record<number, 'higher' | 'lower'> = { 100: 'higher', 101: 'lower' };
 
 /**
  * `hydra.v1.PlayerAction.kind` — FIVE arms, and `fight` is not a synonym the
@@ -909,12 +959,12 @@ const HILO_ACTION_ARMS: Record<number, 'higher' | 'lower'> = { 1: 'higher', 2: '
  * engine action as `physical_attack`. The projection table is what records
  * that, not this reader, which reports the arm the player actually signed.
  */
-const HYDRA_ACTION_ARMS: Record<number, 'fight' | 'physical-attack' | 'magic-attack' | 'drink-potion' | 'drink-mana'> = {
-    1: 'fight',
-    2: 'physical-attack',
-    3: 'magic-attack',
-    4: 'drink-potion',
-    5: 'drink-mana',
+export const HYDRA_ACTION_ARMS: Record<number, 'fight' | 'physical-attack' | 'magic-attack' | 'drink-potion' | 'drink-mana'> = {
+    100: 'fight',
+    101: 'physical-attack',
+    102: 'magic-attack',
+    103: 'drink-potion',
+    104: 'drink-mana',
 };
 
 // casino.v1.CashOutCommand / casino.v1.PlayerActionCommand — `round_id` is
@@ -963,7 +1013,9 @@ function oneofArm(bytes: Uint8Array): [number, Uint8Array] | null {
     let arm: [number, Uint8Array] | null = null;
 
     forEachField(bytes, (field) => {
-        if (field.wireType === WIRE_LENGTH_DELIMITED) {
+        // Only a field in this oneof's band can be its arm: a later scalar or
+        // a later oneof's field is skipped, never read as the player's choice.
+        if (field.wireType === WIRE_LENGTH_DELIMITED && oneofBand(field.number) === 'arm') {
             arm = [field.number, field.bytes];
         }
     });
@@ -982,14 +1034,12 @@ function decodePlaceBetBody(bytes: Uint8Array): DecodedCommandBody {
             return;
         }
 
-        const game = PLACE_BET_ARMS[field.number];
+        const game = PLACE_BET_GAMES.get(field.number);
 
         if (!game) {
-            if (
-                field.number !== PLACE_BET_CLIENT_SEED &&
-                field.number !== PLACE_BET_AMOUNT &&
-                field.number !== PLACE_BET_SERVER_SEED_HASH
-            ) {
+            // `amount`, `client_seed` and `server_seed_hash` sit in the scalar
+            // band with any scalar added later; only an in-band field is an arm.
+            if (oneofBand(field.number) === 'arm') {
                 body = {
                     case: 'unrecognised',
                     description: `a PlaceBet game_data arm this build has no rule for (field ${field.number})`,
@@ -1057,13 +1107,15 @@ function decodePlayerActionBody(bytes: Uint8Array): DecodedCommandBody {
             return;
         }
 
-        const game = PLAYER_ACTION_ARMS[field.number];
+        const game = PLAYER_ACTION_GAMES.get(field.number);
 
         if (!game) {
-            body = {
-                case: 'unrecognised',
-                description: `a PlayerAction game_data arm this build has no rule for (field ${field.number})`,
-            };
+            if (oneofBand(field.number) === 'arm') {
+                body = {
+                    case: 'unrecognised',
+                    description: `a PlayerAction game_data arm this build has no rule for (field ${field.number})`,
+                };
+            }
 
             return;
         }
@@ -1132,13 +1184,15 @@ function decodeCashOutBody(bytes: Uint8Array): DecodedCommandBody {
             return;
         }
 
-        const game = CASH_OUT_ARMS[field.number];
+        const game = CASH_OUT_GAMES.get(field.number);
 
         if (!game) {
-            body = {
-                case: 'unrecognised',
-                description: `a CashOut game_data arm this build has no rule for (field ${field.number})`,
-            };
+            if (oneofBand(field.number) === 'arm') {
+                body = {
+                    case: 'unrecognised',
+                    description: `a CashOut game_data arm this build has no rule for (field ${field.number})`,
+                };
+            }
 
             return;
         }

@@ -18,7 +18,7 @@ import { computeCommitment } from './commitment';
 import { commandFrame, serverFrame, type ServerFrameSpec } from './fixtures';
 import { importReceipts, RECEIPTS_SCHEMA, receiptsSourceLine, type ImportedFrame } from './import';
 import { decodeReceiptFrame, labelFindings, recomputeRoundCommitment } from './recompute';
-import { receiptsExportFixtureUrl, receiptVectorsUrl } from './receipt-vectors-path';
+import { receiptsExportFixtureUrl, receiptsExportServerFixtureUrl, receiptVectorsUrl } from './receipt-vectors-path';
 import { settledFrameSeedFindings } from '../verifier';
 import { wireVectorsUrl } from '../wire/wire-vectors-path';
 import { bytesToHex, hexToBytes } from '@99dot5/round-replay';
@@ -140,8 +140,8 @@ describe('proto-reader', () => {
     });
 
     it('recognizes explicit promise commands and replies as known non-round payloads', () => {
-        const command = new ProtoWriter().bytes(17, new Uint8Array()).finish();
-        const reply = new ProtoWriter().bytes(22, new Uint8Array()).finish();
+        const command = new ProtoWriter().bytes(107, new Uint8Array()).finish();
+        const reply = new ProtoWriter().bytes(111, new Uint8Array()).finish();
         expect(decodeClientEnvelope(command).payloadCase).toBe('requestServerSeedPromise');
         expect(decodeServerEnvelope(reply).payloadCase).toBe('serverSeedPromised');
     });
@@ -1222,5 +1222,124 @@ describe('receipts export fixture', () => {
         } else {
             expect(result.reason).toBe(testCase.expected.recompute.reason);
         }
+    });
+});
+
+/**
+ * The game arm numbers against bytes this suite did NOT build.
+ *
+ * Every self-built frame goes through the fixtures' own copy of the field
+ * numbers, so a reader table that swapped two games would still round-trip
+ * those. The two export fixtures are real encoder output (protobuf-es from the
+ * play client, prost from the sequencer), so they are where a swapped number
+ * shows: a hilo bet would decode as some other game.
+ */
+describe('game arms on the real-encoder export fixtures', () => {
+    interface RoundCase {
+        name: string;
+        export: unknown;
+    }
+
+    const serverFixture = JSON.parse(readFileSync(fileURLToPath(receiptsExportServerFixtureUrl()), 'utf8')) as {
+        export: unknown;
+    };
+    const CASES: RoundCase[] = [
+        ...FIXTURE.cases.map((c) => ({ name: `client ${c.name}`, export: c.export })),
+        { name: 'server golden', export: serverFixture.export },
+    ];
+
+    /**
+     * The `game_type` a `RoundStarted` frame states, found as text in its body.
+     *
+     * Read by content rather than by field number, so this check does not
+     * share the numbering it is checking.
+     */
+    function statedGameType(body: Uint8Array): string {
+        const found = new Set(
+            Array.from(
+                new TextDecoder('latin1').decode(body).matchAll(/(?:hilo|crash|plinko|mines|hydra):v\d+/g),
+                (match) => match[0],
+            ),
+        );
+
+        expect(found.size, 'a RoundStarted states exactly one game_type').toBe(1);
+
+        return [...found][0];
+    }
+
+    it.each(CASES.map((c) => [c.name, c] as const))('%s', (name, roundCase) => {
+        const imported = importReceipts(JSON.stringify(roundCase.export));
+
+        if (imported.status !== 'ok') {
+            throw new Error(`${name}: ${imported.message}`);
+        }
+
+        const openers = imported.receipts.frames
+            .map((frame) => splitSignedFrame(frame.frame).body)
+            .filter((body) => decodeServerEnvelope(body).payloadCase === 'roundStarted');
+
+        expect(openers, `${name} carries one RoundStarted`).toHaveLength(1);
+
+        const gameType = statedGameType(openers[0]);
+        const game = gameType.split(':')[0];
+
+        if (name.startsWith('client ')) {
+            // The client cases are named after their game.
+            expect(name.slice('client '.length).split('-')[0]).toBe(game);
+        }
+
+        let gameCommands = 0;
+
+        for (const command of imported.receipts.commands) {
+            const body = decodeClientEnvelope(splitSignedFrame(command.frame).body).commandBody;
+
+            if (body === null) {
+                continue;
+            }
+
+            expect(body.case === 'unrecognised' ? body.description : body.game, `${name}: ${command.requestId}`).toBe(
+                game,
+            );
+            gameCommands += 1;
+        }
+
+        expect(gameCommands, `${name} carries a game command`).toBeGreaterThan(0);
+    });
+
+    /**
+     * The crash arm of `RoundStartedEvent.game_state`, read back off the play
+     * client's own encoding: a wrong crash number in the reader leaves every
+     * crash opener without a state, which no self-built frame can show. Client
+     * cases only, because the server golden is a hilo round and has no crash
+     * opener to read.
+     */
+    it.each(FIXTURE.cases.filter((c) => c.name.startsWith('crash-')).map((c) => [c.name, c] as const))(
+        'reads the crash.v1.State off the RoundStarted of client %s',
+        (name, testCase) => {
+            const imported = importReceipts(JSON.stringify(testCase.export));
+
+            if (imported.status !== 'ok') {
+                throw new Error(`${name}: ${imported.message}`);
+            }
+
+            const openers = imported.receipts.frames
+                .map((frame) => decodeServerEnvelope(splitSignedFrame(frame.frame).body))
+                .filter((envelope) => envelope.payloadCase === 'roundStarted');
+
+            expect(openers, `${name} carries one RoundStarted`).toHaveLength(1);
+
+            const { crashState } = openers[0];
+
+            expect(crashState, `${name}: crash.v1.State on the opener`).not.toBeNull();
+            expect(crashState?.tickQuantumMs, `${name}: tick_quantum_ms`).toBeGreaterThan(0n);
+            expect(crashState?.serverAnchorUnixMs, `${name}: server_anchor_unix_ms`).toBeGreaterThan(0n);
+        },
+    );
+
+    it('covers every game the fixtures carry, crash included', () => {
+        const games = new Set(FIXTURE.cases.map((c) => c.name.split('-')[0]));
+
+        expect(games).toContain('crash');
+        expect(games.size).toBeGreaterThanOrEqual(5);
     });
 });

@@ -19,19 +19,19 @@ import { CLIENT_FRAME_TAG, RECEIPT_DOMAIN, SERVER_FRAME_TAG } from '../wire/sign
 const SERVER_SEQUENCE = 1;
 const SERVER_RELATED_REQUEST_ID = 2;
 const SERVER_SESSION_ID = 3;
-const SERVER_COMMAND_ACCEPTED = 11;
-const SERVER_COMMAND_REJECTED = 12;
+export const SERVER_COMMAND_ACCEPTED = 101;
+export const SERVER_COMMAND_REJECTED = 102;
 /**
  * A payload tag this build's reader does not map, for the forward-skew tests:
  * the verifier ships separately from the sequencer, so a newer server can emit
- * a payload an older verifier has never heard of. Deliberately far above the
- * assigned range rather than a recycled number, so it cannot start meaning
- * something the day a real tag is added.
+ * a payload an older verifier has never heard of. 999 is above every band
+ * this message declares (its scalars sit below 100, its one oneof in
+ * 100-199), so it cannot start meaning something the day a real tag is added.
  */
-const SERVER_UNKNOWN_TAG = 99;
-const SERVER_ROUND_STARTED = 14;
-const SERVER_ROUND_UPDATED = 15;
-const SERVER_ROUND_ENDED = 16;
+const SERVER_UNKNOWN_TAG = 999;
+export const SERVER_ROUND_STARTED = 103;
+export const SERVER_ROUND_UPDATED = 104;
+export const SERVER_ROUND_ENDED = 105;
 
 // CommandAccepted / CommandRejected
 const ACCEPTED_RECEIVED_AT_UNIX_MS = 1;
@@ -41,7 +41,7 @@ const REJECTED_ROUND_ID = 3;
 const REJECTED_RECEIVED_AT_UNIX_MS = 4;
 
 // RoundStartedEvent.game_state, crash arm; crash.v1.State
-const ROUND_STARTED_CRASH_STATE = 11;
+export const ROUND_STARTED_CRASH_STATE = 101;
 const ROUND_STARTED_STAKE = 2;
 const ROUND_STARTED_SERVER_SEED_COMMITMENT = 4;
 const ROUND_STARTED_NEXT_SERVER_SEED_COMMITMENT = 5;
@@ -65,15 +65,15 @@ const ROUND_ENDING_VOIDED = 5;
 // ClientEnvelope
 const CLIENT_REQUEST_ID = 1;
 const CLIENT_SESSION_ID = 2;
-const CLIENT_PAYLOAD_FIELDS = {
-    ping: 10,
-    placeBet: 11,
-    playerAction: 12,
-    cashOut: 13,
-    resumeSession: 14,
-    endSession: 15,
-    timeSync: 16,
-    requestServerSeedPromise: 17,
+export const CLIENT_PAYLOAD_FIELDS = {
+    ping: 100,
+    placeBet: 101,
+    playerAction: 102,
+    cashOut: 103,
+    resumeSession: 104,
+    endSession: 105,
+    timeSync: 106,
+    requestServerSeedPromise: 107,
 } as const;
 
 // PlaceBetCommand
@@ -85,13 +85,14 @@ const PLACE_BET_SERVER_SEED_HASH = 3;
 const COMMAND_ROUND_ID = 1;
 
 /**
- * The per-game `game_data` arms. `PlaceBetCommand` and `CashOutCommand` share
- * the numbering on purpose ("one game keeps one number across commands");
- * `PlayerActionCommand` has only the three games with in-round decisions.
+ * The per-game `game_data` arms, at the game table's number for each game
+ * version. `PlaceBetCommand` and `CashOutCommand` carry every game;
+ * `PlayerActionCommand` has only the three games with in-round decisions, at
+ * the same numbers.
  */
-const PLACE_BET_ARM_FIELDS = { hilo: 10, crash: 11, plinko: 12, mines: 13, hydra: 14 } as const;
-const CASH_OUT_ARM_FIELDS = PLACE_BET_ARM_FIELDS;
-const PLAYER_ACTION_ARM_FIELDS = { hilo: 10, mines: 11, hydra: 12 } as const;
+export const PLACE_BET_ARM_FIELDS = { hilo: 100, crash: 101, plinko: 102, mines: 103, hydra: 104 } as const;
+export const CASH_OUT_ARM_FIELDS = PLACE_BET_ARM_FIELDS;
+export const PLAYER_ACTION_ARM_FIELDS = { hilo: 100, mines: 103, hydra: 104 } as const;
 
 // crash.v1.PlaceBet / crash.v1.CashOut / plinko.v1.PlaceBet /
 // mines.v1.PlaceBet / mines.v1.Reveal / hydra.v1.PlaceBet
@@ -107,15 +108,15 @@ const HYDRA_ARMOUR = 3;
 const HYDRA_SPRITE = 4;
 
 /** `PlayerAction.kind` arm numbers, per game. */
-const ACTION_KIND_FIELDS: Record<string, number> = {
-    higher: 1,
-    lower: 2,
-    reveal: 1,
-    fight: 1,
-    'physical-attack': 2,
-    'magic-attack': 3,
-    'drink-potion': 4,
-    'drink-mana': 5,
+export const ACTION_KIND_FIELDS: Record<string, number> = {
+    higher: 100,
+    lower: 101,
+    reveal: 100,
+    fight: 100,
+    'physical-attack': 101,
+    'magic-attack': 102,
+    'drink-potion': 103,
+    'drink-mana': 104,
 };
 
 /** `casino.v1.StepOrigin` values. */

@@ -16,6 +16,7 @@ export {
     type SeedRule,
 } from './verify/seed';
 export { actionTypeOf, isSystem, tagOf } from './wire/action-tags';
+export { BorshError, BorshReader } from './wire/borsh';
 export {
     decodeEnvelopePayload,
     decodeExternalMessage,

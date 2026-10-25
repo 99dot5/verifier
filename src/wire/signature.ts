@@ -72,7 +72,7 @@ export function decodeSr1(address: string): Uint8Array {
  * and the width. A wrong prefix (an `sr1` where a `NetX` was expected) is a
  * `RangeError`, never a silently mis-sized domain.
  */
-function decodeBase58Check(
+export function decodeBase58Check(
     value: string,
     prefix: readonly number[],
     payloadLength: number,
@@ -113,7 +113,7 @@ function decodeBase58Check(
  * frame — is in base58. Hand-rolled for the same reason the decoder is: the
  * published verifier must have nothing load-bearing hidden in node_modules.
  */
-function encodeBase58Check(prefix: readonly number[], payload: Uint8Array): string {
+export function encodeBase58Check(prefix: readonly number[], payload: Uint8Array): string {
     const body = new Uint8Array(prefix.length + payload.length);
 
     body.set(prefix, 0);
@@ -157,6 +157,11 @@ export function encodeEdpk(raw: Uint8Array): string {
     }
 
     return encodeBase58Check(EDPK_PREFIX, raw);
+}
+
+/** Decode a `KT1…` originated-contract address to its 20-byte hash. */
+export function decodeKt1(address: string): Uint8Array {
+    return decodeBase58Check(address, KT1_PREFIX, 20, 'KT1');
 }
 
 /** Encode a 20-byte originated-contract hash as `KT1…`. */
@@ -241,6 +246,32 @@ export function verifyPrehashedSignature(
     } catch {
         return false;
     }
+}
+
+/**
+ * Base58check-DECODE a value whose prefix the CALLER classifies: the checksum
+ * is verified and the body (prefix and payload, checksum stripped) returned.
+ * For a `key`, a `signature` or an `address` read off chain, which can carry
+ * any of several prefixes; `payout/keys.ts` tells them apart.
+ */
+export function base58CheckBody(value: string): Uint8Array {
+    const decoded = base58Decode(value.trim());
+
+    if (decoded.length < 4) {
+        throw new RangeError(`not base58check: decoded length ${decoded.length}`);
+    }
+
+    const body = decoded.slice(0, decoded.length - 4);
+    const checksum = decoded.slice(decoded.length - 4);
+    const digest = sha256sha256(body);
+
+    for (let i = 0; i < 4; i++) {
+        if (checksum[i] !== digest[i]) {
+            throw new RangeError('bad base58check checksum');
+        }
+    }
+
+    return body;
 }
 
 function base58Decode(value: string): Uint8Array {

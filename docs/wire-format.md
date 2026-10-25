@@ -513,3 +513,87 @@ itself sent a `0x08`, and keep **every** key ever registered rather than the
 currently-valid one. The kernel's grace window governs admission of new
 messages; a verifier checks historical evidence, and a receipt signed under a
 key that was valid at delivery stays valid evidence forever.
+
+# The session payout
+
+A session's balance leaves the rollup through the pool's **vault**, an L1
+contract, in one of two ways, and the vault emits a typed contract event for
+each (`sp.emit` with its type, so a node renders the event with the `type`
+beside the `payload`):
+
+| Tag | Emitted by | Payload (by field annotation) |
+|---|---|---|
+| `fast_payout` | `fast_payout(session_id: bytes, amount: mutez, signatures: map key signature)`, the signed fast path | `mutez %fast`, `mutez %paid_now`, `mutez %paid_total`, `bytes %session_id` |
+| `cemented_payout` | `execute_cemented_payout((session_id, amount))`, the rollup's own outbox message, executed about two weeks after the session ends | `mutez %cemented`, `mutez %paid_now`, `mutez %paid_total`, `bytes %session_id` |
+
+Read the payload **through its type by annotation**, not by position: the
+record is a right comb in the contract's field order, and a node may render a
+comb nested (`Pair a (Pair b c)`), flattened (`Pair a b c`) or as a sequence
+(`[a, b, c]`). Only an event with `result.status = "applied"` counts. The
+event is an internal operation result of the operation that triggered it: the
+submitter's `transaction` for a fast payout, the
+`smart_rollup_execute_outbox_message` for a cemented one.
+
+## The paid ledger
+
+`paid[session_id]` in the vault's storage is the total paid to the session's
+owner through either path, and the two events report what each execution did
+to it. A fast payout is refused once anything is on the ledger, so it always
+starts from zero: `paid_now = paid_total = fast`. A cemented payout of `c`
+over a previous total `p` pays the remainder and records the larger:
+`paid_now = max(0, c − p)`, `paid_total = max(p, c)`. Replay the previous
+total from the session's earlier events; never take it from the event's own
+claim. An over-paid session (`p > c`) is left standing — nothing is clawed
+back, which is why the comparison below exists.
+
+## The fast payout's signatures
+
+The `fast_payout` call's parameter value (in the same operation as the event,
+at the top level or as an internal transaction when a contract batched it)
+has the type `pair (mutez %amount) (pair (bytes %session_id) (map %signatures
+key signature))`. The vault counts an entry only when its key is in its
+`payout_signers` set (a `set key` in storage, read by annotation through the
+script's storage type at the block **before** the payout) and its signature
+verifies over
+
+```
+PACK(("fast-payout:v1", chain_id, vault, session_id, amount))
+```
+
+a five-tuple right comb: `05` PACK prefix; `07 07` for each `Pair`; the
+domain as `01 <u32 BE 14> "fast-payout:v1"`; the chain id as `0a <u32 BE 4>`
+and its 4 raw bytes (the payload of the `NetX…` base58check); the vault as
+`0a <u32 BE 22>` and its forged address `01 ‖ hash20 ‖ 00`; the session id as
+`0a <u32 BE 16>` and its 16 raw bytes (never the hyphenated text); the amount
+as `00 <zarith>`, the signed zarith described under the administrator lineage.
+At least two of the four signers must verify. Every Tezos signature is over
+`blake2b-256(payload)`: Ed25519 (`edpk` / `edsig`) signs that digest as its
+message; secp256k1 (`sppk` / `spsig1`, low-S required) and P-256 (`p2pk` /
+`p2sig`) sign it as their prehash; the generic `sig…` form carries no curve
+and verifies under the key's. Keys and signatures may be rendered readable
+(`{"string": "sppk…"}`) or optimised (`{"bytes": …}`: a key as `tag ‖ raw`
+with tag `00` Ed25519, `01` secp256k1, `02` P-256; a signature as its 64 raw
+bytes). The shared `vectors/fast-payout-vectors.json` pins the payload bytes
+and every signature.
+
+## The kernel's figure
+
+The cemented payout's `cemented` amount is the kernel's figure as the outbox
+message carried it, so once it has executed a fast payout above it is an
+overpayment provable from L1 alone. Before that, the figure is in the
+kernel's durable storage, readable from any rollup node that follows the
+rollup — `GET /global/block/finalized/durable/wasm_2_0_0/value?key=…`, a hex
+string or `null` — at two keys under the vault's own `tenant_id` and
+`pool_id`:
+
+| Key | Record (Borsh, in a one-byte envelope: `00` = V1) |
+|---|---|
+| `/tenants/{tenant}/pools/{pool}/sessions/{session_id}` (hyphenated) | `owner: String`, `asset: String`, `balance: u128`, `funding_vault_address: String`, `ended: bool`, `end_reason: Option<String>` |
+| `/tenants/{tenant}/pools/{pool}/transactions/TEZ/payout-{session_id}` | `account_address: String`, `asset: String`, `kind: u8` (`0` deposit, `1` session-end payout, `2` stake, `3` round-end payout, `4` fund, `5` sweep), `amount: u128` |
+
+A fast payout is backed when the session exists, has ended, was funded
+through the vault that paid, is a `TEZ` session, and the row at its payout
+key is a session-end payout (kind `1`) of at least the amount paid. Anything
+else is a finding; paying less is not, because the cemented payout pays the
+remainder. Read a rollup node you run: a rollup node is one party's replay of
+the rollup, and the operator's can only confirm the operator.

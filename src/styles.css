@@ -208,8 +208,40 @@ button:disabled {
     color: var(--fail);
 }
 
+/*
+ * The session payout's outcomes, under the same rule as the verdicts: the
+ * one that alleges something (`overpaid`) and the one that found a check not
+ * holding (`unbacked`) read as failures; `backed` as a pass; and the four that
+ * are not findings (`short`, `pending`, `unpaid`, `unavailable`) stay muted,
+ * because a warning colour on "nothing to compare yet" would read as an
+ * accusation the outcome is specifically declining to make.
+ */
+.verdict.payout-backed {
+    background: rgba(74, 222, 128, 0.12);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+}
+
+.verdict.payout-overpaid,
+.verdict.payout-unbacked {
+    background: rgba(248, 113, 113, 0.12);
+    border: 1px solid var(--fail);
+    color: var(--fail);
+}
+
+.verdict.payout-short,
+.verdict.payout-pending,
+.verdict.payout-unpaid,
+.verdict.payout-unavailable {
+    background: rgba(154, 164, 173, 0.12);
+    border: 1px solid var(--muted);
+    color: var(--muted);
+}
+
 #checks,
-#references {
+#references,
+#payout-checks,
+#payout-references {
     list-style: none;
     margin: 0;
     padding: 0;

@@ -1,0 +1,259 @@
+{
+    "capturedFrom": [
+        "GET https://rpc.shadownet.teztnets.com/chains/main/blocks/5627069/context/contracts/KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C/script, captured 2026-10-25: the first vault of the treasury generation, thirteen storage leaves, before any deposit. Only the script's `storage` type section is kept beside the storage value, which is all the vault-storage reader consumes; the node rendered every key and address in the optimised (forged bytes) form.",
+        "GET https://api.shadownet.tzkt.io/v1/contracts/KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C/storage, read 2026-10-25, renders the same storage with payout_signers [edpktv2awP63gVQpkw5CmwHcPoQ5vXig2NrML8iEkWFBpDVK6YciBK, edpkv98rVaVRW5nJ1JgKsXvXwXqt7GdFv8x4rhM8pfS2KbidDNnKdt, sppk7aCm8va7mSob4Zw2yL6nYuHNQc1zNzMBHvkpfgZ4EDg5trNuJDm, sppk7bxwGnpCqM9F2GXNuP294NpsVYaGS6pJVrvixNqe1Yc9siJ42oJ], treasury KT1QztSkFbwE2M4TpRT3yXPxwfSNPSWPBcDh, tenant_id stg-99dot5-com-shadownet, pool_id standard: the expected values below."
+    ],
+    "vault": "KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C",
+    "level": 5627069,
+    "expected": {
+        "tenantId": "stg-99dot5-com-shadownet",
+        "poolId": "standard",
+        "payoutSigners": [
+            "edpktv2awP63gVQpkw5CmwHcPoQ5vXig2NrML8iEkWFBpDVK6YciBK",
+            "edpkv98rVaVRW5nJ1JgKsXvXwXqt7GdFv8x4rhM8pfS2KbidDNnKdt",
+            "sppk7aCm8va7mSob4Zw2yL6nYuHNQc1zNzMBHvkpfgZ4EDg5trNuJDm",
+            "sppk7bxwGnpCqM9F2GXNuP294NpsVYaGS6pJVrvixNqe1Yc9siJ42oJ"
+        ],
+        "treasury": "KT1QztSkFbwE2M4TpRT3yXPxwfSNPSWPBcDh",
+        "adminAddress": "tz1crXV6x6jRJLnR5uTfhuQrqxSo7wQajQJh"
+    },
+    "script": {
+        "code": [
+            {
+                "prim": "storage",
+                "args": [
+                    {
+                        "prim": "pair",
+                        "args": [
+                            {
+                                "prim": "address",
+                                "annots": [
+                                    "%admin_address"
+                                ]
+                            },
+                            {
+                                "prim": "pair",
+                                "args": [
+                                    {
+                                        "prim": "key",
+                                        "annots": [
+                                            "%deposit_authoriser"
+                                        ]
+                                    },
+                                    {
+                                        "prim": "pair",
+                                        "args": [
+                                            {
+                                                "prim": "big_map",
+                                                "args": [
+                                                    {
+                                                        "prim": "bytes"
+                                                    },
+                                                    {
+                                                        "prim": "mutez"
+                                                    }
+                                                ],
+                                                "annots": [
+                                                    "%paid"
+                                                ]
+                                            },
+                                            {
+                                                "prim": "pair",
+                                                "args": [
+                                                    {
+                                                        "prim": "bool",
+                                                        "annots": [
+                                                            "%paused"
+                                                        ]
+                                                    },
+                                                    {
+                                                        "prim": "pair",
+                                                        "args": [
+                                                            {
+                                                                "prim": "nat",
+                                                                "annots": [
+                                                                    "%payout_signer_nonce"
+                                                                ]
+                                                            },
+                                                            {
+                                                                "prim": "pair",
+                                                                "args": [
+                                                                    {
+                                                                        "prim": "set",
+                                                                        "args": [
+                                                                            {
+                                                                                "prim": "key"
+                                                                            }
+                                                                        ],
+                                                                        "annots": [
+                                                                            "%payout_signers"
+                                                                        ]
+                                                                    },
+                                                                    {
+                                                                        "prim": "pair",
+                                                                        "args": [
+                                                                            {
+                                                                                "prim": "option",
+                                                                                "args": [
+                                                                                    {
+                                                                                        "prim": "address"
+                                                                                    }
+                                                                                ],
+                                                                                "annots": [
+                                                                                    "%pending_admin_address"
+                                                                                ]
+                                                                            },
+                                                                            {
+                                                                                "prim": "pair",
+                                                                                "args": [
+                                                                                    {
+                                                                                        "prim": "string",
+                                                                                        "annots": [
+                                                                                            "%pool_id"
+                                                                                        ]
+                                                                                    },
+                                                                                    {
+                                                                                        "prim": "pair",
+                                                                                        "args": [
+                                                                                            {
+                                                                                                "prim": "big_map",
+                                                                                                "args": [
+                                                                                                    {
+                                                                                                        "prim": "bytes"
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "prim": "pair",
+                                                                                                        "args": [
+                                                                                                            {
+                                                                                                                "prim": "address",
+                                                                                                                "annots": [
+                                                                                                                    "%owner"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "prim": "key",
+                                                                                                                "annots": [
+                                                                                                                    "%session_public_key"
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ],
+                                                                                                "annots": [
+                                                                                                    "%sessions"
+                                                                                                ]
+                                                                                            },
+                                                                                            {
+                                                                                                "prim": "pair",
+                                                                                                "args": [
+                                                                                                    {
+                                                                                                        "prim": "address",
+                                                                                                        "annots": [
+                                                                                                            "%smart_rollup_address"
+                                                                                                        ]
+                                                                                                    },
+                                                                                                    {
+                                                                                                        "prim": "pair",
+                                                                                                        "args": [
+                                                                                                            {
+                                                                                                                "prim": "string",
+                                                                                                                "annots": [
+                                                                                                                    "%tenant_id"
+                                                                                                                ]
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "prim": "pair",
+                                                                                                                "args": [
+                                                                                                                    {
+                                                                                                                        "prim": "mutez",
+                                                                                                                        "annots": [
+                                                                                                                            "%total_deposits"
+                                                                                                                        ]
+                                                                                                                    },
+                                                                                                                    {
+                                                                                                                        "prim": "address",
+                                                                                                                        "annots": [
+                                                                                                                            "%treasury"
+                                                                                                                        ]
+                                                                                                                    }
+                                                                                                                ]
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                ]
+                                                                                            }
+                                                                                        ]
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "storage": [
+            {
+                "bytes": "0000bcd72a3797c6892934c1e6f45833de5ffc2bed10"
+            },
+            {
+                "bytes": "01033e3d3eb49a8e47e8b54dc82cb3008a6d44999dc0c8d51c21a11d8a635207f3cf"
+            },
+            {
+                "int": "45375"
+            },
+            {
+                "prim": "False"
+            },
+            {
+                "int": "0"
+            },
+            [
+                {
+                    "bytes": "0023e2b594bbab090bebb3e0e7ec67c86ed6a6b833b57e7ce3503059f89bafaaf2"
+                },
+                {
+                    "bytes": "00c5585c6a8f1658cbc6887909433d6e2093e9883bb0fb60c656776b82ea24180c"
+                },
+                {
+                    "bytes": "0102765b8135f72dbce48838b2d55c71533da183f43db5c78985ae1dac37c8d08a6e"
+                },
+                {
+                    "bytes": "01035e5b932cf2ec0d1007ed4b26f9b8164fd6535c84221083f9c13091a39a1739bb"
+                }
+            ],
+            {
+                "prim": "None"
+            },
+            {
+                "string": "standard"
+            },
+            {
+                "int": "45376"
+            },
+            {
+                "bytes": "039e1b62008cb6f9aee372705ebce0b3e9effd591700"
+            },
+            {
+                "string": "stg-99dot5-com-shadownet"
+            },
+            {
+                "int": "0"
+            },
+            {
+                "bytes": "01b411bce7ba832b28ab1d763e4a33982e0a2e1bb800"
+            }
+        ]
+    }
+}

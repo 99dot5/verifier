@@ -15,10 +15,11 @@ import {
     type InboxMessage,
     type ScanProgress,
 } from './chain/inbox';
-import { fetchAdminLineage, keysForTenant, type AdminLineage } from './chain/admin-lineage';
+import { fetchAdminLineage, keysForTenant, vaultsForPool, type AdminLineage } from './chain/admin-lineage';
 import {
     keySetFromLineage,
     supportedGameTypes,
+    type Check,
     type KeySet,
     type ReceiptsInput,
     type ScanContext,
@@ -28,7 +29,13 @@ import {
 import { decodeExternalMessage, hexToBytes } from '@99dot5/round-replay';
 import { importReceipts, receiptsSourceLine, type ReceiptsSource } from './receipts/import';
 import { type HintHandoff, readHintHandoff, readReceiptsHandoff, readRoundHandoff } from './receipts/handoff';
-import { type DepositChain, fetchBigMapHas, fetchContractStorage, locateSessionDeposit } from './chain/deposit';
+import {
+    type DepositChain,
+    fetchBigMapHas,
+    fetchContractScript,
+    fetchContractStorage,
+    locateSessionDeposit,
+} from './chain/deposit';
 import {
     resolveReceiptsDeposit,
     runChainVerification,
@@ -36,6 +43,9 @@ import {
     type HintInput,
     type PreliminaryReport,
 } from './run';
+import { locatePayoutEvents } from './payout/locate';
+import { rollupNodeReads } from './payout/rollup-node';
+import { type PayoutOutcome, type SessionPayoutReport, verifySessionPayout } from './payout/session-payout';
 
 const app = document.getElementById('app')!;
 
@@ -75,6 +85,11 @@ app.innerHTML = `
         <p class="intro">
             Supported games: <code>${supportedGameTypes().join('</code>, <code>')}</code>.
             Everything below runs in your browser; view the source — it is published precisely so you can.
+        </p>
+        <p class="intro">
+            A fifth check, further down, is about your <strong>session’s payout</strong> rather than a round:
+            that the fast payout your wallet received was authorised by two of the vault’s own payout signers and
+            does not exceed what the rollup kernel said the session was owed.
         </p>
     </header>
 
@@ -189,6 +204,55 @@ app.innerHTML = `
         </details>
     </section>
 
+    <section class="panel" id="payout-panel">
+        <h2>Verify a session’s payout</h2>
+        <p class="intro">
+            When a session ends, its balance leaves the rollup in one of two ways. The <strong>cemented
+            payout</strong> is the rollup’s own outbox message, executable about two weeks later once the
+            commitment covering it cements. The <strong>fast payout</strong> is the same payment minutes after the
+            session ends, authorised by <strong>two of the vault’s four payout signers</strong> — and the vault
+            cannot check its amount, because before cementation only a rollup node knows what the kernel computed.
+            So two signers acting together could pay a session more than it was owed. That cannot be prevented
+            without capital; this check is what makes it impossible to do quietly.
+        </p>
+        <p class="intro">
+            It reads the vault’s <code>fast_payout</code> and <code>cemented_payout</code> events for the session
+            off L1, re-verifies every signature the fast payout carried against the <code>payout_signers</code> the
+            vault held at the time, replays the vault’s paid ledger, and compares the fast payout with the kernel’s
+            figure: from the cemented payout on L1 once it has executed, or within minutes from the kernel’s own
+            <code>payout-{session}</code> record on a rollup node <em>you</em> run. Paying less than the kernel’s
+            figure is not a finding — the cemented payout pays the remainder.
+        </p>
+        <div class="grid">
+            <label>Session ID (UUID — from your receipts, or the session you deposited to)
+                <input id="session-id" spellcheck="false" placeholder="filled in from your receipts when loaded" />
+            </label>
+            <label>Rollup node RPC (optional — a node YOU run; the operator’s can only confirm the operator)
+                <input id="rollup-node" spellcheck="false" placeholder="http://127.0.0.1:8932" />
+            </label>
+        </div>
+        <p class="note">
+            The vaults searched are the ones the administrator lineage registered for the tenant and pool above,
+            so run this after the network and tenant are set. A rollup node is deliberately not defaulted: a rollup
+            node is one party’s replay of the rollup, not a public chain source. An observer node of your own is
+            enough — only <code>value</code> and <code>level</code> are read at its finalised block, and it must
+            allow this page’s origin in its CORS settings.
+        </p>
+        <div class="actions">
+            <button id="payout-verify" class="primary">Check the payout</button>
+            <span id="payout-progress" role="status"></span>
+        </div>
+        <div id="payout-report" hidden>
+            <div id="payout-outcome"></div>
+            <h3>Checks</h3>
+            <ul id="payout-checks"></ul>
+            <h3>Evidence and findings</h3>
+            <div id="payout-evidence"></div>
+            <h3>L1 references</h3>
+            <ul id="payout-references"></ul>
+        </div>
+    </section>
+
     <section class="panel" id="report-panel" hidden>
         <h2>Report</h2>
         <div id="verdict"></div>
@@ -243,6 +307,10 @@ const abortButton = el<HTMLButtonElement>('abort');
 const progress = el<HTMLSpanElement>('progress');
 
 const deploymentSelect = el<HTMLSelectElement>('deployment');
+const sessionIdInput = el<HTMLInputElement>('session-id');
+const rollupNodeInput = el<HTMLInputElement>('rollup-node');
+const payoutButton = el<HTMLButtonElement>('payout-verify');
+const payoutProgress = el<HTMLSpanElement>('payout-progress');
 
 /**
  * Tenant and pool from the loaded receipts, or null when none are loaded.
@@ -516,6 +584,72 @@ function depositChain(signal?: AbortSignal): DepositChain {
         bigMapHas: (bigMapId, scriptExprHash) => fetchBigMapHas(rpc, bigMapId, scriptExprHash, signal),
     };
 }
+
+/**
+ * The session payout check: the lineage's vaults for the form's tenant and
+ * pool, the indexer to locate the payout events, the node to read them, and
+ * the reader's own rollup node when one is given.
+ */
+payoutButton.addEventListener('click', async () => {
+    const sessionId = sessionIdInput.value.trim();
+
+    if (!sessionId) {
+        payoutProgress.textContent = 'enter a session ID first (loading your receipts fills it in)';
+
+        return;
+    }
+
+    const abort = new AbortController();
+    const { signal } = abort;
+    const tzkt = tzktInput.value.trim();
+    const rpc = rpcInput.value.trim();
+    const rollupNodeUrl = rollupNodeInput.value.trim();
+
+    payoutButton.disabled = true;
+
+    try {
+        const resolved = await resolveKeySet(signal);
+        const lineage = resolved.lineage;
+
+        if (!lineage) {
+            payoutProgress.textContent =
+                'the administrator lineage could not be derived, so the pool’s vaults are unknown: ' +
+                (resolved.keys.status === 'unavailable' ? resolved.keys.reason : 'an override key carries no lineage');
+
+            return;
+        }
+
+        const tenantId = tenantInput.value.trim();
+        const poolId = poolInput.value.trim();
+        // A pool narrows the search to its vaults; without one, every vault
+        // the lineage registered under the tenant is searched.
+        const vaultAddresses = poolId
+            ? vaultsForPool(lineage, tenantId, poolId)
+            : [...new Set(lineage.vaults.filter((v) => v.tenantId === tenantId).map((v) => v.vault))];
+        const report = await verifySessionPayout({
+            sessionId,
+            vaultAddresses,
+            chainId: currentNetwork().chainId,
+            chain: {
+                locatePayoutEvents: (vaults, sessionIdHex) =>
+                    locatePayoutEvents({ tzktApiUrl: tzkt, vaultAddresses: vaults, sessionIdHex, signal }),
+                blockOperations: (level) => fetchBlockOperations(rpc, level, signal),
+                contractScript: (address, level) => fetchContractScript(rpc, address, level, signal),
+                rollupNode: rollupNodeUrl ? rollupNodeReads(rollupNodeUrl, signal) : null,
+            },
+            onProgress: (text) => {
+                payoutProgress.textContent = text;
+            },
+        });
+
+        payoutProgress.textContent = 'done';
+        renderPayoutReport(report);
+    } catch (error) {
+        payoutProgress.textContent = error instanceof Error ? error.message : String(error);
+    } finally {
+        payoutButton.disabled = false;
+    }
+});
 
 receiptsFileInput.addEventListener('change', async () => {
     const file = receiptsFileInput.files?.[0];
@@ -917,7 +1051,13 @@ function adoptReceiptsScope(statusPrefix: string): void {
 
     // The round ID is filled only when the field is empty: a reader who typed a
     // round and then loaded receipts for a different one should see the
-    // mismatch in the report, not have their input silently replaced.
+    // mismatch in the report, not have their input silently replaced. The
+    // session ID, for the payout check, follows the same rule.
+    if (!sessionIdInput.value.trim()) {
+        sessionIdInput.value = hyphenateUuid(result.receipts.sessionIdHex);
+        changed.push(`session ${sessionIdInput.value}`);
+    }
+
     if (!roundIdInput.value.trim()) {
         roundIdInput.value = roundId;
         changed.push(`round ${roundId}`);
@@ -1038,14 +1178,11 @@ function renderReport(report: VerificationReport, hintedRun: VerificationReport 
     }
 }
 
-function renderBody(report: Omit<VerificationReport, 'verdict'>): void {
-    el('report-panel').hidden = false;
+/** One list item per check, with its badge, title and detail. */
+function renderChecksInto(list: HTMLElement, checks: readonly Check[]): void {
+    list.innerHTML = '';
 
-    const checks = el('checks');
-
-    checks.innerHTML = '';
-
-    for (const check of report.checks) {
+    for (const check of checks) {
         const li = document.createElement('li');
         const badge = { pass: '✓', fail: '✗', unavailable: '–' }[check.status];
 
@@ -1053,8 +1190,77 @@ function renderBody(report: Omit<VerificationReport, 'verdict'>): void {
         li.innerHTML = `<span class="badge">${badge}</span><div><strong></strong><p></p></div>`;
         li.querySelector('strong')!.textContent = check.title;
         li.querySelector('p')!.textContent = check.detail;
-        checks.appendChild(li);
+        list.appendChild(li);
     }
+}
+
+// Seven outcomes for the payout, kept apart from the round verdicts: a payout
+// is a fact about the SESSION, judged by different rules, and only one of
+// the seven alleges anything.
+const PAYOUT_OUTCOME_LABELS: Record<PayoutOutcome, string> = {
+    backed: 'BACKED — the payout matches the kernel’s figure, two of the vault’s own signers authorised it, and the ledger holds',
+    short: 'SHORT — the fast payout was below the kernel’s figure; the cemented payout pays (or paid) the remainder. Not an accusation',
+    overpaid: 'OVERPAID — the fast payout exceeds what the kernel recorded: two signers paid what the kernel does not back',
+    unbacked: 'UNBACKED — a check did not hold; see below',
+    pending: 'PENDING — a fast payout exists, but nothing yet says what the kernel owed: no cemented payout on L1, and no rollup node to ask',
+    unpaid: 'UNPAID — no payout event for this session on any of the pool’s vaults: not ended, or not paid yet',
+    unavailable: 'UNAVAILABLE — the lookups could not be made or could not be trusted; see below',
+};
+
+function renderPayoutReport(report: SessionPayoutReport): void {
+    const outcome = el('payout-outcome');
+    const evidence = el('payout-evidence');
+    const references = el('payout-references');
+
+    el('payout-report').hidden = false;
+    outcome.className = `verdict payout-${report.outcome}`;
+    outcome.textContent = PAYOUT_OUTCOME_LABELS[report.outcome];
+    renderChecksInto(el('payout-checks'), report.checks);
+    evidence.innerHTML = '';
+
+    const lines = [
+        `Session ${report.sessionId}: ${report.events.length} payout event(s)` +
+            (report.events.length > 0
+                ? ' — ' +
+                  report.events
+                      .map(
+                          (e) =>
+                              `${e.path} ${e.amountMutez} mutez at level ${e.level} on ${e.vault} ` +
+                              `(paid_now ${e.paidNowMutez}, paid_total ${e.paidTotalMutez})`,
+                      )
+                      .join('; ')
+                : ''),
+        ...(report.payoutSigners
+            ? [
+                  `The vault’s payout_signers at the block before the fast payout (${report.payoutSigners.length}): ` +
+                      report.payoutSigners.join(', '),
+              ]
+            : []),
+        ...report.findings,
+    ];
+
+    for (const line of lines) {
+        const p = document.createElement('p');
+
+        p.className = 'note';
+        p.textContent = line;
+        evidence.appendChild(p);
+    }
+
+    references.innerHTML = '';
+
+    for (const reference of report.references) {
+        const li = document.createElement('li');
+
+        li.textContent = `level ${reference.level} — ${reference.summary} (op ${reference.operationHash})`;
+        references.appendChild(li);
+    }
+}
+
+function renderBody(report: Omit<VerificationReport, 'verdict'>): void {
+    el('report-panel').hidden = false;
+
+    renderChecksInto(el('checks'), report.checks);
 
     const working = el('working');
 

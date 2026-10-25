@@ -1,0 +1,416 @@
+{
+  "l1": {
+    "blocks": {
+      "105": [
+        [],
+        [],
+        [],
+        [
+          {
+            "branch": "BL35qU9cLuKmamjHhebWLKe4ySiiWFxwXhmcUZ8Vo4kXzwAhRdQ",
+            "chain_id": "NetXdQprcVkpaWU",
+            "contents": [
+              {
+                "amount": "0",
+                "counter": "1000",
+                "destination": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+                "fee": "2000",
+                "gas_limit": "6000",
+                "kind": "transaction",
+                "metadata": {
+                  "balance_updates": [],
+                  "internal_operation_results": [
+                    {
+                      "amount": "1500000",
+                      "destination": "tz1UyQDepgtUBnWjyzzonqeDwaiWoQzRKSP5",
+                      "kind": "transaction",
+                      "nonce": 0,
+                      "result": {
+                        "consumed_milligas": "2100000",
+                        "status": "applied"
+                      },
+                      "source": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc"
+                    },
+                    {
+                      "kind": "event",
+                      "nonce": 1,
+                      "payload": {
+                        "args": [
+                          {
+                            "int": "1500000"
+                          },
+                          {
+                            "args": [
+                              {
+                                "int": "1500000"
+                              },
+                              {
+                                "args": [
+                                  {
+                                    "int": "1500000"
+                                  },
+                                  {
+                                    "bytes": "0102030405060708090a0b0c0d0e0f10"
+                                  }
+                                ],
+                                "prim": "Pair"
+                              }
+                            ],
+                            "prim": "Pair"
+                          }
+                        ],
+                        "prim": "Pair"
+                      },
+                      "result": {
+                        "consumed_milligas": "100000",
+                        "status": "applied"
+                      },
+                      "source": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+                      "tag": "fast_payout",
+                      "type": {
+                        "args": [
+                          {
+                            "annots": [
+                              "%fast"
+                            ],
+                            "prim": "mutez"
+                          },
+                          {
+                            "args": [
+                              {
+                                "annots": [
+                                  "%paid_now"
+                                ],
+                                "prim": "mutez"
+                              },
+                              {
+                                "args": [
+                                  {
+                                    "annots": [
+                                      "%paid_total"
+                                    ],
+                                    "prim": "mutez"
+                                  },
+                                  {
+                                    "annots": [
+                                      "%session_id"
+                                    ],
+                                    "prim": "bytes"
+                                  }
+                                ],
+                                "prim": "pair"
+                              }
+                            ],
+                            "prim": "pair"
+                          }
+                        ],
+                        "prim": "pair"
+                      }
+                    }
+                  ],
+                  "operation_result": {
+                    "consumed_milligas": "4000000",
+                    "status": "applied"
+                  }
+                },
+                "parameters": {
+                  "entrypoint": "fast_payout",
+                  "value": {
+                    "args": [
+                      {
+                        "int": "1500000"
+                      },
+                      {
+                        "args": [
+                          {
+                            "bytes": "0102030405060708090a0b0c0d0e0f10"
+                          },
+                          [
+                            {
+                              "args": [
+                                {
+                                  "string": "sppk7bWq3wGj9AuTowUc7N2dpRhMCWtw6pmDFcLrSTLyA1mnBJ9hL5T"
+                                },
+                                {
+                                  "string": "spsig1T44Ls6CqyU9xqnDbB7QU4oZRdkXUDbx8Edi2hoPsmxKfmi1nj1GCic3GBzC7xssqPqJwVELB9uzoqEeLYQePdPdLbPDQE"
+                                }
+                              ],
+                              "prim": "Elt"
+                            },
+                            {
+                              "args": [
+                                {
+                                  "string": "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD"
+                                },
+                                {
+                                  "string": "spsig1HBz6gc5KdAv4DAWh5ByQRYHXjyqhQkNuVcU5Q3GLcE98iWBfvUoMb9EudRab4G8i4AKtT2Dau7N77jnpGd7He782SJuBv"
+                                }
+                              ],
+                              "prim": "Elt"
+                            }
+                          ]
+                        ],
+                        "prim": "Pair"
+                      }
+                    ],
+                    "prim": "Pair"
+                  }
+                },
+                "source": "tz1KzFd43P88CfLbvDC1arQTXhLYuxfRraHd",
+                "storage_limit": "100"
+              }
+            ],
+            "hash": "oneev3QMfQJd2fEM3zQPdFwwPY1aohkxffttrK8Qrswemnh2nML",
+            "protocol": "PsUshuai9QapM5TGj1JpuVGkdxz5GykdnEvS6Rh8SUVrARvZLCY",
+            "signature": "sigNXGj9T2fhd3v6H1hxpRUDpdhcBeghKQVt5nCKghm4ECeMHC6EkAxbXPaA2DLFZkvM6NMh7gXi7J9JjYNp4ymhrN8H8Y2s"
+          }
+        ]
+      ]
+    },
+    "finalized_level": 130,
+    "scripts": [
+      {
+        "contract": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+        "from_level": 100,
+        "script": {
+          "code": [
+            {
+              "args": [
+                {
+                  "prim": "unit"
+                }
+              ],
+              "prim": "parameter"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "annots": [
+                        "%admin_address"
+                      ],
+                      "prim": "address"
+                    },
+                    {
+                      "args": [
+                        {
+                          "annots": [
+                            "%paid"
+                          ],
+                          "args": [
+                            {
+                              "prim": "bytes"
+                            },
+                            {
+                              "prim": "mutez"
+                            }
+                          ],
+                          "prim": "big_map"
+                        },
+                        {
+                          "args": [
+                            {
+                              "annots": [
+                                "%paused"
+                              ],
+                              "prim": "bool"
+                            },
+                            {
+                              "args": [
+                                {
+                                  "annots": [
+                                    "%payout_signer_nonce"
+                                  ],
+                                  "prim": "nat"
+                                },
+                                {
+                                  "args": [
+                                    {
+                                      "annots": [
+                                        "%payout_signers"
+                                      ],
+                                      "args": [
+                                        {
+                                          "prim": "key"
+                                        }
+                                      ],
+                                      "prim": "set"
+                                    },
+                                    {
+                                      "args": [
+                                        {
+                                          "annots": [
+                                            "%pending_admin_address"
+                                          ],
+                                          "args": [
+                                            {
+                                              "prim": "address"
+                                            }
+                                          ],
+                                          "prim": "option"
+                                        },
+                                        {
+                                          "args": [
+                                            {
+                                              "annots": [
+                                                "%pool_id"
+                                              ],
+                                              "prim": "string"
+                                            },
+                                            {
+                                              "args": [
+                                                {
+                                                  "annots": [
+                                                    "%sessions"
+                                                  ],
+                                                  "args": [
+                                                    {
+                                                      "prim": "bytes"
+                                                    },
+                                                    {
+                                                      "args": [
+                                                        {
+                                                          "annots": [
+                                                            "%owner"
+                                                          ],
+                                                          "prim": "address"
+                                                        },
+                                                        {
+                                                          "annots": [
+                                                            "%session_public_key"
+                                                          ],
+                                                          "prim": "key"
+                                                        }
+                                                      ],
+                                                      "prim": "pair"
+                                                    }
+                                                  ],
+                                                  "prim": "big_map"
+                                                },
+                                                {
+                                                  "args": [
+                                                    {
+                                                      "annots": [
+                                                        "%smart_rollup_address"
+                                                      ],
+                                                      "prim": "address"
+                                                    },
+                                                    {
+                                                      "args": [
+                                                        {
+                                                          "annots": [
+                                                            "%tenant_id"
+                                                          ],
+                                                          "prim": "string"
+                                                        },
+                                                        {
+                                                          "annots": [
+                                                            "%total_deposits"
+                                                          ],
+                                                          "prim": "mutez"
+                                                        }
+                                                      ],
+                                                      "prim": "pair"
+                                                    }
+                                                  ],
+                                                  "prim": "pair"
+                                                }
+                                              ],
+                                              "prim": "pair"
+                                            }
+                                          ],
+                                          "prim": "pair"
+                                        }
+                                      ],
+                                      "prim": "pair"
+                                    }
+                                  ],
+                                  "prim": "pair"
+                                }
+                              ],
+                              "prim": "pair"
+                            }
+                          ],
+                          "prim": "pair"
+                        }
+                      ],
+                      "prim": "pair"
+                    }
+                  ],
+                  "prim": "pair"
+                }
+              ],
+              "prim": "storage"
+            },
+            {
+              "args": [
+                []
+              ],
+              "prim": "code"
+            }
+          ],
+          "storage": {
+            "args": [
+              {
+                "string": "tz1UyQDepgtUBnWjyzzonqeDwaiWoQzRKSP5"
+              },
+              {
+                "int": "41"
+              },
+              {
+                "prim": "False"
+              },
+              {
+                "int": "0"
+              },
+              [
+                {
+                  "string": "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn"
+                },
+                {
+                  "string": "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW"
+                },
+                {
+                  "string": "sppk7bWq3wGj9AuTowUc7N2dpRhMCWtw6pmDFcLrSTLyA1mnBJ9hL5T"
+                },
+                {
+                  "string": "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD"
+                }
+              ],
+              {
+                "prim": "None"
+              },
+              {
+                "string": "golden-pool"
+              },
+              {
+                "int": "42"
+              },
+              {
+                "string": "sr1TMxAUtDA4sDL7C4r39L18iQjhRcBRzd8a"
+              },
+              {
+                "string": "golden-tenant"
+              },
+              {
+                "int": "25000000"
+              }
+            ],
+            "prim": "Pair"
+          }
+        }
+      }
+    ]
+  },
+  "rollup": {
+    "durable": {
+      "/kernel/boot.wasm": "001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e50928476685a4c3e20625446382a1c0df032241607f9ebddc001f3e5d7c9bbad9f81c3b5a7998b7d6f51938577695b4d3f21635547392b1d0ef133251708faecdec102f4e6d8cabcae90d2c4b6a89a8c7e60a29486786a5c4e30726456483a2c1e004234261809fbedd01203f5e7d9cbbdaf91d3c5b7a99b8d7f61a39587796b5d4f31736557493b2d1f01433527190afceed11304f6e8daccbea0e2d4c6b8aa9c8e70b2a496887a6c5e40827466584a3c2e10524436281a0bfde0221405f7e9dbcdbfa1e3d5c7b9ab9d8f71b3a597897b6d5f41837567594b3d2f11534537291b0cfee1231506f8eadcceb0f2e4d6c8baac9e80c2b4a6988a7c6e509284766",
+      "/kernel/info": "0006000000302e382e3130010000000500000063726173680100000000",
+      "/tenants/golden-tenant/pools/golden-pool/sessions/01020304-0506-0708-090a-0b0c0d0e0f10": "0024000000747a31557951446570677455426e576a797a7a6f6e716544776169576f517a524b5350350300000054455a00000000000000000000000000000000240000004b54314275455a7462363863315134796a74636b634e6a47454c71577435365879657363010106000000706c61796572",
+      "/tenants/golden-tenant/pools/golden-pool/transactions/TEZ/payout-01020304-0506-0708-090a-0b0c0d0e0f10": "0024000000747a31557951446570677455426e576a797a7a6f6e716544776169576f517a524b5350350300000054455a0140420f00000000000000000000000000"
+    },
+    "durable_at_level": {},
+    "finalized_level": 130
+  }
+}

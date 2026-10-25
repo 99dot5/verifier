@@ -1,0 +1,958 @@
+{
+  "generated_by": "local-env/admin-ops/gen_fast_payout_vectors.py",
+  "domains": {
+    "fast_payout": "fast-payout:v1",
+    "rotate_payout_signers": "fast-payout-rotate:v1"
+  },
+  "payout_signer_count": 4,
+  "payout_threshold": 2,
+  "chain_id": "NetXdQprcVkpaWU",
+  "chain_id_bytes": "7a06a770",
+  "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+  "payout_signers": [
+    "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn",
+    "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW",
+    "sppk7bWq3wGj9AuTowUc7N2dpRhMCWtw6pmDFcLrSTLyA1mnBJ9hL5T",
+    "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD"
+  ],
+  "payout_signer_labels": [
+    "ed_a",
+    "ed_b",
+    "sp_a",
+    "sp_b"
+  ],
+  "payloads": {
+    "fast_payout": {
+      "domain": "fast-payout:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "session_id": "0102030405060708090a0b0c0d0e0f10",
+      "amount_mutez": 1500000,
+      "bytes": "050707010000000e666173742d7061796f75743a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e882845500007070a000000100102030405060708090a0b0c0d0e0f1000a08db701"
+    },
+    "fast_payout_other_chain": {
+      "domain": "fast-payout:v1",
+      "chain_id": "NetXnHfVqm9iesp",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "session_id": "0102030405060708090a0b0c0d0e0f10",
+      "amount_mutez": 1500000,
+      "bytes": "050707010000000e666173742d7061796f75743a763107070a00000004af1864d907070a0000001601246667a931fe0bd2fb1cb604f714601e882845500007070a000000100102030405060708090a0b0c0d0e0f1000a08db701"
+    },
+    "fast_payout_other_vault": {
+      "domain": "fast-payout:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1EfTusMLoeCAAGd9MZJn5yKzFr6kJU5U91",
+      "session_id": "0102030405060708090a0b0c0d0e0f10",
+      "amount_mutez": 1500000,
+      "bytes": "050707010000000e666173742d7061796f75743a763107070a000000047a06a77007070a000000160142b419240509ddacd12839700b7f720b4aa55e4e0007070a000000100102030405060708090a0b0c0d0e0f1000a08db701"
+    },
+    "fast_payout_other_session": {
+      "domain": "fast-payout:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "session_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "amount_mutez": 1500000,
+      "bytes": "050707010000000e666173742d7061796f75743a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e882845500007070a00000010bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb00a08db701"
+    },
+    "fast_payout_other_amount": {
+      "domain": "fast-payout:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "session_id": "0102030405060708090a0b0c0d0e0f10",
+      "amount_mutez": 1500001,
+      "bytes": "050707010000000e666173742d7061796f75743a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e882845500007070a000000100102030405060708090a0b0c0d0e0f1000a18db701"
+    },
+    "rotate_ed25519": {
+      "domain": "fast-payout-rotate:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "nonce": 0,
+      "new_signers": [
+        "edpkuQgYK28u2VJ919ZPA1wV22deSMjufcrjvnJmEEdPAC8atfTAvD",
+        "edpkuTwqYmUCJAsayghedCZGbNXzPognRbxt6XHMXnYTJEPRpBqqTc",
+        "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn",
+        "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW"
+      ],
+      "new_signer_labels": [
+        "ed_c",
+        "ed_d",
+        "ed_a",
+        "ed_b"
+      ],
+      "bytes": "0507070100000015666173742d7061796f75742d726f746174653a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e88284550000707000002000000980a000000210064f2ea18d6933b97763d99c2b3dd1c2be5f023d1a63c81fe6f9fd483f16f58660a00000021006c5c0fcbfac9cbea85f90fe583ddbf68e87db6b0ffff105e00da05be4eb6e4bd0a0000002100d7cde4352c4e9d1ff3ce68ff987b52d1f05783a70df896e0f58b25de0c953e410a0000002100ea21406fff8cfda53a04b25217d75779f5ddb19dfb4920c5c981d2371f91d6fc"
+    },
+    "rotate_mixed_curve": {
+      "domain": "fast-payout-rotate:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "nonce": 0,
+      "new_signers": [
+        "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn",
+        "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW",
+        "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD",
+        "p2pk67wNGpJKdARvrVyts9kCAK9a1pkHBzCCGuJGAWjkeTs8dRL9BaF"
+      ],
+      "new_signer_labels": [
+        "ed_a",
+        "ed_b",
+        "sp_b",
+        "p2_a"
+      ],
+      "bytes": "0507070100000015666173742d7061796f75742d726f746174653a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e882845500007070000020000009a0a0000002100d7cde4352c4e9d1ff3ce68ff987b52d1f05783a70df896e0f58b25de0c953e410a0000002100ea21406fff8cfda53a04b25217d75779f5ddb19dfb4920c5c981d2371f91d6fc0a000000220103dd4f7c90f18125221243ef8cc3f891792a45f721793f83983c7bebc1a90092930a000000220203bb3c992ecea4ff41794815b4aa2be3a0d4d794120e8a28fce435a3140da61759"
+    },
+    "rotate_mixed_curve_nonce_1": {
+      "domain": "fast-payout-rotate:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "nonce": 1,
+      "new_signers": [
+        "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn",
+        "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW",
+        "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD",
+        "p2pk67wNGpJKdARvrVyts9kCAK9a1pkHBzCCGuJGAWjkeTs8dRL9BaF"
+      ],
+      "new_signer_labels": [
+        "ed_a",
+        "ed_b",
+        "sp_b",
+        "p2_a"
+      ],
+      "bytes": "0507070100000015666173742d7061796f75742d726f746174653a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e882845500007070001020000009a0a0000002100d7cde4352c4e9d1ff3ce68ff987b52d1f05783a70df896e0f58b25de0c953e410a0000002100ea21406fff8cfda53a04b25217d75779f5ddb19dfb4920c5c981d2371f91d6fc0a000000220103dd4f7c90f18125221243ef8cc3f891792a45f721793f83983c7bebc1a90092930a000000220203bb3c992ecea4ff41794815b4aa2be3a0d4d794120e8a28fce435a3140da61759"
+    },
+    "rotate_outsiders": {
+      "domain": "fast-payout-rotate:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "nonce": 0,
+      "new_signers": [
+        "edpkuQgYK28u2VJ919ZPA1wV22deSMjufcrjvnJmEEdPAC8atfTAvD",
+        "edpkuTwqYmUCJAsayghedCZGbNXzPognRbxt6XHMXnYTJEPRpBqqTc",
+        "sppk7b3VMpr4AK133uTdwVeJAjaMBCTr651MyXh3m4aot2wTXJFf2fH",
+        "p2pk67wNGpJKdARvrVyts9kCAK9a1pkHBzCCGuJGAWjkeTs8dRL9BaF"
+      ],
+      "new_signer_labels": [
+        "ed_c",
+        "ed_d",
+        "sp_c",
+        "p2_a"
+      ],
+      "bytes": "0507070100000015666173742d7061796f75742d726f746174653a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e882845500007070000020000009a0a000000210064f2ea18d6933b97763d99c2b3dd1c2be5f023d1a63c81fe6f9fd483f16f58660a00000021006c5c0fcbfac9cbea85f90fe583ddbf68e87db6b0ffff105e00da05be4eb6e4bd0a000000220102e500114ffd90e9a2e21eddc6ec60947845795d049a7f77c3c2ece7d97bf097dd0a000000220203bb3c992ecea4ff41794815b4aa2be3a0d4d794120e8a28fce435a3140da61759"
+    },
+    "rotate_three_members": {
+      "domain": "fast-payout-rotate:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "nonce": 0,
+      "new_signers": [
+        "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn",
+        "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW",
+        "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD"
+      ],
+      "new_signer_labels": [
+        "ed_a",
+        "ed_b",
+        "sp_b"
+      ],
+      "bytes": "0507070100000015666173742d7061796f75742d726f746174653a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e88284550000707000002000000730a0000002100d7cde4352c4e9d1ff3ce68ff987b52d1f05783a70df896e0f58b25de0c953e410a0000002100ea21406fff8cfda53a04b25217d75779f5ddb19dfb4920c5c981d2371f91d6fc0a000000220103dd4f7c90f18125221243ef8cc3f891792a45f721793f83983c7bebc1a9009293"
+    },
+    "rotate_five_members": {
+      "domain": "fast-payout-rotate:v1",
+      "chain_id": "NetXdQprcVkpaWU",
+      "vault": "KT1BuEZtb68c1Q4yjtckcNjGELqWt56Xyesc",
+      "nonce": 0,
+      "new_signers": [
+        "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn",
+        "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW",
+        "sppk7bWq3wGj9AuTowUc7N2dpRhMCWtw6pmDFcLrSTLyA1mnBJ9hL5T",
+        "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD",
+        "p2pk67wNGpJKdARvrVyts9kCAK9a1pkHBzCCGuJGAWjkeTs8dRL9BaF"
+      ],
+      "new_signer_labels": [
+        "ed_a",
+        "ed_b",
+        "sp_a",
+        "sp_b",
+        "p2_a"
+      ],
+      "bytes": "0507070100000015666173742d7061796f75742d726f746174653a763107070a000000047a06a77007070a0000001601246667a931fe0bd2fb1cb604f714601e88284550000707000002000000c10a0000002100d7cde4352c4e9d1ff3ce68ff987b52d1f05783a70df896e0f58b25de0c953e410a0000002100ea21406fff8cfda53a04b25217d75779f5ddb19dfb4920c5c981d2371f91d6fc0a0000002201032313f58d2fe29dab8d88d6dfa54cc55b496f744e135c0b377c456d26767910300a000000220103dd4f7c90f18125221243ef8cc3f891792a45f721793f83983c7bebc1a90092930a000000220203bb3c992ecea4ff41794815b4aa2be3a0d4d794120e8a28fce435a3140da61759"
+    }
+  },
+  "signers": {
+    "ed_a": {
+      "curve": "ed25519",
+      "secret_exponent": "0645ecadb69bf0666d6ff01d9e2dddb76d88cb549ce2cb8523ae9e4ecd5d613c",
+      "secret_key": "edsk2ifX2cYQmAH78q8R6Ft8oknFFeZcxjADSVVWP5MpauCbsZDw57",
+      "public_key": "edpkvHGNFNUxqbtfVujAwR3tRtbGK5UP5BMAY8PDvd6CfpAu3TpRUn",
+      "public_key_hash": "tz1foa24CTfrvjCNSstj2SzGP7PV1ywdiGnY",
+      "signatures": {
+        "fast_payout": "edsigtmo3Kt7ZqyTssxcoSQuXDnWZt4eCuyvef4GFFeg87soCvpWBJZw1x6UhzFh1b92bidmgzh7qYZZNyUuKyRkRDYjjKjpsAc",
+        "fast_payout_other_chain": "edsigu3LeGCknBVNqKbs4mvsm84JL6YY22eSWfSKw5PAdvEax9H86UbHwhyMq3owPcGnJh5rtyZyXKdkwqUWerHz3Y2f8kR3rCw",
+        "fast_payout_other_vault": "edsigu4eGb48iMcTE9Wq4MM5scoF9RSkYMZ8PZfHGNDiW88TtC3psYSgaZJBHZEjXwPTodfqyBfaD6QEk9ZKBDT4FQ2HLSTgyY2",
+        "fast_payout_other_session": "edsigtiMBXE6Qtf4ertuG6mamehuJ5e6xUBpaAgGitDnZY1iLHxEibGMj3cMWZ5cH51Vk2ydtqM72ndB31kX2QCZcmxpt61Koqn",
+        "fast_payout_other_amount": "edsigttSYT62rARueShSCn1U3FM7TX3ojECjpyng6eTwiaFr68UQbeDwv9zUU4PodoYuSE59fmyjqnFW9xPWL4u2bRpS7SBoouk",
+        "rotate_ed25519": "edsigu22W7wzwLvEcvrop5b9huxMPAwK8UckqCFHkZtQuHipZ5egNjdEhRvxHKTqHWSijEGhXKYJpgvZtrPiZSxcx7UDh6kdhAp",
+        "rotate_mixed_curve": "edsigu2HQBcumPCKr39b1a2HBx5Stb2a239Da885hijpvwsqbZpaRNyDPpV7ET5eG25Kr6G4nQhGJbmoPNqVR5bbMTDkFqgMA1N",
+        "rotate_mixed_curve_nonce_1": "edsigu1wVxQfkb1kkFkkUAyemDZfLVjVctk7QZQpzM8TGR7f1xvNNKP2nkdEZCjawZqAcMqocrqVUhifbkYF6quMnx5PQytdtuF",
+        "rotate_outsiders": "edsigtdVFQ2AkfrmByK3odx7KUcvEUsibL1tm7twHtt9gPuJQSMcAJPvzkoAh1wGAHbJXJX4Z4nLaQxUEQmDsWQ5cFDrgfrujyY",
+        "rotate_three_members": "edsigtwXqQc7pf9Ym1kzTMoQDuZVANqfKYBTcVvHqwNT6PHvFxhboZuMDCdxmNn3RBqHbbmA7wPadX3gmJicLopsHbutrroU8Xw",
+        "rotate_five_members": "edsigtp74f8bsEgEYjvDAL3VxcTYH7hgN1RBxJth5JQb5JQUNHxBuZvEd78qayz1r66r3Ads1F6MtPz946T8JJa3St7kj8EectL"
+      }
+    },
+    "ed_b": {
+      "curve": "ed25519",
+      "secret_exponent": "c9e4d1ddb2001590bff310ae6e03283a552f3e197f1b18db3feff1cc95763dc6",
+      "secret_key": "edsk4CpPN29CBTizTg4fbQ9nmydJW62Nc6fUayy6yr2dmvD6cj5Aed",
+      "public_key": "edpkvRLUFcuvRbsQHvdAuZzTSxSfYYJBGwB5FYBN76fRcVhqd6s3VW",
+      "public_key_hash": "tz1MT8XpaKXc3x39aRBoJF8YAHnyzo4Xwpo7",
+      "signatures": {
+        "fast_payout": "edsigtqXYnkRK7UsdogSHn2FQ7i85HYSWAGugPQa6U8Y9vieZf8xGK3FbzpbXsQ34Z88WPB6vG12tBcAfoDjtvPje7r4yUs2RMR",
+        "fast_payout_other_chain": "edsigtwnDpiUeq2Jf74ZrDdMqfytvLMX8gzJgEsZ56ShgAHgNGSZM8zNambHGu5G211yzvwMcJ8gFEC5fZgGTaKwNBfNbL9Smvh",
+        "fast_payout_other_vault": "edsigu5RqaBphd8siCtyrXhM6q1TNxo3czivCvcJ9AenT7TDRWCoRTNThdmkXjGTxGk47PSqMHTnCtmrNiVHpeRNbuvYTcngLhr",
+        "fast_payout_other_session": "edsigteWDHYcc8n3s6TK5T4gutjmScFATw3wxnCYqeNfFZ4A7sWbmXgf179EsWJ8TxaFmrG1AfSC1cTCKHJriqaurncD6vscBzL",
+        "fast_payout_other_amount": "edsigtrESviNE9eioPQQkMuctdZX1BDX516HN5NtRwKoeuWySM4KGHaQz7VSCPcNXM6Xkdnoh7ozCVss7mkLYNpaEjyfUF2GJZY",
+        "rotate_ed25519": "edsigtqMiemLTv1cCLiAKFNamode1DqFVeNoHcbqtdQ8jG2ygS5eRWVQESVvkT3y95VUegLZ4CqeF5x1MTnWHRnYDHy6HQmTYHs",
+        "rotate_mixed_curve": "edsigtyKawecS8jYTNZb5WT3hZu3xmbdwxyh9imDBtrryyUw6PbBF8cuozTRvTHVnxU1LUiejU6UMbXfnjF18WEs9e9i2HTjxYa",
+        "rotate_mixed_curve_nonce_1": "edsigtzi7Nr1XTymW8Lk6DF5qrQdmYNxU19Xa3x4kNx8ujv43B5TS8QiNhq7EoqRFAsbxKkyqLmSSvfVPaLdGhUH4B9EsCb465o",
+        "rotate_outsiders": "edsigtYsSCACgYP3EvDzeKkhumB3ZrBZfTzAeENnd661fdohZSYdyfyBUqXvfWM1Z6QgyuUp4WAeX68uYW9zBsiWrcqQtnPigcm",
+        "rotate_three_members": "edsigtgVfxxSZCG839WPaY5wGtU1xrmzUGg3qkzoqKterrAJYH5dBqZQxq83xTjA5PTYTHZnMJfm9NZEtzzjn1RLugoJhZAqtkE",
+        "rotate_five_members": "edsigtyUBprXwk5bMDCxHUFGSe6YhkyN8swrX9ant71Qs4GHYY2aw4EMm5MkcU2ZVgx5YfEeSUPtiwYeV6W936CzzHkeZXZXDYH"
+      }
+    },
+    "ed_c": {
+      "curve": "ed25519",
+      "secret_exponent": "ed2c6a555d8a5c2d066050d09b3fa83bd99ce9b5fd8329f32e4c901d8c80b5cd",
+      "secret_key": "edsk4UMZL3LoyWSTdJ399dvVgm4t8qDkfdA55CUsBQpB5eWj7vfjaE",
+      "public_key": "edpkuQgYK28u2VJ919ZPA1wV22deSMjufcrjvnJmEEdPAC8atfTAvD",
+      "public_key_hash": "tz1KzFd43P88CfLbvDC1arQTXhLYuxfRraHd",
+      "signatures": {
+        "fast_payout": "edsigtxAThrbDwYgrd478GTVqRGpRngkBGXHVt3KpNgRioJviw8SeRJZrxdiDDQPNdEhiJxymmuuYWkucKWkTk1UVU71gkasr1p",
+        "fast_payout_other_chain": "edsigu4ZCuEC5qCCmw9pGPWNFVT1fAfe8iQ5uY7fzcaBcD3HZLGDnuKKPqNhqxHfdvW85JoK1MCUKna7Mo2te767MNZdUcjtzLK",
+        "fast_payout_other_vault": "edsigtw7iVpn7NT2eBQ3xvZZzCcnH4DJVbGCGutHczZq9gc8XnSMpnU7Q9rCHMPSXPkQm2HxyXQKjrhdbWe2Z3XVhNAhQG7yDcP",
+        "fast_payout_other_session": "edsigtd9W2jZFQpy48ChF6j39XF6Ygz4oSYfFFahY7mobRbDMcnCFqtwCR5vzZidk7vZZNPsB5y6bUV21iBVyP1n6AA8eD38bc5",
+        "fast_payout_other_amount": "edsigtdVgvthkdRjpKEcqef77Zodxib776ic85ygNVxJM1h7tSdxW3ndAMKf65LPpqkzfYUbvWSypqHCABcuNRa7MWKxAwovHbh",
+        "rotate_ed25519": "edsigtmdpmUs4cX634khe2ENZ7ouvVxVH8beAi11PjjZEcnYMpj9ZmShXAUoXrTTwXwsrMg4p7fVXwQJXcRkHVMeHJ3kiMsPsrd",
+        "rotate_mixed_curve": "edsigtaQeMWuVqRpjZkdattS7FD175ydWeoK1bTwPzuCiTgtQ1Gedk37AzJQZiCfdkqSL8nLJefd3wRpj9FSUVF8wE4myfpNtfu",
+        "rotate_mixed_curve_nonce_1": "edsigtddLZvfzeyeg3d77UsUMTCXNBNkf3P7uJm5y2FmATpjbmYtoSZe61TY7Lyb6pHW9LS96mq5PktGUyPgwGV86CQrFPFhwDh",
+        "rotate_outsiders": "edsigu6uNgRpXMvan3wPuw58rdF2yH4m3wbQDdGnUEBxxAghQo8WRBxRJr1RdQhffAcFYzTo2Br4PehU1TZ4MSewXkejURqjz5E",
+        "rotate_three_members": "edsigu6ZkwTKkd5Dqc5p3CT85nm6WHPqUxouSN8woHbtSUFtC7HrGDaL2SWaQNQ3YzEWtTEjduzzujA6A1kiHFNMPer78MaK4Ao",
+        "rotate_five_members": "edsigtnvSCHHva3VaKCumwHB3CbatU84yhqAvPBAddJ1u7jo9Fe7MKFXBJdNEPhVCy8HyY4j7z21CvE2555E6g5BaTp2TDd8TtC"
+      }
+    },
+    "ed_d": {
+      "curve": "ed25519",
+      "secret_exponent": "e3dccc0f02344cac4cc2df0bcfc1764a6f3d9b7df719ad3daa7327847776385e",
+      "secret_key": "edsk4QFimcucjTmTn1QG8YSUo1LHfQxRRFwmP11TruJ9NTTgbWjGUb",
+      "public_key": "edpkuTwqYmUCJAsayghedCZGbNXzPognRbxt6XHMXnYTJEPRpBqqTc",
+      "public_key_hash": "tz1XWLU9qhq34WQfo698fGWjrcZW8ir8eVV1",
+      "signatures": {
+        "fast_payout": "edsigtc3xwzcbYQrVgBfQSruEg5p7JJwaEMEALKsCKVZHLZSwzs5pVWU4nUKVVE6Y6Zh5pcN4zuighPLpWiaSiB5F5ZZsav6EFG",
+        "fast_payout_other_chain": "edsigtzQTRN8445iJvqnN3a8t7WRHr9tBLCLEfqgkZRTD5QnDn48gwgpi84Q98iBEQYw1t7n1CBpxwVfTFGciHtG3itiLMSUEtN",
+        "fast_payout_other_vault": "edsigtaTcyZV3p81zh7wWbmsF2fpAW9iCt8UN5mnS7sZL43b9z7pGRBtCQB7swcRuLW6BDXsFx7TNCfaJ7uFrSYV5jZmPyF14BN",
+        "fast_payout_other_session": "edsigtcyYQqP6mWYZwQFnGJRYbW1EoGqiJ4UH7uPGPJdXNzVUvg4gFZtcvBYd3mr2GLX1TQvCFsxKUQGabikaKcCWumDa17GarK",
+        "fast_payout_other_amount": "edsigtZ3zVu6tZSi19xcLQFfcmvUhRCf72wvFBhWaFN7kqBVwnhNDT1n34vbnwaZGifiDZ1D31VfZfi6kaEvRsZG38J7g5pjB6T",
+        "rotate_ed25519": "edsigu595PhaHatXkGonJiuMd2kKnuwGedgcxUeKzyAN1oFMFXexR7ghFAsieXhCn43b2s3EbNp6g8CYTfrp2EuSGvSuvX1Yfd1",
+        "rotate_mixed_curve": "edsigtXvgvN5QweJ3xGwYZz5gzP4EPdaRhFCZVkAS1dwmEuS4893eYh4kDR61JA5Jv88wGQDz4Jncsp6PMem1KuAyJJcgfxNsbS",
+        "rotate_mixed_curve_nonce_1": "edsigtgL9bZKD9wCuV2NkrnWNpyrjxbvsRMXQu6EyqH7Lfus8bNxQCWL1RfvsgsYsTG453FpGBLaLW9ZAb4zjWG9dkB821BQGME",
+        "rotate_outsiders": "edsigtqCvdLqoPKDfiTPJFVZKE22BnoJnUvMZJmYaifSKApTGRiPYf8N7zWtQ1n8tD7Ux47cvRUoPx8crbCVFAuekQ7XoxHNhFg",
+        "rotate_three_members": "edsigtucBtNs5fqPfxqEn3CMDuWShmmdFgCxK5PNjcAA6maHdzBXuctEmbq3ixsukRrYTkuDZcFXF9djnQMnKNQazucNqaBNrh5",
+        "rotate_five_members": "edsigtj2SkYB4pMDY3Wbyy3e77f5c1P1AN6RbzfDmSdFJwrWGnq3eMUQMmVGu7svVaL29LX2jmqKqRqdvNgmxDei72MFACQHsbV"
+      }
+    },
+    "sp_a": {
+      "curve": "secp256k1",
+      "secret_exponent": "ca15c12527af099bb6e3769d2e40233453d7871c6cbfe42f337e284e6129cfa9",
+      "secret_key": "spsk2xZfsLYJeKkcEStfFttiezVQyUjmbbZRfcxJ1vcKmzSjP6tzwH",
+      "public_key": "sppk7bWq3wGj9AuTowUc7N2dpRhMCWtw6pmDFcLrSTLyA1mnBJ9hL5T",
+      "public_key_hash": "tz2QLc9Wrs7L23TmqiR8af411jar4LUWMo8U",
+      "signatures": {
+        "fast_payout": "spsig1T44Ls6CqyU9xqnDbB7QU4oZRdkXUDbx8Edi2hoPsmxKfmi1nj1GCic3GBzC7xssqPqJwVELB9uzoqEeLYQePdPdLbPDQE",
+        "fast_payout_other_chain": "spsig1KxUYPABuMX8NVaynuRX94aJyhFWNmfw5BcYsxuvbGqk7No7GvhNsJbHN7PQzzqdaQAWPr6XKE1m7iyVuEpEUDrXXTsEfn",
+        "fast_payout_other_vault": "spsig1QZbXhQRtpEfDXif2aAqkwHim7bhAmMc69nJdrqBRtvH1NnLMJXdGyKucpiqGEBb9zNk6QT2R3z8nu1gZKvyd61Z4CkSWE",
+        "fast_payout_other_session": "spsig19LnmoK7iUxZ437N7RFYX4S47s6b3dUnGxxKGf2dJd1U7GC38fi3c4hAdJkBz2WorcbYcaRn89FBnFCYJreZgRRwkgR1L2",
+        "fast_payout_other_amount": "spsig1dmjuzmZv46YKXS2s6j9GrTTrX1mhepmNJ7DtaR6JdsE6jF7opZ64cQ8kF7BixSk3HzVpHbTuo9cApFVrpygPAe2RZLL2y",
+        "rotate_ed25519": "spsig1YguFoKmysV6vioDvaHcKYsUc7NZTwRmUCnugi2wRU2VteSxCnTpYqedQCPTM7o976ygDFZXKbbKEEpFPkNXmQD7zZchgH",
+        "rotate_mixed_curve": "spsig1ahjPSQquCFVJ7nJvegaAew2xDW6qGF5KEhoUJkD9LfjdULEHfeJw7CtBuxg835S1mAFhqu2CSPQzg37jn97VHf8cZyQWm",
+        "rotate_mixed_curve_nonce_1": "spsig1fCAELYvx1MtWU9aX3mVRjg2xPgQM2KqKfgPtVu5q9tmJA8ytMj6AZVdXCxensMFL9Qtesh9oceMhXGHzXJynJ6rTZ53Au",
+        "rotate_outsiders": "spsig169heaAiearW3JrE8Pu1gR91KvrnyZ9BLEHere1w4u64WY1QxMhEvHWxz1nVrX9d3x8pg6u9uHFzdJbW8qNMgJ4UFyFumJ",
+        "rotate_three_members": "spsig1ZJpKCziBQZXBQ23cmsDLipyAXnzBy9hGVJJX9zjh8i6VcUg61zcexyLDBFzTCU5PCWJnkTZKzk7ppuWUAnQeNjSVbMD5X",
+        "rotate_five_members": "spsig1QKLJ5arBJ7yc9Ysz3KdBWzjoAcmvUUhZc2tdADkeueMmwLvZoyHgJDrv926HrTbVNvz87j7jebKuEQhRq46t2Pb4mZamb"
+      }
+    },
+    "sp_b": {
+      "curve": "secp256k1",
+      "secret_exponent": "2b46ecdb3c7d639086365d34f3e7875f918887c1a2fba9e8f67665c256bac5c7",
+      "secret_key": "spsk1kd8pS1M863DjeuFxMfTo7UEHrEamRoQuQpLbJPj5uGwLP95JP",
+      "public_key": "sppk7cvr7R7YsAHVKRdomtpcC4J4tvudRK7f2wcTmA2JaMiXAna7emD",
+      "public_key_hash": "tz2RRk3UqqMX46PJigHQkYhpD6UbmBdhd9qC",
+      "signatures": {
+        "fast_payout": "spsig1HBz6gc5KdAv4DAWh5ByQRYHXjyqhQkNuVcU5Q3GLcE98iWBfvUoMb9EudRab4G8i4AKtT2Dau7N77jnpGd7He782SJuBv",
+        "fast_payout_other_chain": "spsig1YDrVmvdkxZdpvzAu3UYSTnfYAxfey2oC6bwZberN5cNFbqct9DSQdDz1A8SEZ6EgirSdPXtyWWaEgeAYAPixmG6QvzxrD",
+        "fast_payout_other_vault": "spsig1MuU5GP5UT7k6gHZTCXkGHmEAuEQ5prk2MHLSVroXN8wsJb8n8Aj5NeMv4RL1nEFbzGSGRSAkbzcKDAPMwPxfeAqbP7YkB",
+        "fast_payout_other_session": "spsig1VCtH7PhCkYfhQzZ7sPmRs3u3dr8nQEk886BQMrDGfcghBLL3724gR6RFjvmFgsUpDfCaLSY31fQ4P4QAkFSjVxB1aRLk2",
+        "fast_payout_other_amount": "spsig1eqcfcgNPzLsi7VN8dAmkfFjMfCoKUDR6cuUxwzL95GdUntHMBzBEmScamAApt6f1a1FXPfnp9BYFVva2hDmTPSJzPoaXj",
+        "rotate_ed25519": "spsig1XxcaUkMaHUc6VPuv1qCFYq2iKbCAmY4sn8nmZiCkA92Ke4dLGorvHdX6EdGHfUGn17pdhXwsnZZ8MPv7RwFVG9w1PQVEw",
+        "rotate_mixed_curve": "spsig1CbSY1HqQCDywHz2jouN8E8N5U7w9MeVymmVDR8q5Y6VcbemwyAv5yxzJtewnf2EDLR9sqVXb9Kc8ZQEyjAsABv4Z9ir1y",
+        "rotate_mixed_curve_nonce_1": "spsig1KKgoNDpEf7utPxoxKpbT7YXenRj4a6TGE2ndRjCxzEtCgFX7d5sUFnEaXWxAKsR6vLwzkq8ztNVt3KSgiznup9Bo7CdrE",
+        "rotate_outsiders": "spsig1EsFgtDK59g9Tw2VjVGLKA8RkAfwKzTY2h3XJ5YYVshzCjuTBti97Uj4SYFkszfHpK8sVWEEmegGT6aRwygpQuxCZ84Cq5",
+        "rotate_three_members": "spsig19kwi3M8ztnrivQmyqxxtCVdJvcmxPUu2WBRETgxckLZTooKAvLXiymBk2gfYMp2bEajY9kSNT9efsodbGnwxA8n4jxsxh",
+        "rotate_five_members": "spsig1Hb5VuuytFccnSZG6sUrvrqsvfy9PydWDPhtGZ2rTE5Bf9VVffaCrvZz3GWjXDRxGhZi8xthWqmvkw4sP4nexTNyaetGni"
+      }
+    },
+    "sp_c": {
+      "curve": "secp256k1",
+      "secret_exponent": "3a325c775cbf40b00283b35da9818864c01725b580f2b976bb05602773354b6e",
+      "secret_key": "spsk1sCEntrRXfxF1h4wvw89e9LQAauh4bsdNvECMKW2oDumK4gyhP",
+      "public_key": "sppk7b3VMpr4AK133uTdwVeJAjaMBCTr651MyXh3m4aot2wTXJFf2fH",
+      "public_key_hash": "tz2LA4ciFUdmdZN6EBw8iLHEztLkuqv54aeh",
+      "signatures": {
+        "fast_payout": "spsig1WNMCkGHyRJhwSB65ixNsqaK6tDSFFH5WoGxPSaTUytT6yXHqxQ8R9H82XzDrgoT9S3hcw5AkuXwvYAq8zo1kqobtNe6sX",
+        "fast_payout_other_chain": "spsig1eJr1QwZwFDgvZ149mvtVM5ahmdSDQZKGw28Rz4TMZRm6Dn8SyyqdmAVQQue3mtQHunot9DtJ1eQ9GNxJUEUcRYpQubGn2",
+        "fast_payout_other_vault": "spsig1FWijs9ydh1P6TJDJ5HsyksEftTu1X4RoY3v7Sgi71TgDFBtuhY5xBmekMRU7o4X8sgkX5emAuvifS95aJknyzT4PB4NUT",
+        "fast_payout_other_session": "spsig1aur3i1YyNy74SZcHPDSvbkuJa4VN8rKenJ6jMBbpjtAB4MGDTybtgpAkCYHfCcxzvLce1NJrnNRbGHBnA6eBzUTdwsMnH",
+        "fast_payout_other_amount": "spsig1dWSYMSd7jdjn6mF6aSh79FYGbhmWviZMZbuduNAJQYWwpHtAHRodLTFv67fcBcGSRc4RoYiDFX6nWhnXvFj3c6EF7cVxH",
+        "rotate_ed25519": "spsig1bY5cL7EZvZkqsMYLBiZ3MTBmyP97Ecf4C2gLLnXh7uNMnpnhfKVrVNE9GM4QmLL9GhpaWHEezfmHnYrsgvBN52uyw3i74",
+        "rotate_mixed_curve": "spsig1SfJ92MdSrNUxzYXaX4bnRjc7EFKefvfErJtAx1LNgz5vGmoHngmGxMxPYmgcboNLZoKiq8x5LsniTzdKJQhAmSpCmPGev",
+        "rotate_mixed_curve_nonce_1": "spsig1VvUNG2LhK6EmH4ZWkjvEn5ccKX8TomXr6LV3PYD2GomV5bArqgPLHcYs7KS2x9preNkzqJEZDkGYgfDySwvWxdL218nsV",
+        "rotate_outsiders": "spsig1CH8TaKV9WMRHuphEPre9HStq4y36rAsDTwUbtdraEEVuURshdYdYG67Y2kxcMpxNxnZaKiX1Us2BVMpbV9hDhY5cVsczY",
+        "rotate_three_members": "spsig1BZFZgc5QLLrS63AnRunyd7GFARDgjBJEPox79ijsv6fnVFC1wXxdg45QSj5aZXn1JygbYLEzGXmG9FZiwNMyiiJPUSL1E",
+        "rotate_five_members": "spsig1PQG3tFqyuFbM8L6Z5FWopsE7WWugyGHgQgMSpvypzdt2P81tWoVRNxEKzKCyr66PrZMC63T11TQBKroHhd1yfRerfuMAp"
+      }
+    },
+    "p2_a": {
+      "curve": "p256",
+      "secret_exponent": "efadf3e6a57131cf3ccd6a3525a25b50baf6d4e576f831b3f5d8e5584da8946b",
+      "secret_key": "p2sk4AM6bezT6z1HwxcoGjQF24n71tkNF18nWNXXJN5iPx8rNf1kkE",
+      "public_key": "p2pk67wNGpJKdARvrVyts9kCAK9a1pkHBzCCGuJGAWjkeTs8dRL9BaF",
+      "public_key_hash": "tz3hsJhbePPhKc2tAXD7dePhEwogw3XrNq7r",
+      "signatures": {
+        "fast_payout": "p2sigP1xWwCD3PWMFBuoEwc2NzxjeyEK7JNojbugx6YownoGF4bAMYbTqmfGu5CJaRBpzYbGmVZjSLkAiUTaDKmegh7tLUYYjF",
+        "fast_payout_other_chain": "p2sigoa2mB7woQjxR7G2V6qHEp7z3uwYEWQKfxmUHxGUdoLDzAcAztNM8Jkn3KfGvKgcUs8hbDKNuzNRU8UNu1PtwLPmSu3hFi",
+        "fast_payout_other_vault": "p2sigs38vQFpXcSPdrMWMMnseZB4E6zqXRf6fLyTk75jcZJP3uu8e78wV4T1LKNJv95m4ic7mtQoTVshkHaFaPHbjk6xstNctE",
+        "fast_payout_other_session": "p2sigPyMbPoDfFtjrZokXgBD3gZBxbLFYpR3V4FEnR7Q5RRkHAqdkHPV99ZjR8zxvfCPDnNVdkJwMoAdRh81Ph2vNddrbQA5zk",
+        "fast_payout_other_amount": "p2sigrYtWWkiupXgqGJmua47LdvMyoWUkbyJkWHTheY2vXjicj2Z9r5LXK8HGaRudWUkpUofE8RUgdEb6i5HePb3K5dSkkjkj5",
+        "rotate_ed25519": "p2siggvqvbGt3imoGJU4K7vUEJpy4t1LWutjga1jKxWoTLcKPucxP5VToWz36oKRtMG273za1m4fZhadkosevQTbukVDV2MNEM",
+        "rotate_mixed_curve": "p2sigPyG2W2k3bedDHYKaAES6aoWrgeKptqwLA8hfwh2S7MADfNoZZzb18V6PLzd8FDSH6VsnBxcfiXf2H92ate4UKq83k2dep",
+        "rotate_mixed_curve_nonce_1": "p2sigPUjXcTvSVHfnKm8nukXqQ2RpjrYzeFNHAapxUgUCKsrHGFKJgtVvFwWkSRFykiVFzJn8TxVin45MGJtv9Y2iPbMfGcanS",
+        "rotate_outsiders": "p2sigq8pGtmWNPSNRod77qo7cSKAmLhtRAyivbfnKJQxvUz6V278xrVrE7yNJf3rWMVRei6K6Mtpu5q9FGMAqYyVuyNaWHvVJS",
+        "rotate_three_members": "p2sigbHyLYr3WBuYr1rNU7fXpxFKeJhzQg5LLxwdwn2amryJMhEpADrcBxMKbW6DdsQcVxTZ6kKaxrq3NXSU8SFAV8trV7jygG",
+        "rotate_five_members": "p2sigmUZn5meA4SrV6pdb8aKaBsBSuKe3QdDzaFRTsBMszxkqRfdzPPwqBFu2MKBcH6bVc62xN7AgDDjy8ZpSoLE6deYzp2m1y"
+      }
+    },
+    "p2_b": {
+      "curve": "p256",
+      "secret_exponent": "4bf367a3368f35ee60539d8039eee76456d7c065baabf4a6df3b7485ace938ba",
+      "secret_key": "p2sk2vEsG49AbNWbmmufHqHyRmpsTjNDfvH7RJiQtph8gdBzEV66dF",
+      "public_key": "p2pk65oYo59T9Zz9J1meV1fbdtAFjWfoQLfqGSSVHwYgUMWX6jNsekA",
+      "public_key_hash": "tz3WLQxqq2LZpxJ5Ero1ZcF6Qb3XYoyhoBVk",
+      "signatures": {
+        "fast_payout": "p2sigTXwqdZJ3FGyBJaUaRWceWvjyM38wb4ja2PJZrq2fqu5ZUNehCi9wTAoUdm6G2wtKZxHxRXFXzdjTLDwkYF4sREayjLAnS",
+        "fast_payout_other_chain": "p2sigtG9YCHHzypBM6ngzrYkd4KxchhBvxFGcjgM9QMFEEBpVeReNUc1YNDAFpz3cNg254a1aetVf7ioJHPRMJ7iodBkqbVKt9",
+        "fast_payout_other_vault": "p2siguDCQ4f2AJTLwz1XRPZs8v6ZTNQrd4TnTN1ENfuLv1M1qdEBJ4vrtzaAc8KPJBgXqyoundVGFAkGHac3NdtaHnHUJW4iNo",
+        "fast_payout_other_session": "p2sigvLoJafB6gB74aEt1GxrJF4xbKEkyNYCH4WeQoz2KxkBgyvbHWiuFQeeXD9DoWzvYp4CArcJAvMwxbW9UceY8K66tmvdQJ",
+        "fast_payout_other_amount": "p2sigN2amPM9wMLX4Uh5M3v6k9o5qC8sgAcs9Ev47DzSXqNKnaTxa5u6pvcPaTR1uEKo6DXvoSBasmTkm9wUeqhzLurWSYdhro",
+        "rotate_ed25519": "p2sigpcxNrCepQ7qLvhCKbjCxBopMLPpjHnhG3yNidn1SinGshPf2CbiYZHhDJfkWSHdfJMFWhmeWxrodffRJche1AxamiSDCe",
+        "rotate_mixed_curve": "p2sigabeXpVLj59SaNY3BgsmPuCMD8uoiZMS2fXoGy1fWSCQrp7CbWEsXsfsSseCRKMWq3VKxUfLmm67TmMtYrPZQMnAqSVm7x",
+        "rotate_mixed_curve_nonce_1": "p2sigkiH1vngZBAACUN3zg8R4gR9q7juAVGmbbUtYqYeE2r5dHSmmuyVJJdsoxJCrLpp2LVDokkR9bZAB1tAKMKSHNVstd78Sk",
+        "rotate_outsiders": "p2sigbuPZfmoTWRN5XDrV8XHtaM9WapgcTpJ4WiHKJmeUUfWLRHSpP3CtAsbtD5UkvWvhuvGCKZcim2D6UvMKNvTq6Sct2z7ii",
+        "rotate_three_members": "p2sigc5NCYSSSfYP9n1gyZFLYDyjrqNYNqYhLpTqipHa6LtxdF1uPtMctQScxnerJDceb9ppxaR9PAi94wX2xAi8JuQWgJAHRA",
+        "rotate_five_members": "p2sigcKxxkHF2tdADbgXg8vBJRGqm26gwADL2so4n37VzzJeXFdbCbhpsc7Tx91Vts5d76VnLRCebSu6TexK7SJDZr4tMWcvzd"
+      }
+    },
+    "mallory": {
+      "curve": "ed25519",
+      "secret_exponent": "fb8a347427cb4ca30d299265e3321d010867658fe2b52cfc470994349f1219c9",
+      "secret_key": "edsk4agXZWcFqktzLCcizzHtWdBEHc5nWHhL2mZhT91rdFj3inonui",
+      "public_key": "edpku2yXYY1iV3gK3HubZgiv34fh6BWLojYBaM2PpKuhMUDnEwYczP",
+      "public_key_hash": "tz1W5zgFNA5oFcDDS4EdcCiwrzVmCUUpTKw3",
+      "signatures": {
+        "fast_payout": "edsigtm2rgokJt8T9WKocmPLnXWCPEcofUJXuN28BJjGnaf6B7hB1JaWZppGGrD5zqPw1we21Zi28MteyrRXMVgPApw5ep7dMh3",
+        "fast_payout_other_chain": "edsigtg4P49AgFuN1sFLPCbDwShQ35Ys3ihuFA4DJSgg9BiTXgiB9TstNoYFEuLcBFFUCoFBipQhsJqKW74ozQQHgWvgSgZYxCC",
+        "fast_payout_other_vault": "edsigtiSAE4ERw86rjhbN5sHA9EjncZMXL2h3rRcG1YhNLqb4uNfkTw9C2Yz2JDP3vxGtpEZoYmV6uJyTjcvkQwHjG3Ny5nv7xn",
+        "fast_payout_other_session": "edsigu4a9uBYTFRswnyVEjg4xk7iXuYFiArewL2qR9QEF21nZkochj5MLnJxf5GTFd5RoGZe6LAZABTaRxw1ZBX3FPTjSmScay9",
+        "fast_payout_other_amount": "edsigtcyMxfs7r7FCQXpAaVvRows9T2fGsdgN7R9u7RUejAXxS2q4PkrBuszrusTeYviLu98DWWWN8YNpL5cM3L68xLYeoWrLMx",
+        "rotate_ed25519": "edsigtxuSU79KrC67UCxZncauvCqiT6FWZEZLvJWdcL1C11RHwTZ36LBtQfbPViojHhr6yGKvrdwfsuR9HhH6YnQWZSFQZusrPV",
+        "rotate_mixed_curve": "edsigtpU9a3GXF3Z5visT5tXCojuGFbAai4zZ7wv4JcYmG69YjcjbNr349W35Y8Li5R67Fq7C5fs1iHrXSqYjxzV6jyiV1wBVic",
+        "rotate_mixed_curve_nonce_1": "edsigtaV3z9aYFfpTAVBSsbVv8p9EgroEJaFVJihigrQjVZ4pusB4mfP8xuP6bWgprUZqjgMTfwdbdpHMC3i4ryXUERmZQj5q8E",
+        "rotate_outsiders": "edsigtkGCVRi7tgzk2Ggq5LSRACJz58ZnRbVADcAT1Cbw9D1CWq4vkxej2b837Y3tKXJHqjGn5KwRnQ1hRSWZCHRMoyMX37hQ21",
+        "rotate_three_members": "edsigtned8wsYL1W5CYXWdjWjJ9fU9x2scbfgzeuhZSR81LfGper5u9Kf2ZvqZH8xiHqKnxztXCxMdApiP679AJMVRaDMGsMapJ",
+        "rotate_five_members": "edsigu3R4Ue3FnFazxdcAyLiBzYHeJTLSzHhKpwUvYxksFmEwnJRny7Jyh1hyD8ytZgvSRa2pUSSLT31vQUk453GQL4rdTFRFVA"
+      }
+    }
+  },
+  "fast_payout_cases": [
+    {
+      "name": "pair_ed_a_ed_b_accepted",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "fast_payout",
+          "signed_by": "ed_b"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "pair_ed_a_sp_a_accepted",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "pair_ed_a_sp_b_accepted",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "pair_ed_b_sp_a_accepted",
+      "signatures": [
+        {
+          "key": "ed_b",
+          "payload": "fast_payout",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "pair_ed_b_sp_b_accepted",
+      "signatures": [
+        {
+          "key": "ed_b",
+          "payload": "fast_payout",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "pair_sp_a_sp_b_accepted",
+      "signatures": [
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "three_accepted",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "four_accepted",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "fast_payout",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "one_under_threshold",
+      "signatures": [
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "none_under_threshold",
+      "signatures": [],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "non_signer_does_not_count",
+      "signatures": [
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "mallory",
+          "payload": "fast_payout",
+          "signed_by": "mallory"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "non_signer_is_ignored_not_refused",
+      "signatures": [
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "mallory",
+          "payload": "fast_payout",
+          "signed_by": "mallory"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "other_chain_id",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout_other_chain",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout_other_chain",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "other_vault",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout_other_vault",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout_other_vault",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "other_session_id",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout_other_session",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout_other_session",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "other_amount",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "fast_payout_other_amount",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "sp_a",
+          "payload": "fast_payout_other_amount",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "one_right_one_over_other_amount",
+      "signatures": [
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout_other_amount",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "entry_carrying_another_keys_signature",
+      "signatures": [
+        {
+          "key": "sp_a",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "fast_payout",
+          "signed_by": "sp_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    }
+  ],
+  "rotate_cases": [
+    {
+      "name": "authorised_with_every_possession_accepted",
+      "payload": "rotate_mixed_curve",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "p2_a"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "staying_signer_signs_once",
+      "payload": "rotate_mixed_curve",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "p2_a"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "cold_keys_alone_authorise",
+      "payload": "rotate_mixed_curve",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "p2_a"
+        }
+      ],
+      "verdict": "accepted"
+    },
+    {
+      "name": "missing_possession",
+      "payload": "rotate_mixed_curve",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "Missing proof of possession"
+    },
+    {
+      "name": "possession_from_another_key_on_the_same_curve",
+      "payload": "rotate_mixed_curve",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "p2_b"
+        }
+      ],
+      "verdict": "Invalid proof of possession"
+    },
+    {
+      "name": "possession_over_a_stale_nonce",
+      "payload": "rotate_mixed_curve",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_mixed_curve_nonce_1",
+          "signed_by": "p2_a"
+        }
+      ],
+      "verdict": "Invalid proof of possession"
+    },
+    {
+      "name": "under_threshold",
+      "payload": "rotate_mixed_curve",
+      "signatures": [
+        {
+          "key": "sp_b",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_mixed_curve",
+          "signed_by": "p2_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "incoming_set_cannot_install_itself",
+      "payload": "rotate_outsiders",
+      "signatures": [
+        {
+          "key": "ed_c",
+          "payload": "rotate_outsiders",
+          "signed_by": "ed_c"
+        },
+        {
+          "key": "ed_d",
+          "payload": "rotate_outsiders",
+          "signed_by": "ed_d"
+        },
+        {
+          "key": "sp_c",
+          "payload": "rotate_outsiders",
+          "signed_by": "sp_c"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_outsiders",
+          "signed_by": "p2_a"
+        }
+      ],
+      "verdict": "Under threshold"
+    },
+    {
+      "name": "three_members_refused_before_any_signature",
+      "payload": "rotate_three_members",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_three_members",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_three_members",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "rotate_three_members",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_three_members",
+          "signed_by": "sp_b"
+        }
+      ],
+      "verdict": "Exactly four payout signers"
+    },
+    {
+      "name": "five_members_refused_before_any_signature",
+      "payload": "rotate_five_members",
+      "signatures": [
+        {
+          "key": "ed_a",
+          "payload": "rotate_five_members",
+          "signed_by": "ed_a"
+        },
+        {
+          "key": "ed_b",
+          "payload": "rotate_five_members",
+          "signed_by": "ed_b"
+        },
+        {
+          "key": "sp_a",
+          "payload": "rotate_five_members",
+          "signed_by": "sp_a"
+        },
+        {
+          "key": "sp_b",
+          "payload": "rotate_five_members",
+          "signed_by": "sp_b"
+        },
+        {
+          "key": "p2_a",
+          "payload": "rotate_five_members",
+          "signed_by": "p2_a"
+        }
+      ],
+      "verdict": "Exactly four payout signers"
+    }
+  ]
+}

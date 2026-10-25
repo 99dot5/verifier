@@ -549,6 +549,27 @@ export async function fetchContractStorage(rpcUrl: string, address: string, sign
     return response.json();
 }
 
+/**
+ * A contract's script (code and storage) at `level`, from the node: the
+ * payout check reads a vault's storage THROUGH its storage type, so it needs
+ * both, as of the block before a payout.
+ */
+export async function fetchContractScript(
+    rpcUrl: string,
+    address: string,
+    level: number,
+    signal?: AbortSignal,
+): Promise<unknown> {
+    const url = `${rpcUrl.replace(/\/$/, '')}/chains/main/blocks/${level}/context/contracts/${address}/script`;
+    const response = await fetch(url, { signal });
+
+    if (!response.ok) {
+        throw new Error(`RPC ${response.status} for ${url} (archive node required for old levels)`);
+    }
+
+    return response.json();
+}
+
 /** Whether a big_map holds a key at head: 200 is an entry, 404 is none, anything else throws. */
 export async function fetchBigMapHas(
     rpcUrl: string,

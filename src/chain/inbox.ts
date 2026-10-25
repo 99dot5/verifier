@@ -170,6 +170,8 @@ export interface RpcManagerOperation {
 
 export interface RpcManagerOperationGroup {
     hash: string;
+    /** The `NetX…` chain the group was included on; every signature in it was made for this chain. */
+    chain_id?: string;
     contents: RpcManagerOperation[];
 }
 

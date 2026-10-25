@@ -218,8 +218,8 @@ function describeHint(hint: number | null, derived: number): string {
  * Matching the 32-hex session id anywhere in the rendered record, rather than
  * reaching for `value.session_id`, so a change in how the indexer shapes the
  * JSON cannot silently turn every row into a non-match. A 16-byte UUID does
- * not collide with the record's other fields (an `edpk`/`edsig` base58 string
- * and nothing else).
+ * not collide with the record's other fields (base58 keys and signatures and
+ * an RFC 3339 authorisation expiry, nothing else).
  */
 function namesSession(value: unknown, needle: string): boolean {
     return JSON.stringify(value ?? null)
@@ -272,9 +272,10 @@ export interface SessionDepositInput {
  *      session. Otherwise the two disagree and the lookup fails.
  *   3. `firstProven`: the call's TOP-LEVEL receipt writes the vault's
  *      `sessions` big_map at this session's key with a value. The production
- *      vault writes that entry only on a session's first deposit, never
- *      deletes it, and keeps no other big_map, so the write is the node's own
- *      proof that this deposit created the session on that vault. A write
+ *      vault writes that entry only on a session's first deposit and never
+ *      deletes it, so the write is the node's own proof that this deposit
+ *      created the session on that vault (its other big_map, the `paid`
+ *      ledger, is listed in the same receipt and told apart by id). A write
  *      inside `internal_operation_results` (a deposit routed through a
  *      contract wallet) is not read, and a vault with no `sessions` big_map
  *      (the preview vault binds statelessly on every deposit) never proves
@@ -445,33 +446,33 @@ async function checkOtherVaults(
 }
 
 /**
- * The leaf counts of the production vault's storage, one per generation of the
- * contract: eight fields at first, eleven with the payout ledger and signers,
- * twelve with the deposit authoriser. Every generation keeps the same four
- * trailing fields, which is what {@link sessionsBigMapId} relies on.
+ * The production vault's storage is a right-comb pair of thirteen leaves in
+ * SmartPy's alphabetical field order: `admin_address`, `deposit_authoriser`,
+ * `paid`, `paused`, `payout_signer_nonce`, `payout_signers`,
+ * `pending_admin_address`, `pool_id`, `sessions`, `smart_rollup_address`,
+ * `tenant_id`, `total_deposits`, `treasury`. Only the current generation is
+ * read: nothing is deployed, every vault on the rollups `networks.json` lists
+ * has this shape, and an older comb is some other contract. A new generation
+ * moves both constants (the index by one when the added field sorts before
+ * `sessions`) and re-captures `testdata/shadownet-treasury-vault-storage.json`.
  */
-const PRODUCTION_VAULT_LEAF_COUNTS: ReadonlySet<number> = new Set([8, 11, 12]);
+const PRODUCTION_VAULT_LEAF_COUNT = 13;
+const SESSIONS_LEAF_INDEX = 8;
 
 /**
  * The production vault's `sessions` big_map id from its storage, or null for
  * any other contract.
  *
- * The storage type is a right-comb pair in SmartPy's alphabetical field order,
- * so the fields a later generation adds (`deposit_authoriser`, `paid`,
- * `payout_signer_nonce`, `payout_signers`) all sort BEFORE `sessions`, while
- * the three after it (`smart_rollup_address`, `tenant_id`, `total_deposits`)
- * never change: `sessions` is always the 4th leaf from the end, and the node
- * renders it as `{ "int": "<id>" }`. The count is checked against the known
- * generations because the preview vault (nine fields, no big_map) carries an
- * `int` in that place too, and must read as null.
+ * The node renders the big_map as `{ "int": "<id>" }` at
+ * {@link SESSIONS_LEAF_INDEX}. The leaf count is checked because the preview
+ * vault (nine fields, no big_map) carries an `int` near that place too, and
+ * must read as null.
  */
 export function sessionsBigMapId(storage: unknown): string | null {
     const leaves = combLeaves(storage);
-    const leaf = leaves[leaves.length - 4] as { int?: unknown } | undefined;
+    const leaf = leaves.length === PRODUCTION_VAULT_LEAF_COUNT ? (leaves[SESSIONS_LEAF_INDEX] as { int?: unknown } | undefined) : undefined;
 
-    return PRODUCTION_VAULT_LEAF_COUNTS.has(leaves.length) && typeof leaf?.int === 'string' && /^\d+$/.test(leaf.int)
-        ? leaf.int
-        : null;
+    return typeof leaf?.int === 'string' && /^\d+$/.test(leaf.int) ? leaf.int : null;
 }
 
 /** The leaves of a right-comb pair, in either the nested or the flattened Micheline form. */

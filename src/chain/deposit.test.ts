@@ -29,6 +29,7 @@ import type { InboxMessage, RpcManagerOperation, RpcManagerOperationGroup } from
 import firstDepositCapture from './testdata/shadownet-first-deposit.json';
 import topUpCapture from './testdata/shadownet-top-up.json';
 import sessionsEntryCapture from './testdata/shadownet-sessions-entry.json';
+import treasuryVaultStorageCapture from './testdata/shadownet-treasury-vault-storage.json';
 
 const TZKT = 'https://api.shadownet.tzkt.io';
 const VAULT = 'KT1GCjZwMGnZhJzGw36rm8gyKeh2ZJe9vjNE';
@@ -216,71 +217,79 @@ describe('locateSessionDeposit', () => {
 // ── The session-creating deposit: receipts captured from shadownet (D-9) ──
 //
 // Every shape the `firstProven` rule reads is pinned against REAL node
-// output, captured read-only on 2026-10-11 from the public shadownet node and
-// indexer listed in networks.json (the URLs are in each fixture's
-// `capturedFrom`): the first deposit of one session to the shadownet vault,
-// a top-up of the same session, and that session's `sessions` entry with the
-// script expression hash the node and the indexer report for its key.
+// output, captured read-only from the public shadownet node and indexer (the
+// URLs are in each fixture's `capturedFrom`), all from the one vault the
+// shadownet rollup's `networks.json` entry registers: its storage before any
+// deposit (2026-10-24), then the first deposit of one session, a top-up of the
+// same session, and that session's `sessions` entry with the script expression
+// hash the node and the indexer report for its key (2026-10-25). A vault of
+// this generation keeps two big_maps, `paid` and `sessions`, and a deposit
+// receipt lists both; the rule matches the `sessions` one by id.
 
 const REAL_VAULT = sessionsEntryCapture.vault;
 const REAL_SESSION_HEX = sessionsEntryCapture.sessionIdHex;
-const REAL_SESSION = '01a1175f-11b1-7662-986b-81d519ccfcc1';
+const REAL_SESSION = '01a17098-a9b8-7c69-831c-42ce11cb8b0f';
+/** The level of the `RegisterPoolVault` that registered the vault for the pool. */
+const REAL_VAULT_REGISTERED_AT = 5_625_985;
+/** The vault's other big_map, `paid` (ADR 0027's payout ledger), the third leaf of its storage. */
+const PAID_BIG_MAP_ID = (sessionsEntryCapture.storageAtHead.args[2] as { int: string }).int;
 const firstDepositGroup = firstDepositCapture.operationGroup as unknown as RpcManagerOperationGroup;
 const topUpGroup = topUpCapture.operationGroup as unknown as RpcManagerOperationGroup;
 const firstDepositCall = firstDepositGroup.contents[0];
 const topUpCall = topUpGroup.contents[0];
 
+/** The receipt's `lazy_storage_diff` entry for the vault's `sessions` big_map. */
+function sessionsDiff(call: RpcManagerOperation) {
+    return (call.metadata?.operation_result?.lazy_storage_diff ?? []).find((entry) => entry.id === sessionsEntryCapture.bigMapId);
+}
+
 describe('the deposit receipt shape (captured)', () => {
-    it("reads the sessions big_map id as the 4th leaf from the end of the production vault's storage", () => {
-        expect(sessionsBigMapId(sessionsEntryCapture.storageAtHead)).toBe(sessionsEntryCapture.bigMapId);
-        // The receipt's own storage, in the flattened sequence form, agrees.
-        expect(
-            sessionsBigMapId((firstDepositCall.metadata?.operation_result as unknown as { storage: unknown }).storage),
-        ).toBe(sessionsEntryCapture.bigMapId);
+    it("reads the sessions big_map id from the current vault's storage, as captured", () => {
+        expect(sessionsBigMapId(treasuryVaultStorageCapture.storageAtHead)).toBe(treasuryVaultStorageCapture.bigMapId);
+        // The flattened sequence form a receipt renders agrees.
+        expect(sessionsBigMapId(treasuryVaultStorageCapture.storageAtHead.args)).toBe(treasuryVaultStorageCapture.bigMapId);
     });
 
-    it('reads it from the later vault generations too, whose extra fields all sort before sessions', () => {
-        const admin = { string: 'tz1dBStuxore6uR3E2s5NAhjSGc3EtpkwCp7' };
-        const key = { string: 'sppk7aMNM3xh14haqEyaxNjSt7hXanCDyoWtRcxF8wbtya859ak6yZT' };
-        const tail = [
-            { int: '4242' },
-            { string: 'sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK' },
-            { string: 'stg-99dot5-com-shadownet' },
-            { int: '0' },
-        ];
-        // paid ledger + payout signers (eleven leaves): admin, paid, paused,
-        // nonce, signers, pending admin, pool, then the unchanged tail.
-        const withSigners = [admin, { int: '4240' }, { prim: 'False' }, { int: '0' }, [key, key, key], { prim: 'None' }, { string: 'standard' }, ...tail];
-        // + deposit authoriser (twelve leaves), sorted in at the second place.
-        const withAuthoriser = [admin, key, ...withSigners.slice(1)];
+    it('reads the same id from the storage after the deposits, as captured', () => {
+        expect(sessionsBigMapId(sessionsEntryCapture.storageAtHead)).toBe(sessionsEntryCapture.bigMapId);
+        expect(sessionsEntryCapture.vault).toBe(treasuryVaultStorageCapture.vault);
+    });
 
-        expect(sessionsBigMapId(withSigners)).toBe('4242');
-        expect(sessionsBigMapId(withAuthoriser)).toBe('4242');
-        expect(sessionsBigMapId({ prim: 'Pair', args: withAuthoriser })).toBe('4242');
-        // A leaf count no generation has is some other contract.
-        expect(sessionsBigMapId([admin, ...tail])).toBeNull();
-        expect(sessionsBigMapId([admin, key, key, ...withSigners.slice(1)])).toBeNull();
+    it('reads it only from the current generation: an earlier comb, or one leaf more, is some other contract', () => {
+        const current = treasuryVaultStorageCapture.storageAtHead.args as unknown[];
+
+        // The generation before `treasury` was appended (twelve leaves).
+        expect(sessionsBigMapId(current.slice(0, -1))).toBeNull();
+        expect(sessionsBigMapId([...current, { int: '7' }])).toBeNull();
+        // A thirteen-leaf comb whose sessions leaf is not an int.
+        expect(sessionsBigMapId([...current.slice(0, 8), { prim: 'None' }, ...current.slice(9)])).toBeNull();
     });
 
     it('pins the first deposit: a top-level big_map update of the sessions id at the session key, with a value', () => {
         const diff = firstDepositCall.metadata?.operation_result?.lazy_storage_diff ?? [];
+        const sessions = sessionsDiff(firstDepositCall);
 
         expect(firstDepositCall.destination).toBe(REAL_VAULT);
         expect(firstDepositCall.parameters?.entrypoint).toBe('deposit');
-        expect(diff).toHaveLength(1);
-        expect(diff[0]).toMatchObject({ kind: 'big_map', id: sessionsEntryCapture.bigMapId, diff: { action: 'update' } });
-        expect(diff[0].diff.updates).toHaveLength(1);
-        expect(diff[0].diff.updates?.[0].key).toEqual({ bytes: REAL_SESSION_HEX });
-        expect(diff[0].diff.updates?.[0].value).toBeDefined();
+        // Both of the vault's big_maps are listed; only `sessions` is written.
+        expect(diff.map((entry) => entry.id).sort()).toEqual([sessionsEntryCapture.bigMapId, PAID_BIG_MAP_ID].sort());
+        expect(sessions).toMatchObject({ kind: 'big_map', id: sessionsEntryCapture.bigMapId, diff: { action: 'update' } });
+        expect(sessions?.diff.updates).toHaveLength(1);
+        expect(sessions?.diff.updates?.[0].key).toEqual({ bytes: REAL_SESSION_HEX });
+        expect(sessions?.diff.updates?.[0].value).toBeDefined();
+        expect(diff.find((entry) => entry.id === PAID_BIG_MAP_ID)?.diff.updates).toEqual([]);
         expect(writesSessionEntry(firstDepositCall, sessionsEntryCapture.bigMapId, REAL_SESSION)).toBe(true);
     });
 
-    it('pins the top-up: the same big_map is touched with NO update, so it proves nothing', () => {
+    it('pins the top-up: the same big_maps are touched with NO update, so it proves nothing', () => {
         const diff = topUpCall.metadata?.operation_result?.lazy_storage_diff ?? [];
 
         expect(topUpCall.parameters?.entrypoint).toBe('deposit');
         expect(JSON.stringify(topUpCall.parameters?.value)).toContain(REAL_SESSION_HEX);
-        expect(diff).toEqual([{ kind: 'big_map', id: sessionsEntryCapture.bigMapId, diff: { action: 'update', updates: [] } }]);
+        expect(diff).toEqual([
+            { kind: 'big_map', id: sessionsEntryCapture.bigMapId, diff: { action: 'update', updates: [] } },
+            { kind: 'big_map', id: PAID_BIG_MAP_ID, diff: { action: 'update', updates: [] } },
+        ]);
         expect(writesSessionEntry(topUpCall, sessionsEntryCapture.bigMapId, REAL_SESSION)).toBe(false);
     });
 
@@ -290,7 +299,7 @@ describe('the deposit receipt shape (captured)', () => {
         expect(derived).toBe(sessionsEntryCapture.nodeScriptExprHash);
         expect(derived).toBe(sessionsEntryCapture.tzktKeyHash);
         // The receipt reports the same hash for the key it wrote.
-        expect(firstDepositCall.metadata?.operation_result?.lazy_storage_diff?.[0].diff.updates?.[0].key_hash).toBe(derived);
+        expect(sessionsDiff(firstDepositCall)?.diff.updates?.[0].key_hash).toBe(derived);
         expect(sessionKeyScriptExprHash(REAL_SESSION_HEX)).toBe(derived);
     });
 
@@ -351,7 +360,7 @@ describe('the deposit receipt shape (captured)', () => {
 
 // ── resolveSessionDeposit: the lookup the session-before-transcript check reads (D-6) ──
 
-const TRANSCRIPT_LEVEL = 5_396_000;
+const TRANSCRIPT_LEVEL = 5_629_000;
 
 /** The chosen transcript copy, reduced to what the resolver reads off its signed envelope. */
 function transcriptCopy(poolId = 'standard', level = TRANSCRIPT_LEVEL): InboxMessage {
@@ -416,7 +425,7 @@ describe('resolveSessionDeposit', () => {
     it('found: the indexer and the node agree, and the receipt proves the deposit created the session', async () => {
         const located = await resolveSessionDeposit({
             transcript: transcriptCopy('standard', firstDepositCapture.level - 10),
-            lineage: lineageWith([{ vault: REAL_VAULT, level: 5_394_347 }]),
+            lineage: lineageWith([{ vault: REAL_VAULT, level: REAL_VAULT_REGISTERED_AT }]),
             formPoolId: '',
             chain: capturedChain(),
         });
@@ -436,7 +445,7 @@ describe('resolveSessionDeposit', () => {
     it('found, not first: the indexer omits the first deposit and returns the top-up', async () => {
         const located = await resolveSessionDeposit({
             transcript: transcriptCopy('standard', firstDepositCapture.level),
-            lineage: lineageWith([{ vault: REAL_VAULT, level: 5_394_347 }]),
+            lineage: lineageWith([{ vault: REAL_VAULT, level: REAL_VAULT_REGISTERED_AT }]),
             formPoolId: 'standard',
             chain: capturedChain({
                 indexer: mockIndexer({
@@ -464,7 +473,7 @@ describe('resolveSessionDeposit', () => {
         }) as unknown as typeof fetch;
         const located = await resolveSessionDeposit({
             transcript: transcriptCopy(),
-            lineage: lineageWith([{ vault: REAL_VAULT, level: 5_394_347 }]),
+            lineage: lineageWith([{ vault: REAL_VAULT, level: REAL_VAULT_REGISTERED_AT }]),
             formPoolId: '',
             chain: capturedChain({ indexer: paging }),
         });
@@ -562,7 +571,7 @@ describe('resolveSessionDeposit', () => {
             transcript: transcriptCopy('standard', firstDepositCapture.level - 10),
             lineage: lineageWith([
                 { vault: OLD_VAULT, level: 5_000_000 },
-                { vault: REAL_VAULT, level: 5_394_347 },
+                { vault: REAL_VAULT, level: REAL_VAULT_REGISTERED_AT },
                 // Registered after the transcript: it cannot have held a credited deposit before it.
                 { vault: 'KT1LateVaultLateVaultLateVaultLat', level: firstDepositCapture.level },
             ]),

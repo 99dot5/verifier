@@ -2464,15 +2464,43 @@ describe('locator hints', () => {
         };
     }
 
-    /** The node's storage for a vault: the production comb (sessions id at leaf 5), the preview's nine fields, or an 8-leaf comb with no id. */
+    /** The node's storage for a vault: the production comb (thirteen leaves, sessions id at index 8), the preview's nine fields, or the production comb with no id. */
     function storageOf(world: DepositWorld, vault: string): unknown {
         const index = world.vaults.findIndex((v) => v.vault === vault);
         const kind = world.vaults[index]?.kind ?? 'production';
-        const fifth = kind === 'production' ? { int: String(500 + index) } : { prim: 'None' };
-        const leaves = [{ string: 'tz1admin' }, { prim: 'False' }, { prim: 'None' }, { string: POOL }, fifth, { string: 'sr1' }, { string: TENANT }, { int: '0' }];
 
-        return { prim: 'Pair', args: kind === 'preview' ? [...leaves, { int: '1000' }] : leaves };
+        if (kind === 'preview') {
+            return {
+                prim: 'Pair',
+                args: [{ string: 'tz1admin' }, [], { prim: 'False' }, { prim: 'None' }, { string: POOL }, { int: '1000' }, { string: 'sr1' }, { string: TENANT }, { int: '0' }],
+            };
+        }
+
+        const sessions = kind === 'production' ? { int: String(500 + index) } : { prim: 'None' };
+
+        return {
+            prim: 'Pair',
+            args: [
+                { string: 'tz1admin' },
+                { string: 'sppk7authoriser' },
+                { int: '400' },
+                { prim: 'False' },
+                { int: '0' },
+                [],
+                { prim: 'None' },
+                { string: POOL },
+                sessions,
+                { string: 'sr1' },
+                { string: TENANT },
+                { int: '0' },
+                { string: 'KT1treasury' },
+            ],
+        };
     }
+
+    /** The sessions id `storageOf` gives a vault, 'none' when it has none. */
+    const sessionsIdOf = (world: DepositWorld, vault: string) =>
+        (storageOf(world, vault) as { args: { int?: string }[] }).args[8].int ?? 'none';
 
     function depositChainOver(world: DepositWorld): DepositChain {
         const rowsFor = (vault: string) =>
@@ -2492,7 +2520,7 @@ describe('locator hints', () => {
             return Promise.resolve({ ok: status === 200, status, json: () => Promise.resolve(rows) } as Response);
         }) as unknown as typeof fetch;
         const vaultOfBigMap = (id: string) =>
-            world.vaults.find((v) => (storageOf(world, v.vault) as { args: { int?: string }[] }).args[4].int === id);
+            world.vaults.find((v) => sessionsIdOf(world, v.vault) === id);
 
         return {
             locateDeposit: (vaultAddresses, sessionIdHex, levelHint) =>
@@ -2507,7 +2535,7 @@ describe('locator hints', () => {
                 (world.onNode ?? world.indexed)
                     .filter((d) => d.level === level)
                     .map((d) => {
-                        const id = (storageOf(world, d.vault) as { args: { int?: string }[] }).args[4].int ?? 'none';
+                        const id = sessionsIdOf(world, d.vault);
 
                         return {
                             hash: `op-deposit-${d.level}`,

@@ -1,177 +1,227 @@
 {
-  "capturedFrom": "GET https://rpc.shadownet.teztnets.com/chains/main/blocks/5395144/operations/3, captured 2026-10-11; the one operation group of the first deposit of session 01a1175f-11b1-7662-986b-81d519ccfcc1 to the shadownet vault KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty, verbatim",
-  "level": 5395144,
-  "operationGroup": {
-    "protocol": "PsUshuai9QapM5TGj1JpuVGkdxz5GykdnEvS6Rh8SUVrARvZLCY",
-    "chain_id": "NetXsqzbfFenSTS",
-    "hash": "oo5GpD2sRV4QaSvS5wX3LF64j7xFirwuVwSr7FBZm2u6tbaJRKw",
-    "branch": "BL35qU9cLuKmamjHhebWLKe4ySiiWFxwXhmcUZ8Vo4kXzwAhRdQ",
-    "contents": [
-      {
-        "kind": "transaction",
-        "source": "tz1g3LZAHCeHkW7hgmE2HuNX6xGE7JGJAe7X",
-        "fee": "626",
-        "counter": "24890705",
-        "gas_limit": "1628",
-        "storage_limit": "132",
-        "amount": "5000000",
-        "destination": "KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty",
-        "parameters": {
-          "entrypoint": "deposit",
-          "value": {
-            "prim": "Pair",
-            "args": [
-              {
-                "bytes": "01a1175f11b17662986b81d519ccfcc1"
-              },
-              {
-                "prim": "Pair",
-                "args": [
-                  {
-                    "prim": "Some",
-                    "args": [
-                      {
-                        "string": "edpkvArSZFp5RjdrbSJBRzffN3bjnTfZvosEYocKb5S7GEbT6rxNcf"
-                      }
-                    ]
-                  },
-                  {
-                    "prim": "Some",
-                    "args": [
-                      {
-                        "string": "edsigtfHiQ1cFxfFrp8gjnqtkGtzQdbQaGidoGsF6Y5HZfMvfTX4AKN4y7HzmyA6UcpETPPKmCbSofcJcAE5ujU9qN7BCfMr2LU"
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        "metadata": {
-          "balance_updates": [
+    "capturedFrom": "GET https://rpc.shadownet.teztnets.com/chains/main/blocks/5628062/operations/3, captured 2026-10-25; the one operation group of the first deposit of session 01a17098-a9b8-7c69-831c-42ce11cb8b0f to the shadownet vault KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C, verbatim",
+    "level": 5628062,
+    "operationGroup": {
+        "protocol": "PsUshuai9QapM5TGj1JpuVGkdxz5GykdnEvS6Rh8SUVrARvZLCY",
+        "chain_id": "NetXsqzbfFenSTS",
+        "hash": "opaZ5iA2PWoTY79M3QJjCf7qhPetvhsBf3pNTXSzArbcPjQ6KGn",
+        "branch": "BL5mVpreFofPsztjMMW4RSR29jeGniZ4Z912gFU7VmzjFVCMsv5",
+        "contents": [
             {
-              "kind": "contract",
-              "contract": "tz1g3LZAHCeHkW7hgmE2HuNX6xGE7JGJAe7X",
-              "change": "-626",
-              "origin": "block"
-            },
-            {
-              "kind": "accumulator",
-              "category": "block fees",
-              "change": "626",
-              "origin": "block"
-            }
-          ],
-          "operation_result": {
-            "status": "applied",
-            "storage": [
-              {
-                "bytes": "0000c06b3cb1a29f9cc8313d88e20a5a31d2e3d10633"
-              },
-              {
-                "prim": "False"
-              },
-              {
-                "prim": "None"
-              },
-              {
-                "string": "standard"
-              },
-              {
-                "int": "38248"
-              },
-              {
-                "bytes": "036d55dd0ba86bb5aaa082f519c1f59fe9eda9431200"
-              },
-              {
-                "string": "stg-99dot5-com-shadownet"
-              },
-              {
-                "int": "10000000"
-              }
-            ],
-            "balance_updates": [
-              {
-                "kind": "contract",
-                "contract": "tz1g3LZAHCeHkW7hgmE2HuNX6xGE7JGJAe7X",
-                "change": "-33000",
-                "origin": "block"
-              },
-              {
-                "kind": "burned",
-                "category": "storage fees",
-                "change": "33000",
-                "origin": "block"
-              },
-              {
-                "kind": "contract",
-                "contract": "tz1g3LZAHCeHkW7hgmE2HuNX6xGE7JGJAe7X",
-                "change": "-5000000",
-                "origin": "block"
-              },
-              {
-                "kind": "contract",
-                "contract": "KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty",
-                "change": "5000000",
-                "origin": "block"
-              }
-            ],
-            "consumed_milligas": "1491469",
-            "storage_size": "3390",
-            "paid_storage_size_diff": "132",
-            "lazy_storage_diff": [
-              {
-                "kind": "big_map",
-                "id": "38248",
-                "diff": {
-                  "action": "update",
-                  "updates": [
-                    {
-                      "key_hash": "exprujVMTpjKEksZCx1gqmAnXfbUyPNUEnwABBxDsWuovhexp5d5xK",
-                      "key": {
-                        "bytes": "01a1175f11b17662986b81d519ccfcc1"
-                      },
-                      "value": {
+                "kind": "transaction",
+                "source": "tz1hMuheNcraVzJAtiCnh9x8Mb9kzCrsH3Z2",
+                "fee": "768",
+                "counter": "25524084",
+                "gas_limit": "1715",
+                "storage_limit": "135",
+                "amount": "5000000",
+                "destination": "KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C",
+                "parameters": {
+                    "entrypoint": "deposit",
+                    "value": {
                         "prim": "Pair",
                         "args": [
-                          {
-                            "bytes": "0000dfcafe703915356962ccb7f04128dad0160259ac"
-                          },
-                          {
-                            "bytes": "00c93e6e3d1682436f81891326ea1ce5b48370eeb3e9805e2b21d8b687e4d029e8"
-                          }
+                            {
+                                "string": "2026-10-25T01:22:06Z"
+                            },
+                            {
+                                "prim": "Pair",
+                                "args": [
+                                    {
+                                        "string": "spsig1N6fdAJ9aP2Fzqgff4Sn92wXTjJ44sZJruUHa6mCq27Ke3HPAfh6Au2kxYgeszvhjYKcro2jiiEkRQsMhXKVXLfT4hJcQC"
+                                    },
+                                    {
+                                        "prim": "Pair",
+                                        "args": [
+                                            {
+                                                "bytes": "01a17098a9b87c69831c42ce11cb8b0f"
+                                            },
+                                            {
+                                                "prim": "Pair",
+                                                "args": [
+                                                    {
+                                                        "prim": "Some",
+                                                        "args": [
+                                                            {
+                                                                "string": "edpkuqSSJCo84YuibTkgDN9bcGb3mhF3m9v2BnapkL9gnAbBTWhSiv"
+                                                            }
+                                                        ]
+                                                    },
+                                                    {
+                                                        "prim": "Some",
+                                                        "args": [
+                                                            {
+                                                                "string": "edsigu21XQMKMCD45onjBr93nNHEHGYdNrb4nNXrZM1KwGQLagn3rbpUpfGPneUyyheLisZPVTExaHAYRBLzrmdtcjE9bDFQ3np"
+                                                            }
+                                                        ]
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
                         ]
-                      }
                     }
-                  ]
+                },
+                "metadata": {
+                    "balance_updates": [
+                        {
+                            "kind": "contract",
+                            "contract": "tz1hMuheNcraVzJAtiCnh9x8Mb9kzCrsH3Z2",
+                            "change": "-768",
+                            "origin": "block"
+                        },
+                        {
+                            "kind": "accumulator",
+                            "category": "block fees",
+                            "change": "768",
+                            "origin": "block"
+                        }
+                    ],
+                    "operation_result": {
+                        "status": "applied",
+                        "storage": [
+                            {
+                                "bytes": "0000bcd72a3797c6892934c1e6f45833de5ffc2bed10"
+                            },
+                            {
+                                "bytes": "01033e3d3eb49a8e47e8b54dc82cb3008a6d44999dc0c8d51c21a11d8a635207f3cf"
+                            },
+                            {
+                                "int": "45375"
+                            },
+                            {
+                                "prim": "False"
+                            },
+                            {
+                                "int": "0"
+                            },
+                            [
+                                {
+                                    "bytes": "0023e2b594bbab090bebb3e0e7ec67c86ed6a6b833b57e7ce3503059f89bafaaf2"
+                                },
+                                {
+                                    "bytes": "00c5585c6a8f1658cbc6887909433d6e2093e9883bb0fb60c656776b82ea24180c"
+                                },
+                                {
+                                    "bytes": "0102765b8135f72dbce48838b2d55c71533da183f43db5c78985ae1dac37c8d08a6e"
+                                },
+                                {
+                                    "bytes": "01035e5b932cf2ec0d1007ed4b26f9b8164fd6535c84221083f9c13091a39a1739bb"
+                                }
+                            ],
+                            {
+                                "prim": "None"
+                            },
+                            {
+                                "string": "standard"
+                            },
+                            {
+                                "int": "45376"
+                            },
+                            {
+                                "bytes": "039e1b62008cb6f9aee372705ebce0b3e9effd591700"
+                            },
+                            {
+                                "string": "stg-99dot5-com-shadownet"
+                            },
+                            {
+                                "int": "5000000"
+                            },
+                            {
+                                "bytes": "01b411bce7ba832b28ab1d763e4a33982e0a2e1bb800"
+                            }
+                        ],
+                        "balance_updates": [
+                            {
+                                "kind": "contract",
+                                "contract": "tz1hMuheNcraVzJAtiCnh9x8Mb9kzCrsH3Z2",
+                                "change": "-33750",
+                                "origin": "block"
+                            },
+                            {
+                                "kind": "burned",
+                                "category": "storage fees",
+                                "change": "33750",
+                                "origin": "block"
+                            },
+                            {
+                                "kind": "contract",
+                                "contract": "tz1hMuheNcraVzJAtiCnh9x8Mb9kzCrsH3Z2",
+                                "change": "-5000000",
+                                "origin": "block"
+                            },
+                            {
+                                "kind": "contract",
+                                "contract": "KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C",
+                                "change": "5000000",
+                                "origin": "block"
+                            }
+                        ],
+                        "consumed_milligas": "1576491",
+                        "storage_size": "6061",
+                        "paid_storage_size_diff": "135",
+                        "lazy_storage_diff": [
+                            {
+                                "kind": "big_map",
+                                "id": "45376",
+                                "diff": {
+                                    "action": "update",
+                                    "updates": [
+                                        {
+                                            "key_hash": "expruGfjx7nu9R4h6mRpaWhonnUaVYVoJb6rbhc7nhZKVeTpQx3Hec",
+                                            "key": {
+                                                "bytes": "01a17098a9b87c69831c42ce11cb8b0f"
+                                            },
+                                            "value": {
+                                                "prim": "Pair",
+                                                "args": [
+                                                    {
+                                                        "bytes": "0000ee4646afb9d81156e5623aceb642fbd416ee1042"
+                                                    },
+                                                    {
+                                                        "bytes": "009d298ca3e7c66402c15685ac1ddaf351aa34b5ad21058b950b0abb481d83769c"
+                                                    }
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            },
+                            {
+                                "kind": "big_map",
+                                "id": "45375",
+                                "diff": {
+                                    "action": "update",
+                                    "updates": []
+                                }
+                            }
+                        ]
+                    },
+                    "internal_operation_results": [
+                        {
+                            "kind": "transaction",
+                            "source": "KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C",
+                            "nonce": 0,
+                            "amount": "0",
+                            "destination": "sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La",
+                            "parameters": {
+                                "entrypoint": "default",
+                                "value": {
+                                    "bytes": "00000507070a000000160000ee4646afb9d81156e5623aceb642fbd416ee104207070080ade20407070a0000001001a17098a9b87c69831c42ce11cb8b0f0a00000021009d298ca3e7c66402c15685ac1ddaf351aa34b5ad21058b950b0abb481d83769c"
+                                }
+                            },
+                            "result": {
+                                "status": "applied",
+                                "consumed_milligas": "103632",
+                                "ticket_receipt": []
+                            }
+                        }
+                    ]
                 }
-              }
-            ]
-          },
-          "internal_operation_results": [
-            {
-              "kind": "transaction",
-              "source": "KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty",
-              "nonce": 0,
-              "amount": "0",
-              "destination": "sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK",
-              "parameters": {
-                "entrypoint": "default",
-                "value": {
-                  "bytes": "00000507070a000000160000dfcafe703915356962ccb7f04128dad0160259ac07070080ade20407070a0000001001a1175f11b17662986b81d519ccfcc10a0000002100c93e6e3d1682436f81891326ea1ce5b48370eeb3e9805e2b21d8b687e4d029e8"
-                }
-              },
-              "result": {
-                "status": "applied",
-                "consumed_milligas": "103632",
-                "ticket_receipt": []
-              }
             }
-          ]
-        }
-      }
-    ],
-    "signature": "sigUUZZdXsHP515qBEmdS8j1oWV1rPcsXPaUhpoty3aus8854w2jWL5DpmVhCePZJ8PJVBUD4EY58UwgBtf43WV3Az4TSisv"
-  }
+        ],
+        "signature": "sigaqpuGz8rvmaKzWcJsQMF4hA2AE1oRpkJLLk78XjExPNL9LNpn7D1jVAGoARwkdG6d7J2p4ah4umoT7MgD5dZMTKfwrnUK"
+    }
 }

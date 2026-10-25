@@ -18,19 +18,19 @@
                 {
                     "status": "active",
                     "tenantId": "stg-99dot5-com-shadownet",
-                    "rollupAddress": "sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK",
+                    "rollupAddress": "sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La",
                     "originationAdministrator": {
-                        "address": "KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d",
-                        "level": 5392545
+                        "address": "KT1VoY33fk5yrHbHfJ61eYREp6BHQpQLdjse",
+                        "level": 5623485
                     },
                     "evidence": [
-                        "sr_originate, verified 2026-10-08 via TzKT: GET https://api.shadownet.tzkt.io/v1/operations/sr_originate?rollup=sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK returns level 5392545, operation opAu56t71DewkrjoHZEwH4YrRyi6m3Swnuq2CBwyCowTmiNwwNa, sender tz1NqnqWgn6hrdL8Xu5jKWVzYGXMGYHfKHng.",
-                        "Administrator KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d was originated at level 5392389 (ooyewG1tsw38PaH7EEbAiSne49oJocq89gtWAs3X8owq5bQbzxB); its owner multisig KT1JYp2tXj9PutzKDsv1VTvqPVZXgubyX6Nb set its rollup to sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK at level 5392615 (onxYfsVKZPrkZ7VHzvV8GeUov5dDsC75hYAN4dVRkp2W8R6hqHN).",
-                        "RegisterTenant (0x0100) at level 5394307 (opCiDboTSy9Xt1G2qp6p4wLnHQdWuHddCd5gUneAeQsyY8HCBgn), sent to the rollup by the administrator, names stg-99dot5-com-shadownet with sequencer key edpkvQGVagSNSUihcXErJFQEdeGo7NSBpuiqqmy7pSuQMvhFWZuLVE; SetTenantStatus active at level 5394360 (opPqyDQvdmjx1hpQ4UVJVkZVcAzdnbKGu25fbwUaKQbStwptjJf).",
-                        "RegisterPool (0x010c): standard at level 5394332 (ooBrqQ2ZKBLMc1msvPAnzoW9PNLpucrKAxJKuSunV1JRSf3sPaj), TEZ, max_win 1000000000, active.",
-                        "RegisterPoolVault (0x0101): standard vault KT1WiDdttiuqRHVJ8gb1cYte4Xf3YCGwtDty at level 5394347 (opZGc2rBBNmep9Wxv9Mwpfk5UybTafaxcwxz5wX68Pi9Nd4iziP), active.",
-                        "Cross-checked 2026-10-08 against a Tezos RPC node (https://rpc.shadownet.teztnets.com): chain_id NetXsqzbfFenSTS; genesis_info of sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK returns level 5392545; KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d storage is (KT1JYp2tXj9PutzKDsv1VTvqPVZXgubyX6Nb, Some sr1G1TRpqmwhJhHhH7Fx8ejxtAaRqptzCvBK).",
-                        "Confirmed by the operator against the origination ceremony: the rollup's /config/admin-contract/current reads KT19KxepiL2TF4s7QEdijLveNGkxJrxEGS2d."
+                        "sr_originate, verified 2026-10-24 via TzKT: GET https://api.shadownet.tzkt.io/v1/operations/sr_originate?rollup=sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La returns level 5623485, operation opS9WBX3nYjo21vc8DtYJtpAhmPMSQ58dJsLbVzFSikYXjiPxwu, sender tz1crXV6x6jRJLnR5uTfhuQrqxSo7wQajQJh.",
+                        "Administrator KT1VoY33fk5yrHbHfJ61eYREp6BHQpQLdjse was originated at level 5623228 (ooLzLF2xa1G9Q1aieYw5VxVZ1xFVSC3MpAq9v1Kpaj6F8RnTZXW); its owner multisig KT1RKKkDz346E7Y15Lb24qSpaDFsrJAjJmAr, originated at level 5623204 (ooQ9axzQT7q3voG3kEYtKG6siZSoKgqC4CVvk5icSMG4m5HARPi) and pointed at the administrator by set_admin_address at level 5623280 (oopXKEAo2VaecWDeYLw3t8bLm7hJarKZDCFhoD61tjSpdfdSqbT), set the administrator's rollup to sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La at level 5624718 (onup6vMT4CfFa57v4exGNBHHTyJXM1wP3rh792C17hxu1dJTWhN).",
+                        "Cross-checked 2026-10-24 against a Tezos RPC node (https://rpc.shadownet.teztnets.com): chain_id NetXsqzbfFenSTS; genesis_info of sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La returns level 5623485; KT1VoY33fk5yrHbHfJ61eYREp6BHQpQLdjse storage is (KT1RKKkDz346E7Y15Lb24qSpaDFsrJAjJmAr, Some sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La).",
+                        "RegisterTenant (0x0100) at level 5625880 (op3DQj7xFHJBS7ATdhazixEzh9eZzzM9ovMYPn3KkidFqJmPn7Z), sent to the rollup by the administrator, names stg-99dot5-com-shadownet with sequencer key edpkvQGVagSNSUihcXErJFQEdeGo7NSBpuiqqmy7pSuQMvhFWZuLVE; SetTenantStatus (0x0102) active at level 5626025 (onpeNKdXFb2Ag9qGpAfgAwSRW8fMoTKX5ys1MNwtyJyYsvH8LZE).",
+                        "RegisterPool (0x010c): standard at level 5625954 (ooLp7Gw8hh1B3R4mhkZnWXgQeTSZTL6UrniWwFzcSLZdAKMjaaJ), TEZ, max_win 1000000000, active.",
+                        "RegisterPoolVault (0x0101): standard vault KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C at level 5625985 (ooJL19vnBJsDS6jHpkeYc7rX2gdK4ipu8VQTDbMu8DZjrzCwfrn), active. The vault was originated at level 5625619 (ooLPkie4TnstZvEqZXSTT8Gh7YHgQRXDcZcEAVXcy64nt7XJvP7) by tz1X19c2VUccA72VYartkNskZqBwb1Qm15fx; its storage, read 2026-10-24 from https://rpc.shadownet.teztnets.com, carries smart_rollup_address sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La and treasury KT1QztSkFbwE2M4TpRT3yXPxwfSNPSWPBcDh.",
+                        "Confirmed by the operator against the origination ceremony: the rollup node following sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La reports KT1VoY33fk5yrHbHfJ61eYREp6BHQpQLdjse as its current administrator and NetXsqzbfFenSTS as its baked chain id, read before the bind at L1 level 5624637 and again after it at level 5624742, when the administrator's rollup_address was sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La."
                     ]
                 }
             ]

@@ -1,0 +1,63 @@
+{
+  "capturedFrom": [
+    "GET https://rpc.shadownet.teztnets.com/chains/main/blocks/5627069/context/contracts/KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C/storage, captured 2026-10-24 (storageAtHead): the first vault of the treasury generation, thirteen leaves, before any deposit",
+    "GET https://api.shadownet.tzkt.io/v1/bigmaps/45376 reports path sessions on contract KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C, firstLevel 5625619, 0 keys"
+  ],
+  "vault": "KT1Eca5RobtXqZK3WBCHKq4gGLJxzCQWfi2C",
+  "bigMapId": "45376",
+  "storageAtHead": {
+    "prim": "Pair",
+    "args": [
+      {
+        "string": "tz1crXV6x6jRJLnR5uTfhuQrqxSo7wQajQJh"
+      },
+      {
+        "string": "sppk7binrEbB3eyAfy3o7cYe5uyft4HrHzpfCnsJxLaLU2canVCHu2A"
+      },
+      {
+        "int": "45375"
+      },
+      {
+        "prim": "False"
+      },
+      {
+        "int": "0"
+      },
+      [
+        {
+          "string": "edpktv2awP63gVQpkw5CmwHcPoQ5vXig2NrML8iEkWFBpDVK6YciBK"
+        },
+        {
+          "string": "edpkv98rVaVRW5nJ1JgKsXvXwXqt7GdFv8x4rhM8pfS2KbidDNnKdt"
+        },
+        {
+          "string": "sppk7aCm8va7mSob4Zw2yL6nYuHNQc1zNzMBHvkpfgZ4EDg5trNuJDm"
+        },
+        {
+          "string": "sppk7bxwGnpCqM9F2GXNuP294NpsVYaGS6pJVrvixNqe1Yc9siJ42oJ"
+        }
+      ],
+      {
+        "prim": "None"
+      },
+      {
+        "string": "standard"
+      },
+      {
+        "int": "45376"
+      },
+      {
+        "string": "sr1LTLUvH1ziZW1Z47cTxJSwyYMN7chPB3La"
+      },
+      {
+        "string": "stg-99dot5-com-shadownet"
+      },
+      {
+        "int": "0"
+      },
+      {
+        "string": "KT1QztSkFbwE2M4TpRT3yXPxwfSNPSWPBcDh"
+      }
+    ]
+  }
+}

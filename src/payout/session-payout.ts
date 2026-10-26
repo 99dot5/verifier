@@ -31,7 +31,7 @@
  *                           executed, a fast payout above it is an
  *                           overpayment provable from L1 alone;
  *   5. `payout-kernel`      the SAME comparison within minutes rather than
- *                           weeks, against the kernel's `payout-{session}`
+ *                           weeks, against the kernel's `session-{session}-end-payout`
  *                           record read from a rollup node the READER runs
  *                           (never a default: the operator's node can only
  *                           confirm the operator).
@@ -518,7 +518,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
             check(
                 PAYOUT_KERNEL_CHECK_ID,
                 'unavailable',
-                'no rollup node configured. The kernel’s `payout-{session}` record is readable from any rollup node that ' +
+                'no rollup node configured. The kernel’s `session-{session}-end-payout` record is readable from any rollup node that ' +
                     'follows this rollup, but a node is one party’s replay — the operator’s can only confirm the operator — so ' +
                     'this page has no default; enter the RPC of a node you run (an observer node is enough) to make this ' +
                     'comparison within minutes of the payout instead of waiting for the cemented payout',

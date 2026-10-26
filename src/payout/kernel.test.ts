@@ -39,7 +39,7 @@ describe('kernel records', () => {
             '/tenants/t/pools/p/sessions/660e8400-e29b-41d4-a716-446655440099',
         );
         expect(payoutKey('t', 'p', 'TEZ', '660e8400-e29b-41d4-a716-446655440099')).toBe(
-            '/tenants/t/pools/p/transactions/TEZ/payout-660e8400-e29b-41d4-a716-446655440099',
+            '/tenants/t/pools/p/transactions/TEZ/session-660e8400-e29b-41d4-a716-446655440099-end-payout',
         );
     });
 

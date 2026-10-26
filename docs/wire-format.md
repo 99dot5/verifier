@@ -589,7 +589,7 @@ string or `null` — at two keys under the vault's own `tenant_id` and
 | Key | Record (Borsh, in a one-byte envelope: `00` = V1) |
 |---|---|
 | `/tenants/{tenant}/pools/{pool}/sessions/{session_id}` (hyphenated) | `owner: String`, `asset: String`, `balance: u128`, `funding_vault_address: String`, `ended: bool`, `end_reason: Option<String>` |
-| `/tenants/{tenant}/pools/{pool}/transactions/TEZ/payout-{session_id}` | `account_address: String`, `asset: String`, `kind: u8` (`0` deposit, `1` session-end payout, `2` stake, `3` round-end payout, `4` fund, `5` sweep), `amount: u128` |
+| `/tenants/{tenant}/pools/{pool}/transactions/TEZ/session-{session_id}-end-payout` | `account_address: String`, `asset: String`, `kind: u8` (`0` deposit, `1` session-end payout, `2` stake, `3` round-end payout, `4` fund, `5` sweep), `amount: u128` |
 
 A fast payout is backed when the session exists, has ended, was funded
 through the vault that paid, is a `TEZ` session, and the row at its payout

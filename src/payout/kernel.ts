@@ -4,7 +4,7 @@
  *
  * The records and keys are the ones the validator signs from: the session
  * at `/tenants/{tenant}/pools/{pool}/sessions/{id}` and its payout at
- * `…/transactions/TEZ/payout-{id}`. A fast payout is sound only when the
+ * `…/transactions/TEZ/session-{id}-end-payout`. A fast payout is sound only when the
  * session exists, has ended, was funded through the vault that paid, is a
  * TEZ session, and the row at its payout key is the kernel's session-end
  * payout (the session's balance leaving the rollup) of at least the amount
@@ -32,11 +32,11 @@ export function sessionKey(tenant: string, pool: string, sessionId: string): str
 
 /**
  * The durable key of a session's payout record: the kernel's
- * `payout-{session_id}` reference under the pool's transaction ledger for
+ * `session-{session_id}-end-payout` reference under the pool's transaction ledger for
  * `asset`. The row there is the session-end payout `EndSession` writes.
  */
 export function payoutKey(tenant: string, pool: string, asset: string, sessionId: string): string {
-    return `/tenants/${tenant}/pools/${pool}/transactions/${asset}/payout-${sessionId}`;
+    return `/tenants/${tenant}/pools/${pool}/transactions/${asset}/session-${sessionId}-end-payout`;
 }
 
 export interface StoredSession {

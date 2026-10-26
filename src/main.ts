@@ -220,7 +220,7 @@ app.innerHTML = `
             off L1, re-verifies every signature the fast payout carried against the <code>payout_signers</code> the
             vault held at the time, replays the vault’s paid ledger, and compares the fast payout with the kernel’s
             figure: from the cemented payout on L1 once it has executed, or within minutes from the kernel’s own
-            <code>payout-{session}</code> record on a rollup node <em>you</em> run. Paying less than the kernel’s
+            <code>session-{session}-end-payout</code> record on a rollup node <em>you</em> run. Paying less than the kernel’s
             figure is not a finding — the cemented payout pays the remainder.
         </p>
         <div class="grid">

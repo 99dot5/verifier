@@ -804,8 +804,8 @@ describe('the ppm → tick auto-cashout policy', () => {
     it.each(AUTO_CASHOUT_VECTORS.map((v) => [v.note, v] as const))(
         'matches the shared vector: %s',
         (_note, vector) => {
-            // The SAME table binds the sequencer's own conversion in
-            // `services/sequencer/src/proto_conversions/crash/v1.rs`. Two
+            // The SAME table binds the server-side conversion in
+            // `libs/client-commands/src/crash/v1.rs`. Two
             // implementations of a policy is the shape that drifts silently.
             const result = autoCashoutTickFromPpm(vector.auto_cashout_ppm);
 

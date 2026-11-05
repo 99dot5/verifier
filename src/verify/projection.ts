@@ -782,7 +782,7 @@ const HYDRA_ARM_TAGS: Record<string, string> = {
 
 /**
  * The ppm → tick policy, reproduced from
- * `services/sequencer/src/proto_conversions/crash/v1.rs` and bound to it by
+ * `libs/client-commands/src/crash/v1.rs` and bound to it by
  * the SHARED vectors in `libs/games/src/crash/v1/testdata/vectors.json`.
  *
  * It is a POLICY, not curve maths: reject at or below `m(0)` (a target that

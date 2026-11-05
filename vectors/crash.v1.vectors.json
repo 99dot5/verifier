@@ -270,7 +270,7 @@
     }
   ],
   "auto_cashout_ppm_vectors": {
-    "_comment": "Rule-level vectors for the ppm -> tick auto-cashout POLICY (not curve math): reject at or below m(0) = 1_000_000 ppm, reject above MAX_MULTIPLIER_CAP_PPM = 1_000_000_000 ppm, else auto_cashout_tick = crash_tick(ppm). Both boundaries are inclusive on the side named. Two implementations are bound to this table: the sequencer's command-decode path (services/sequencer/src/proto_conversions/crash/v1.rs) and the round verifier's projection rule (clients/round-verifier/src/verify/projection.ts), which must agree or a player's signed auto-cashout target cannot be checked against the transcript the kernel replayed. auto_cashout_tick is null exactly when accepted is false.",
+    "_comment": "Rule-level vectors for the ppm -> tick auto-cashout POLICY (not curve math): reject at or below m(0) = 1_000_000 ppm, reject above MAX_MULTIPLIER_CAP_PPM = 1_000_000_000 ppm, else auto_cashout_tick = crash_tick(ppm). Both boundaries are inclusive on the side named. Two implementations are bound to this table: the command-decode path the sequencer and game-sim share (libs/client-commands/src/crash/v1.rs) and the round verifier's projection rule (clients/round-verifier/src/verify/projection.ts), which must agree or a player's signed auto-cashout target cannot be checked against the transcript the kernel replayed. auto_cashout_tick is null exactly when accepted is false.",
     "vectors": [
       {
         "auto_cashout_ppm": 500000,

@@ -198,6 +198,15 @@ const LIVENESS_REASONS: ReadonlySet<number> = new Set([REASON_ROUND_CLOSED, REAS
  * `Welcome` stated — the player can check against the `RoundStarted` frames
  * their own receipts hold.
  *
+ * `INVALID_SELECTION` carries one case that depends on round state: a move
+ * the game engine refuses as not allowed where the round stands (a mines tile
+ * revealed twice, or a cash-out the engine will not take). The refusal names
+ * the round, so the suppression rule reads such a cash-out as answered. It
+ * stays in this class because the sequencer sends it only for the player's
+ * own move, never for a step the server takes, and the player holds that move
+ * and the round's earlier frames, so the fault is theirs to check. An engine
+ * refusal of a server step is `INTERNAL_ERROR` and keeps its finding.
+ *
  * Everything not listed here and not a liveness or mode code is
  * `uninformative` — `DUPLICATE_COMMAND`, `RATE_LIMITED`, `INTERNAL_ERROR`,
  * `SESSION_NOT_ACTIVE`, the pool/tenant lifecycle codes, `UNSPECIFIED`, and

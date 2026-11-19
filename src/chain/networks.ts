@@ -152,13 +152,7 @@ function httpsUrl(value: unknown, path: string): string {
 }
 
 function parseDeployment(value: unknown, path: string): Deployment {
-    const d = object(value, path, [
-        'status',
-        'tenantId',
-        'rollupAddress',
-        'originationAdministrator',
-        'evidence',
-    ]);
+    const d = object(value, path, ['status', 'tenantId', 'rollupAddress', 'originationAdministrator', 'evidence']);
     const status = string(d.status, `${path}.status`);
 
     if (status !== 'active' && status !== 'retired') {

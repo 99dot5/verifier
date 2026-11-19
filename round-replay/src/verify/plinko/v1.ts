@@ -66,7 +66,7 @@ export const PATH_BYTES = 2;
 
 /** `path[i] = bit (i % 8) of drawn byte (i / 8)`; 0 = left, 1 = right. */
 export function derivePath(seed: Uint8Array, rows: number): number[] {
-    return Array.from({ length: rows }, (_, i) => (seed[Math.floor(i / 8)] >> i % 8) & 1);
+    return Array.from({ length: rows }, (_, i) => (seed[Math.floor(i / 8)] >> (i % 8)) & 1);
 }
 
 export function binIndex(path: number[]): number {
@@ -199,7 +199,10 @@ export function replay(
                     actionType: 'cashout',
                     title: `cashout (settle trigger) at ${ppmToMultiplierString(multiplierPpm)}`,
                     details: [
-                        ['rule', 'pays the multiplier sealed at place-bet — player cashout and deadline-sweep pay identically'],
+                        [
+                            'rule',
+                            'pays the multiplier sealed at place-bet — player cashout and deadline-sweep pay identically',
+                        ],
                     ],
                     cumulativePpm: multiplierPpm,
                 });
@@ -217,7 +220,10 @@ export function replay(
                     actionType: 'abandon',
                     title: `abandon (system) — settles at the sealed outcome, exactly what a cashout pays: ${ppmToMultiplierString(multiplierPpm)}`,
                     details: [
-                        ['rule', 'the rollup replays a system abandon as the cashout the state admits; for plinko that is the sealed multiplier, so the abandon and the cashout pay identically'],
+                        [
+                            'rule',
+                            'the rollup replays a system abandon as the cashout the state admits; for plinko that is the sealed multiplier, so the abandon and the cashout pay identically',
+                        ],
                     ],
                     cumulativePpm: multiplierPpm,
                 });

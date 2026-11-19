@@ -27,18 +27,14 @@
                         "args": [
                             {
                                 "prim": "address",
-                                "annots": [
-                                    "%admin_address"
-                                ]
+                                "annots": ["%admin_address"]
                             },
                             {
                                 "prim": "pair",
                                 "args": [
                                     {
                                         "prim": "key",
-                                        "annots": [
-                                            "%deposit_authoriser"
-                                        ]
+                                        "annots": ["%deposit_authoriser"]
                                     },
                                     {
                                         "prim": "pair",
@@ -53,27 +49,21 @@
                                                         "prim": "mutez"
                                                     }
                                                 ],
-                                                "annots": [
-                                                    "%paid"
-                                                ]
+                                                "annots": ["%paid"]
                                             },
                                             {
                                                 "prim": "pair",
                                                 "args": [
                                                     {
                                                         "prim": "bool",
-                                                        "annots": [
-                                                            "%paused"
-                                                        ]
+                                                        "annots": ["%paused"]
                                                     },
                                                     {
                                                         "prim": "pair",
                                                         "args": [
                                                             {
                                                                 "prim": "nat",
-                                                                "annots": [
-                                                                    "%payout_signer_nonce"
-                                                                ]
+                                                                "annots": ["%payout_signer_nonce"]
                                                             },
                                                             {
                                                                 "prim": "pair",
@@ -85,9 +75,7 @@
                                                                                 "prim": "key"
                                                                             }
                                                                         ],
-                                                                        "annots": [
-                                                                            "%payout_signers"
-                                                                        ]
+                                                                        "annots": ["%payout_signers"]
                                                                     },
                                                                     {
                                                                         "prim": "pair",
@@ -99,18 +87,14 @@
                                                                                         "prim": "address"
                                                                                     }
                                                                                 ],
-                                                                                "annots": [
-                                                                                    "%pending_admin_address"
-                                                                                ]
+                                                                                "annots": ["%pending_admin_address"]
                                                                             },
                                                                             {
                                                                                 "prim": "pair",
                                                                                 "args": [
                                                                                     {
                                                                                         "prim": "string",
-                                                                                        "annots": [
-                                                                                            "%pool_id"
-                                                                                        ]
+                                                                                        "annots": ["%pool_id"]
                                                                                     },
                                                                                     {
                                                                                         "prim": "pair",
@@ -139,9 +123,7 @@
                                                                                                         ]
                                                                                                     }
                                                                                                 ],
-                                                                                                "annots": [
-                                                                                                    "%sessions"
-                                                                                                ]
+                                                                                                "annots": ["%sessions"]
                                                                                             },
                                                                                             {
                                                                                                 "prim": "pair",

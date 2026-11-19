@@ -31,8 +31,7 @@ interface GoldenTranscript {
     signed_frame_hex: string;
 }
 
-const golden: GoldenTranscript = JSON.parse(readFileSync(fileURLToPath(wireVectorsUrl()), 'utf8'))
-    .round_transcript[0];
+const golden: GoldenTranscript = JSON.parse(readFileSync(fileURLToPath(wireVectorsUrl()), 'utf8')).round_transcript[0];
 const GOLDEN = golden.signed_frame_hex;
 
 describe('external message decoder', () => {
@@ -58,9 +57,7 @@ describe('external message decoder', () => {
         expect(message.clientSeed).toHaveLength(32);
         expect(message.serverSeed).toHaveLength(32);
         expect(message.playerCommitment).toHaveLength(32);
-        expect(message.actions.map((a) => a.actionType)).toEqual(
-            golden.fields.actions.map((a) => a.action_type),
-        );
+        expect(message.actions.map((a) => a.actionType)).toEqual(golden.fields.actions.map((a) => a.action_type));
         // Index 0 is always the place-bet: the action's index is its position,
         // and nothing on the wire restates it.
         expect(message.actions[0].tag).toBe(0x00);

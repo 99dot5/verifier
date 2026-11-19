@@ -61,19 +61,107 @@ const TWO_POW_64 = 1n << 64n;
  * ARE the canonical curve.
  */
 export const FRACTIONAL_POW2_PPM: readonly bigint[] = [
-    1_000_000n, 1_006_956n, 1_013_959n, 1_021_012n, 1_028_114n, 1_035_265n, 1_042_466n, 1_049_717n,
-    1_057_018n, 1_064_370n, 1_071_773n, 1_079_228n, 1_086_735n, 1_094_294n, 1_101_905n, 1_109_569n,
-    1_117_287n, 1_125_058n, 1_132_884n, 1_140_764n, 1_148_698n, 1_156_688n, 1_164_734n, 1_172_835n,
-    1_180_993n, 1_189_207n, 1_197_479n, 1_205_808n, 1_214_195n, 1_222_640n, 1_231_144n, 1_239_708n,
-    1_248_331n, 1_257_013n, 1_265_757n, 1_274_561n, 1_283_426n, 1_292_353n, 1_301_342n, 1_310_393n,
-    1_319_508n, 1_328_686n, 1_337_928n, 1_347_234n, 1_356_604n, 1_366_040n, 1_375_542n, 1_385_109n,
-    1_394_744n, 1_404_445n, 1_414_214n, 1_424_050n, 1_433_955n, 1_443_929n, 1_453_973n, 1_464_086n,
-    1_474_269n, 1_484_524n, 1_494_849n, 1_505_247n, 1_515_717n, 1_526_259n, 1_536_875n, 1_547_565n,
-    1_558_329n, 1_569_168n, 1_580_083n, 1_591_073n, 1_602_140n, 1_613_284n, 1_624_505n, 1_635_804n,
-    1_647_182n, 1_658_639n, 1_670_176n, 1_681_793n, 1_693_491n, 1_705_270n, 1_717_131n, 1_729_074n,
-    1_741_101n, 1_753_211n, 1_765_406n, 1_777_685n, 1_790_050n, 1_802_501n, 1_815_038n, 1_827_663n,
-    1_840_375n, 1_853_176n, 1_866_066n, 1_879_045n, 1_892_115n, 1_905_276n, 1_918_528n, 1_931_873n,
-    1_945_310n, 1_958_841n, 1_972_465n, 1_986_185n,] as const;
+    1_000_000n,
+    1_006_956n,
+    1_013_959n,
+    1_021_012n,
+    1_028_114n,
+    1_035_265n,
+    1_042_466n,
+    1_049_717n,
+    1_057_018n,
+    1_064_370n,
+    1_071_773n,
+    1_079_228n,
+    1_086_735n,
+    1_094_294n,
+    1_101_905n,
+    1_109_569n,
+    1_117_287n,
+    1_125_058n,
+    1_132_884n,
+    1_140_764n,
+    1_148_698n,
+    1_156_688n,
+    1_164_734n,
+    1_172_835n,
+    1_180_993n,
+    1_189_207n,
+    1_197_479n,
+    1_205_808n,
+    1_214_195n,
+    1_222_640n,
+    1_231_144n,
+    1_239_708n,
+    1_248_331n,
+    1_257_013n,
+    1_265_757n,
+    1_274_561n,
+    1_283_426n,
+    1_292_353n,
+    1_301_342n,
+    1_310_393n,
+    1_319_508n,
+    1_328_686n,
+    1_337_928n,
+    1_347_234n,
+    1_356_604n,
+    1_366_040n,
+    1_375_542n,
+    1_385_109n,
+    1_394_744n,
+    1_404_445n,
+    1_414_214n,
+    1_424_050n,
+    1_433_955n,
+    1_443_929n,
+    1_453_973n,
+    1_464_086n,
+    1_474_269n,
+    1_484_524n,
+    1_494_849n,
+    1_505_247n,
+    1_515_717n,
+    1_526_259n,
+    1_536_875n,
+    1_547_565n,
+    1_558_329n,
+    1_569_168n,
+    1_580_083n,
+    1_591_073n,
+    1_602_140n,
+    1_613_284n,
+    1_624_505n,
+    1_635_804n,
+    1_647_182n,
+    1_658_639n,
+    1_670_176n,
+    1_681_793n,
+    1_693_491n,
+    1_705_270n,
+    1_717_131n,
+    1_729_074n,
+    1_741_101n,
+    1_753_211n,
+    1_765_406n,
+    1_777_685n,
+    1_790_050n,
+    1_802_501n,
+    1_815_038n,
+    1_827_663n,
+    1_840_375n,
+    1_853_176n,
+    1_866_066n,
+    1_879_045n,
+    1_892_115n,
+    1_905_276n,
+    1_918_528n,
+    1_931_873n,
+    1_945_310n,
+    1_958_841n,
+    1_972_465n,
+    1_986_185n,
+] as const;
 
 /**
  * `m(N)` in ppm: `(1 << (N / 100)) * FRACTIONAL_POW2_PPM[N % 100]`, with `N`
@@ -226,11 +314,17 @@ function roundDetails(round: CrashRound): [string, string][] {
     return [
         ['derived seed (decision 0, chunk 0)', round.seedHex],
         ['raw u64 (LE of the first 8 stream bytes)', round.rawU64.toString()],
-        ['crash point (half_up(995000 × 2^64 / (2^64 − raw)), clamped to [1×, 1000×])', ppmToMultiplierString(round.crashPointPpm)],
+        [
+            'crash point (half_up(995000 × 2^64 / (2^64 − raw)), clamped to [1×, 1000×])',
+            ppmToMultiplierString(round.crashPointPpm),
+        ],
         ['crash tick (smallest N with m(N) ≥ crash point, capped at 996)', round.crashTick.toString()],
-        ['best cashout available', round.crashTick === 0n
-            ? 'none — instant bust, every cashout loses'
-            : `tick ${round.crashTick - 1n} paying ${ppmToMultiplierString(round.maxWinMultiplierPpm)}`],
+        [
+            'best cashout available',
+            round.crashTick === 0n
+                ? 'none — instant bust, every cashout loses'
+                : `tick ${round.crashTick - 1n} paying ${ppmToMultiplierString(round.maxWinMultiplierPpm)}`,
+        ],
     ];
 }
 
@@ -258,9 +352,7 @@ export function replay(
 
     const config = decodeConfig(actions[0].payload);
     const round = crashRound(serverSeed, clientSeed);
-    const mode = config.autoCashoutTick === null
-        ? 'manual'
-        : `auto at tick ${config.autoCashoutTick}`;
+    const mode = config.autoCashoutTick === null ? 'manual' : `auto at tick ${config.autoCashoutTick}`;
     const steps: StepWorking[] = [
         {
             actionIndex: 0,
@@ -268,10 +360,16 @@ export function replay(
             title: `place-bet (${mode}) — crashes at tick ${round.crashTick} (${ppmToMultiplierString(round.crashPointPpm)})`,
             details: [
                 ...roundDetails(round),
-                ['mode', config.autoCashoutTick === null
-                    ? 'manual — settles on a player cashout or the deadline sweep'
-                    : `auto — the pre-committed target tick ${config.autoCashoutTick} settles at the deadline sweep`],
-                ['sealed at bet time', 'the curve and the crash tick are fixed here; later actions choose only when the round stops'],
+                [
+                    'mode',
+                    config.autoCashoutTick === null
+                        ? 'manual — settles on a player cashout or the deadline sweep'
+                        : `auto — the pre-committed target tick ${config.autoCashoutTick} settles at the deadline sweep`,
+                ],
+                [
+                    'sealed at bet time',
+                    'the curve and the crash tick are fixed here; later actions choose only when the round stops',
+                ],
             ],
             // Both modes start in progress at 1.00× — neither settles at place-bet.
             cumulativePpm: SCALE_PPM,
@@ -325,7 +423,10 @@ export function replay(
                         actionType: 'abandon',
                         title: 'abandon (system) — manual round, no cashout to substitute: forfeited, pays 0',
                         details: [
-                            ['rule', "the kernel replays a system abandon as the cashout the state admits; a manual round has no claim to substitute, so it forfeits — the same loss as the deadline sweep's expire"],
+                            [
+                                'rule',
+                                "the kernel replays a system abandon as the cashout the state admits; a manual round has no claim to substitute, so it forfeits — the same loss as the deadline sweep's expire",
+                            ],
                         ],
                         cumulativePpm: 0n,
                     });
@@ -350,7 +451,10 @@ export function replay(
                     details: [
                         ['pre-committed auto target (from your signed PlaceBet config)', target.toString()],
                         ['crash tick', round.crashTick.toString()],
-                        ['rule', 'a system abandon settles exactly as cashout(target) would — stake × m(target) iff target < crash_tick, else 0'],
+                        [
+                            'rule',
+                            'a system abandon settles exactly as cashout(target) would — stake × m(target) iff target < crash_tick, else 0',
+                        ],
                         ['multiplier', ppmToMultiplierString(cumulative)],
                     ],
                     cumulativePpm: cumulative,

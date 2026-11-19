@@ -293,7 +293,10 @@ describe('hydra:v1 transcript rules', () => {
             ['a potion before the first attack', [action(0, 'place-bet', knight), action(1, 'drink-potion')]],
             ['mana before the first attack', [action(0, 'place-bet', knight), action(1, 'drink-mana')]],
             ['an unknown action', [action(0, 'place-bet', knight), action(1, 'higher')]],
-            ['a payload on a payload-free action', [action(0, 'place-bet', knight), action(1, 'physical-attack', new Uint8Array([0]))]],
+            [
+                'a payload on a payload-free action',
+                [action(0, 'place-bet', knight), action(1, 'physical-attack', new Uint8Array([0]))],
+            ],
             ['a bank larger than the live position', [...firstAttack, bank(2, 10_000_000_000n)]],
             ['a zero bank', [...firstAttack, bank(2, 0n)]],
         ] as [string, TranscriptAction[]][])('%s', (_, actions) => {

@@ -20,7 +20,10 @@ import {
     seedRuleForGame,
     type Derivation,
 } from './seed';
-import { vectorsUrl, type VectorGame } from './vectors-path';
+import { VECTOR_DIRS, vectorsUrl, type VectorGame } from './vectors-path';
+
+/** `hydra/v2` → `hydra:v2`: the game type a vectors directory pins. */
+const gameTypeOf = (game: VectorGame): string => VECTOR_DIRS[game].replace('/', ':');
 
 /** gameType "hilo:v1", server "11"×32, client "22"×32, decision 3, chunk 1. */
 const EXAMPLE = {
@@ -34,15 +37,17 @@ const EXAMPLE = {
 /** Computed independently (Python hashlib) — never by the code under test. */
 const EXAMPLE_PREIMAGE_HEX =
     '3939646f74353a656e67696e652d736565643a7631' + // "99dot5:engine-seed:v1"
-    '07' + '68696c6f3a7631' + // len 7, "hilo:v1"
-    '40' + '31'.repeat(64) + // len 64, "11"×32 as ASCII
-    '40' + '32'.repeat(64) + // len 64, "22"×32 as ASCII
+    '07' +
+    '68696c6f3a7631' + // len 7, "hilo:v1"
+    '40' +
+    '31'.repeat(64) + // len 64, "11"×32 as ASCII
+    '40' +
+    '32'.repeat(64) + // len 64, "22"×32 as ASCII
     '03000000' + // decision 3, u32 LE
     '01000000'; // chunk 1, u32 LE
 const EXAMPLE_DIGEST_HEX = 'e032790ea31b22d5299594aa1de0d461e67cc3b398d5aec5d4685d98684599db';
 
-const example = () =>
-    seedPreimage(EXAMPLE.gameType, EXAMPLE.server, EXAMPLE.client, EXAMPLE.decision, EXAMPLE.chunk);
+const example = () => seedPreimage(EXAMPLE.gameType, EXAMPLE.server, EXAMPLE.client, EXAMPLE.decision, EXAMPLE.chunk);
 
 describe('engine seed preimage', () => {
     it('builds the v1 domain from the derivation name, and starts with its 21 bytes', () => {
@@ -119,7 +124,7 @@ describe('seedRule', () => {
 });
 
 describe('seedRuleForGame', () => {
-    it('selects each game version\'s own rule', () => {
+    it("selects each game version's own rule", () => {
         for (const [gameType, derivation] of Object.entries(GAME_SEED_DERIVATIONS)) {
             expect(seedRuleForGame(gameType)).toBe(seedRule(derivation));
         }
@@ -140,7 +145,9 @@ describe('SeedStream', () => {
         const stream = new SeedStream(EXAMPLE.gameType, EXAMPLE.server, EXAMPLE.client, 3);
 
         expect(bytesToHex(stream.take(8))).toBe(bytesToHex(chunk(3, 0).slice(0, 8)));
-        expect(bytesToHex(stream.take(30))).toBe(bytesToHex(chunk(3, 0).slice(8)) + bytesToHex(chunk(3, 1).slice(0, 6)));
+        expect(bytesToHex(stream.take(30))).toBe(
+            bytesToHex(chunk(3, 0).slice(8)) + bytesToHex(chunk(3, 1).slice(0, 6)),
+        );
         expect(bytesToHex(stream.derivedChunks()[1])).toBe(bytesToHex(chunk(3, 1)));
     });
 
@@ -175,12 +182,11 @@ describe('SeedStream', () => {
 });
 
 describe('shared example in the vectors files', () => {
-    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra'];
+    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra', 'hydraV2'];
 
     it.each(GAMES)('%s vectors.json states the same preimage and digest', (game) => {
-        const file: { algorithm?: { preimage_example_hex?: string; preimage_example_digest_hex?: string } } = JSON.parse(
-            readFileSync(fileURLToPath(vectorsUrl(game)), 'utf8'),
-        );
+        const file: { algorithm?: { preimage_example_hex?: string; preimage_example_digest_hex?: string } } =
+            JSON.parse(readFileSync(fileURLToPath(vectorsUrl(game)), 'utf8'));
 
         expect(file.algorithm?.preimage_example_hex).toBe(EXAMPLE_PREIMAGE_HEX);
         expect(file.algorithm?.preimage_example_digest_hex).toBe(EXAMPLE_DIGEST_HEX);
@@ -191,10 +197,10 @@ describe('game → seed derivation table', () => {
     // Each engine's SEED_DERIVATION const is written into its vectors file as
     // algorithm.derivation by the generator's mirror table; this table must
     // name the same rule for every game.
-    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra'];
+    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra', 'hydraV2'];
 
     it('lists exactly the games that ship vectors', () => {
-        expect(Object.keys(GAME_SEED_DERIVATIONS).sort()).toEqual(GAMES.map((game) => `${game}:v1`).sort());
+        expect(Object.keys(GAME_SEED_DERIVATIONS).sort()).toEqual(GAMES.map(gameTypeOf).sort());
     });
 
     it.each(GAMES)('%s vectors.json names the rule GAME_SEED_DERIVATIONS mirrors', (game) => {
@@ -202,7 +208,7 @@ describe('game → seed derivation table', () => {
             readFileSync(fileURLToPath(vectorsUrl(game)), 'utf8'),
         );
 
-        expect(file.algorithm?.game_type).toBe(`${game}:v1`);
-        expect(file.algorithm?.derivation).toBe(GAME_SEED_DERIVATIONS[`${game}:v1`]);
+        expect(file.algorithm?.game_type).toBe(gameTypeOf(game));
+        expect(file.algorithm?.derivation).toBe(GAME_SEED_DERIVATIONS[gameTypeOf(game)]);
     });
 });

@@ -106,7 +106,10 @@ describe('round transcript encodings', () => {
         // independently. A verifier that hashed the bare envelope, or
         // decoded the domain to the wrong width, disagrees here and nowhere
         // else — the kernel pins the same digests from the Rust side.
-        const domain = { chainId: vectors.signing_domain.chain_id, rollupAddress: vectors.signing_domain.rollup_address };
+        const domain = {
+            chainId: vectors.signing_domain.chain_id,
+            rollupAddress: vectors.signing_domain.rollup_address,
+        };
 
         expect(vectors.size_budget.chain_id_bytes).toBe(4);
         expect(vectors.size_budget.rollup_address_bytes).toBe(20);
@@ -127,7 +130,11 @@ describe('round transcript encodings', () => {
 
 describe('really-signed frames (#954)', () => {
     const domain = { chainId: vectors.signing_domain.chain_id, rollupAddress: vectors.signing_domain.rollup_address };
-    const kinds = { seed_batch: 'seed-batch', round_transcript: 'round-transcript', end_session: 'end-session' } as const;
+    const kinds = {
+        seed_batch: 'seed-batch',
+        round_transcript: 'round-transcript',
+        end_session: 'end-session',
+    } as const;
 
     it('carries one signed frame per SequencerMessage variant, under the fixed test seed', () => {
         expect(vectors.signed_messages.map((e) => e.message_tag).sort()).toEqual([0, 1, 2]);

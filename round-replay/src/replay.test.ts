@@ -24,9 +24,7 @@ interface HexScenario {
 
 /** Seeds come from a NAMED scenario, so this file follows the vectors instead of pinning one. */
 function hiloScenario(name: string): HexScenario {
-    const file: { hex_scenarios?: HexScenario[] } = JSON.parse(
-        readFileSync(fileURLToPath(vectorsUrl('hilo')), 'utf8'),
-    );
+    const file: { hex_scenarios?: HexScenario[] } = JSON.parse(readFileSync(fileURLToPath(vectorsUrl('hilo')), 'utf8'));
     const scenario = file.hex_scenarios?.find((candidate) => candidate.name === name);
 
     if (scenario === undefined) {

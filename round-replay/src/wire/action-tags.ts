@@ -47,7 +47,7 @@ export const GAME_VOCABULARY_START = 0x10;
 export const ACTION_TAGS: readonly ActionTagEntry[] = [
     // Protocol block, 0x00–0x0F.
     { tag: 0x00, actionType: 'place-bet', system: false }, // every game, always at actions[0]
-    { tag: 0x01, actionType: 'cashout', system: false }, // crash, plinko, hilo, mines, hydra
+    { tag: 0x01, actionType: 'cashout', system: false }, // crash, plinko, hilo, mines, hydra, hydra v2
     { tag: 0x02, actionType: 'partial-cashout', system: true }, // max-win de-lever (payload: 16 bytes)
     { tag: 0x03, actionType: 'abandon', system: true }, // janitor sweep / force-settle
     { tag: 0x04, actionType: 'expire', system: true }, // crash's terminal loss, from the deadline sweep
@@ -59,6 +59,7 @@ export const ACTION_TAGS: readonly ActionTagEntry[] = [
     { tag: 0x14, actionType: 'magic-attack', system: false }, // hydra
     { tag: 0x15, actionType: 'drink-potion', system: false }, // hydra
     { tag: 0x16, actionType: 'drink-mana', system: false }, // hydra
+    { tag: 0x17, actionType: 'roll', system: false }, // hydra v2
 ] as const;
 
 /**
@@ -83,6 +84,7 @@ export const GAME_VOCABULARIES: Readonly<Record<string, readonly string[]>> = {
         'drink-potion',
         'drink-mana',
     ],
+    'hydra:v2': ['place-bet', 'cashout', 'partial-cashout', 'abandon', 'roll'],
 };
 
 const BY_TAG = new Map(ACTION_TAGS.map((entry) => [entry.tag, entry]));

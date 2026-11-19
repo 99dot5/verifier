@@ -112,7 +112,10 @@ export async function locateSessionDeposit(options: LocateDepositOptions): Promi
     });
 
     if (options.vaultAddresses.length === 0) {
-        return absent('failed', 'no vault is registered on-chain for this pool, so there is no contract to look for the deposit on');
+        return absent(
+            'failed',
+            'no vault is registered on-chain for this pool, so there is no contract to look for the deposit on',
+        );
     }
 
     // The vault types `session_id` as `sp.bytes` of length 16, and TzKT
@@ -141,7 +144,10 @@ export async function locateSessionDeposit(options: LocateDepositOptions): Promi
                 const response = await doFetch(url, { signal: options.signal });
 
                 if (!response.ok) {
-                    return absent('failed', `the indexer returned ${response.status} while looking for the session's deposit`);
+                    return absent(
+                        'failed',
+                        `the indexer returned ${response.status} while looking for the session's deposit`,
+                    );
                 }
 
                 page = (await response.json()) as TzktDepositOperation[];
@@ -380,7 +386,15 @@ export async function resolveSessionDeposit(input: SessionDepositInput): Promise
               : `Its receipt does not write the vault's sessions big_map ${sessionsId} at this session's key, so it is not shown to be the session-creating deposit (a top-up, or a call routed through a contract).`);
     const otherVaults =
         firstProven && level > transcriptLevel
-            ? await checkOtherVaults(input.chain, lineage, envelope.tenantId, envelope.poolId, vault, transcriptLevel, needle)
+            ? await checkOtherVaults(
+                  input.chain,
+                  lineage,
+                  envelope.tenantId,
+                  envelope.poolId,
+                  vault,
+                  transcriptLevel,
+                  needle,
+              )
             : null;
 
     return { ...located, firstProven, otherVaults, detail: confirmed };
@@ -428,7 +442,9 @@ async function checkOtherVaults(
             const id = sessionsBigMapId(await node.contractStorage(other));
 
             if (id === null) {
-                problems.push(`vault ${other} keeps no sessions big_map (a preview or non-production vault), so it cannot be ruled out`);
+                problems.push(
+                    `vault ${other} keeps no sessions big_map (a preview or non-production vault), so it cannot be ruled out`,
+                );
             } else if (await node.bigMapHas(id, expr)) {
                 problems.push(`vault ${other} holds a sessions entry for this session (big_map ${id}, key ${expr})`);
             }
@@ -470,7 +486,10 @@ const SESSIONS_LEAF_INDEX = 8;
  */
 export function sessionsBigMapId(storage: unknown): string | null {
     const leaves = combLeaves(storage);
-    const leaf = leaves.length === PRODUCTION_VAULT_LEAF_COUNT ? (leaves[SESSIONS_LEAF_INDEX] as { int?: unknown } | undefined) : undefined;
+    const leaf =
+        leaves.length === PRODUCTION_VAULT_LEAF_COUNT
+            ? (leaves[SESSIONS_LEAF_INDEX] as { int?: unknown } | undefined)
+            : undefined;
 
     return typeof leaf?.int === 'string' && /^\d+$/.test(leaf.int) ? leaf.int : null;
 }

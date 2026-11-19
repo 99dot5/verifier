@@ -206,7 +206,12 @@ describe('crash:v1 replay', () => {
 
     it('pays a manual cashout below the crash at m(tick)', () => {
         const rv = MID_CURVE;
-        const result = replay(rv.server_seed, rv.client_seed, round(null, [cashout(Number(LAST_WIN_TICK))]), STAKE_MUTEZ);
+        const result = replay(
+            rv.server_seed,
+            rv.client_seed,
+            round(null, [cashout(Number(LAST_WIN_TICK))]),
+            STAKE_MUTEZ,
+        );
 
         expect(result.settled).toBe(true);
         expect(result.outcome).toBe('cashed-out');
@@ -416,7 +421,12 @@ describe('crash:v1 transcript vectors', () => {
     it.each(TRANSCRIPT_VECTORS.map((vector) => [vector.name, vector] as const))(
         'replays %s to the Rust engine’s own outcome and payout',
         (_name, vector) => {
-            const result = replay(vector.server_seed, vector.client_seed, actionsOf(vector), BigInt(vector.stake_units));
+            const result = replay(
+                vector.server_seed,
+                vector.client_seed,
+                actionsOf(vector),
+                BigInt(vector.stake_units),
+            );
 
             expect(result.settled).toBe(true);
             expect(result.outcome).toBe(vector.expected_outcome);

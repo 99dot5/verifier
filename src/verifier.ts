@@ -422,7 +422,8 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         title: 'RoundTranscript found in inbox',
         status: 'pass',
         // The commitment is shown, not checked: verifying it is a later PR.
-        detail: `level ${transcriptMessage.level}, op ${transcriptMessage.operationHash} — the whole round in one signed message, ` +
+        detail:
+            `level ${transcriptMessage.level}, op ${transcriptMessage.operationHash} — the whole round in one signed message, ` +
             `player commitment ${bytesToHex(transcript.playerCommitment)}`,
     });
 
@@ -495,7 +496,9 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                       `. Each is sig = ed25519(blake2b-256(${domain.chainId} ‖ ${domain.rollupAddress} ‖ payload)) — the signature binds the frame to this chain and this rollup, so it could not have been lifted from another deployment's inbox traffic; the key set is every key registered for this tenant across the administrator lineage (${admissible.length} key(s)), so the whole chain of trust starts at the pinned origination administrator and needs no operator input.`
                     : `${unmatched.length}/${toCheck.length} message(s) verify under NO key this tenant ever registered (${admissible
                           .map((k) => k.edpk)
-                          .join(', ')}) for rollup ${domain.rollupAddress} on ${domain.chainId} — either the frames are not this tenant's, they were signed for a different rollup or chain (another deployment under the same slug), or a key was used that never reached L1`,
+                          .join(
+                              ', ',
+                          )}) for rollup ${domain.rollupAddress} on ${domain.chainId} — either the frames are not this tenant's, they were signed for a different rollup or chain (another deployment under the same slug), or a key was used that never reached L1`,
         });
     }
 
@@ -834,7 +837,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         findings.push(
             'Verdict capped at ATTESTED: these receipts were built by the sequencer on request (source "sequencer"), ' +
                 'not kept by your browser. Every frame is server-signed and the round reconstructs from them, but ' +
-                'which commands and frames a server-built document contains is the server\'s choice, so it cannot ' +
+                "which commands and frames a server-built document contains is the server's choice, so it cannot " +
                 'show that nothing was left out. The label is unsigned: it can lower a verdict, never raise one.',
         );
     }
@@ -903,7 +906,10 @@ function actionsAfterSettle(
 
     if (replay !== null) {
         if (replay.settledAtIndex === null) {
-            return row('unavailable', 'the transcript never settles, so there is no settling action to end at (see replay-outcome)');
+            return row(
+                'unavailable',
+                'the transcript never settles, so there is no settling action to end at (see replay-outcome)',
+            );
         }
 
         const trailing = last - replay.settledAtIndex;
@@ -953,7 +959,6 @@ function refuseReplay(deploymentListed: boolean, gameType: string): string | nul
 
     return null;
 }
-
 
 /**
  * The client seed from the round's own PlaceBet command in the receipts, or
@@ -1080,7 +1085,9 @@ function placeBetFromReceipts(
 function clientSeedFromReceipts(input: VerifyInput, roundId: string): { requestId: string; seed: Uint8Array } | null {
     const found = placeBetFromReceipts(input, roundId);
 
-    return found?.decoded.placeBetClientSeed ? { requestId: found.requestId, seed: found.decoded.placeBetClientSeed } : null;
+    return found?.decoded.placeBetClientSeed
+        ? { requestId: found.requestId, seed: found.decoded.placeBetClientSeed }
+        : null;
 }
 
 /**
@@ -1432,7 +1439,9 @@ function runReceiptProofs(
             frame: document.roundEndedFrame,
         });
     } catch (error) {
-        return idle(`roundEndedFrameHex could not be decoded: ${error instanceof Error ? error.message : String(error)}`);
+        return idle(
+            `roundEndedFrameHex could not be decoded: ${error instanceof Error ? error.message : String(error)}`,
+        );
     }
 
     findings.push(...labelFindings(decoded.frames, document.roundIdHex));
@@ -1448,7 +1457,9 @@ function runReceiptProofs(
     }
 
     if (document.roundIdHex !== roundId) {
-        findings.push(`the export labels its round ${document.roundIdHex}, but the round under verification is ${roundId}`);
+        findings.push(
+            `the export labels its round ${document.roundIdHex}, but the round under verification is ${roundId}`,
+        );
     }
 
     // ── (i) authenticity ────────────────────────────────────────────────
@@ -1978,7 +1989,10 @@ export function describeBracket(scan: ScanContext | null): { status: 'ok' | 'nar
     }
 
     if (scan.headLevel === null) {
-        return { status: 'narrow', reason: 'the L1 head level is unknown, so "scanned up to now" cannot be established' };
+        return {
+            status: 'narrow',
+            reason: 'the L1 head level is unknown, so "scanned up to now" cannot be established',
+        };
     }
 
     if (scan.toLevel < scan.headLevel) {
@@ -2009,5 +2023,8 @@ export function describeBracket(scan: ScanContext | null): { status: 'ok' | 'nar
         };
     }
 
-    return { status: 'ok', reason: `levels ${scan.fromLevel}–${scan.toLevel} bracket the session's deposit at ${scan.deposit.level} and reach the head at ${scan.headLevel}` };
+    return {
+        status: 'ok',
+        reason: `levels ${scan.fromLevel}–${scan.toLevel} bracket the session's deposit at ${scan.deposit.level} and reach the head at ${scan.headLevel}`,
+    };
 }

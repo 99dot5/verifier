@@ -18,7 +18,8 @@ import { REPLAYERS } from './replay';
 import { GAME_SEED_DERIVATIONS } from './verify/seed';
 
 const VERIFY_DIR = fileURLToPath(new URL('./verify/', import.meta.url));
-const GAME_TYPE_SHAPE = /^([a-z]+):v(\d+)$/;
+// A game name is lower-case letters then digits (`hydra v2`), never a leading digit.
+const GAME_TYPE_SHAPE = /^([a-z][a-z0-9]*):v(\d+)$/;
 
 function portPath(gameType: string): string {
     const match = GAME_TYPE_SHAPE.exec(gameType);
@@ -60,7 +61,9 @@ describe('versioned port layout', () => {
 
     it('wires every port file on disk into REPLAYERS and GAME_SEED_DERIVATIONS', () => {
         for (const gameType of portsOnDisk()) {
-            expect(Object.hasOwn(REPLAYERS, gameType), `verify/${portPath(gameType)} has no REPLAYERS entry`).toBe(true);
+            expect(Object.hasOwn(REPLAYERS, gameType), `verify/${portPath(gameType)} has no REPLAYERS entry`).toBe(
+                true,
+            );
             expect(
                 Object.hasOwn(GAME_SEED_DERIVATIONS, gameType),
                 `verify/${portPath(gameType)} has no GAME_SEED_DERIVATIONS entry`,

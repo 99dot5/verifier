@@ -234,11 +234,7 @@ export function verifyInboxSignature(
  * preimage above, the `RECEIPT_DOMAIN`-prefixed server frame below, or a
  * player command's bare protobuf.
  */
-export function verifyPrehashedSignature(
-    signature: Uint8Array,
-    bytes: Uint8Array,
-    publicKey: Uint8Array,
-): boolean {
+export function verifyPrehashedSignature(signature: Uint8Array, bytes: Uint8Array, publicKey: Uint8Array): boolean {
     const digest = blake2b(bytes, { dkLen: 32 });
 
     try {
@@ -354,11 +350,7 @@ export function splitSignedFrame(bytes: Uint8Array): SignedFrame {
 }
 
 /** `ed25519.verify(sig, blake2b-256(RECEIPT_DOMAIN ‖ body), pk)`. */
-export function verifyServerFrameSignature(
-    signature: Uint8Array,
-    body: Uint8Array,
-    publicKey: Uint8Array,
-): boolean {
+export function verifyServerFrameSignature(signature: Uint8Array, body: Uint8Array, publicKey: Uint8Array): boolean {
     const preimage = new Uint8Array(RECEIPT_DOMAIN.length + body.length);
 
     preimage.set(RECEIPT_DOMAIN, 0);

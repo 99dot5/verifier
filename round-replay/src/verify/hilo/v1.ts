@@ -50,8 +50,19 @@ import {
 export const GAME_TYPE = 'hilo:v1';
 
 export const RANKS = [
-    'ace', 'two', 'three', 'four', 'five', 'six', 'seven',
-    'eight', 'nine', 'ten', 'jack', 'queen', 'king',
+    'ace',
+    'two',
+    'three',
+    'four',
+    'five',
+    'six',
+    'seven',
+    'eight',
+    'nine',
+    'ten',
+    'jack',
+    'queen',
+    'king',
 ] as const;
 export const SUITS = ['clubs', 'diamonds', 'hearts', 'spades'] as const;
 
@@ -217,12 +228,10 @@ export function replay(
                     details: [
                         ['cumulative', ppmToMultiplierString(cumulative)],
                         ...(bankedTotal.amount > 0n
-                            ? ([
-                                  [
-                                      'payout',
-                                      `banked total ${bankedAmountString(bankedTotal)} + the live position`,
-                                  ],
-                              ] as [string, string][])
+                            ? ([['payout', `banked total ${bankedAmountString(bankedTotal)} + the live position`]] as [
+                                  string,
+                                  string,
+                              ][])
                             : []),
                     ],
                     cumulativePpm: cumulative,

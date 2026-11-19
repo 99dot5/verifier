@@ -63,7 +63,11 @@ describe('deploymentsForTenant', () => {
     });
 
     it('returns every deployment when a re-origination kept the slug', () => {
-        const retired = { ...validDocument().networks[0].deployments[0], status: 'retired', tenantId: 'stg-99dot5-com-shadownet' };
+        const retired = {
+            ...validDocument().networks[0].deployments[0],
+            status: 'retired',
+            tenantId: 'stg-99dot5-com-shadownet',
+        };
         const networks = twoNetworks([OTHER_DEPLOYMENT, retired]);
 
         expect(deploymentsForTenant(networks, 'stg-99dot5-com-shadownet')).toHaveLength(2);
@@ -108,20 +112,56 @@ describe('networks.json', () => {
     // Each case must fail on its own: the valid document above proves the
     // parser is not simply refusing everything.
     const defects: [string, (doc: ReturnType<typeof validDocument>) => void, RegExp][] = [
-        ['a misspelt field', (doc) => Object.assign(doc.networks[0].deployments[0], { rollupAdress: 'x' }), /unknown field "rollupAdress"/],
+        [
+            'a misspelt field',
+            (doc) => Object.assign(doc.networks[0].deployments[0], { rollupAdress: 'x' }),
+            /unknown field "rollupAdress"/,
+        ],
         // A pool is a session fact, not a deployment one; the field must not creep back.
-        ['a per-deployment pool', (doc) => Object.assign(doc.networks[0].deployments[0], { poolId: 'standard' }), /unknown field "poolId"/],
-        ['a non-sr1 rollup address', (doc) => (doc.networks[0].deployments[0].rollupAddress = 'KT1HBEQTLqD54X5hFM3HeicbQ5UVF12RwivW'), /rollupAddress/],
-        ['a truncated administrator address', (doc) => (doc.networks[0].deployments[0].originationAdministrator.address = 'KT1HBEQTLqD54X5hFM3'), /originationAdministrator.address/],
-        ['a non-integer level', (doc) => (doc.networks[0].deployments[0].originationAdministrator.level = 4085587.5), /level/],
+        [
+            'a per-deployment pool',
+            (doc) => Object.assign(doc.networks[0].deployments[0], { poolId: 'standard' }),
+            /unknown field "poolId"/,
+        ],
+        [
+            'a non-sr1 rollup address',
+            (doc) => (doc.networks[0].deployments[0].rollupAddress = 'KT1HBEQTLqD54X5hFM3HeicbQ5UVF12RwivW'),
+            /rollupAddress/,
+        ],
+        [
+            'a truncated administrator address',
+            (doc) => (doc.networks[0].deployments[0].originationAdministrator.address = 'KT1HBEQTLqD54X5hFM3'),
+            /originationAdministrator.address/,
+        ],
+        [
+            'a non-integer level',
+            (doc) => (doc.networks[0].deployments[0].originationAdministrator.level = 4085587.5),
+            /level/,
+        ],
         ['an unknown status', (doc) => (doc.networks[0].deployments[0].status = 'paused'), /status/],
-        ['a tenant slug outside the grammar', (doc) => (doc.networks[0].deployments[0].tenantId = '99dot5_Shadownet'), /tenantId/],
+        [
+            'a tenant slug outside the grammar',
+            (doc) => (doc.networks[0].deployments[0].tenantId = '99dot5_Shadownet'),
+            /tenantId/,
+        ],
         // The seed derivation is named by each game version, not by a deployment.
-        ['a per-deployment derivation', (doc) => Object.assign(doc.networks[0].deployments[0], { derivation: 'v1' }), /unknown field "derivation"/],
+        [
+            'a per-deployment derivation',
+            (doc) => Object.assign(doc.networks[0].deployments[0], { derivation: 'v1' }),
+            /unknown field "derivation"/,
+        ],
         ['empty evidence', (doc) => (doc.networks[0].deployments[0].evidence = []), /evidence/],
         ['a plain-http endpoint', (doc) => (doc.networks[0].tzktApiUrl = 'http://api.shadownet.tzkt.io'), /https/],
-        ['a rollup listed twice', (doc) => doc.networks[0].deployments.push({ ...doc.networks[0].deployments[0] }), /listed twice/],
-        ['a duplicate network id', (doc) => doc.networks.push({ ...doc.networks[0], deployments: [] }), /duplicate network id/],
+        [
+            'a rollup listed twice',
+            (doc) => doc.networks[0].deployments.push({ ...doc.networks[0].deployments[0] }),
+            /listed twice/,
+        ],
+        [
+            'a duplicate network id',
+            (doc) => doc.networks.push({ ...doc.networks[0], deployments: [] }),
+            /duplicate network id/,
+        ],
     ];
 
     it.each(defects)('refuses %s', (_name, breakIt, message) => {

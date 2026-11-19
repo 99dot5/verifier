@@ -118,8 +118,18 @@ const MONSTER_BONUSES: readonly (readonly [bigint, bigint])[] = [
 export const MONSTER_HP = [1, 2, 1, 2, 1, 2, 2, 2, 3, 3, 3, 4] as const;
 
 export const MONSTER_NAMES = [
-    'Lion', 'Hydra', 'Hind', 'Boar', 'Stables', 'Birds',
-    'Bull', 'Mares', 'Belt', 'Cattle', 'Apples', 'Cerberus',
+    'Lion',
+    'Hydra',
+    'Hind',
+    'Boar',
+    'Stables',
+    'Birds',
+    'Bull',
+    'Mares',
+    'Belt',
+    'Cattle',
+    'Apples',
+    'Cerberus',
 ] as const;
 
 export interface Roll {
@@ -251,7 +261,9 @@ export function decodeConfig(payload: Uint8Array): HydraConfig {
 
 function ensureEmpty(action: TranscriptAction): void {
     if (action.payload.length !== 0) {
-        throw new ReplayError(`hydra ${action.actionType} carries a ${action.payload.length}-byte payload; it takes none`);
+        throw new ReplayError(
+            `hydra ${action.actionType} carries a ${action.payload.length}-byte payload; it takes none`,
+        );
     }
 }
 
@@ -376,7 +388,10 @@ export function replay(
                             ...head,
                             ...(bankedTotal.amount > 0n
                                 ? ([
-                                      ['payout', `the banked total ${bankedAmountString(bankedTotal)} (already the player's)`],
+                                      [
+                                          'payout',
+                                          `the banked total ${bankedAmountString(bankedTotal)} (already the player's)`,
+                                      ],
                                   ] as [string, string][])
                                 : []),
                         ],
@@ -418,7 +433,10 @@ export function replay(
                     title: `${action.actionType} vs ${MONSTER_NAMES[stage]} — survived${wounded ? ' wounded' : ''}, ${['miss', 'hit', 'crit'][damage]}${cleared ? ' — all twelve stages cleared, round won' : ''}`,
                     details: [
                         ...head,
-                        ['wound threshold', `${woundThreshold} ppm${wounded ? ` — wounded, HP ${healthBefore} → ${s.health}` : ''}`],
+                        [
+                            'wound threshold',
+                            `${woundThreshold} ppm${wounded ? ` — wounded, HP ${healthBefore} → ${s.health}` : ''}`,
+                        ],
                         ['damage', `${damage} (monster HP ${monsterHpBefore} → ${monsterHpAfter})`],
                         ['step multiplier', ppmToMultiplierString(step)],
                         ['cumulative', ppmToMultiplierString(cumulative)],
@@ -475,9 +493,10 @@ export function replay(
                     details: [
                         ['cumulative', ppmToMultiplierString(cumulative)],
                         ...(bankedTotal.amount > 0n
-                            ? ([
-                                  ['payout', `banked total ${bankedAmountString(bankedTotal)} + the live position`],
-                              ] as [string, string][])
+                            ? ([['payout', `banked total ${bankedAmountString(bankedTotal)} + the live position`]] as [
+                                  string,
+                                  string,
+                              ][])
                             : []),
                     ],
                     cumulativePpm: cumulative,

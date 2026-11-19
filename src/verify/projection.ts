@@ -127,16 +127,17 @@ export const PROJECTION_CHECK_ID = 'action-projection';
  */
 export const PROJECTION_CHECK_TITLE = 'Transcript actions project from the commands you signed';
 
-/** The five shipped games, by the `game_type` the transcript states. */
+/** The shipped games, by the `game_type` the transcript states. */
 const GAME_KEYS: Record<string, CommandGame> = {
     'hilo:v1': 'hilo',
     'crash:v1': 'crash',
     'plinko:v1': 'plinko',
     'mines:v1': 'mines',
     'hydra:v1': 'hydra',
+    'hydra:v2': 'hydraV2',
 };
 
-export type CommandGame = 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra';
+export type CommandGame = 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra' | 'hydraV2';
 
 /**
  * Actions legal at an index NO command of the player's is bound to.
@@ -317,7 +318,10 @@ function crashMode(game: CommandGame, placeBet: ProjectionBinding | undefined, i
     const decoded = decodeCommand(input.commands, placeBet.requestId);
 
     if (!decoded.body) {
-        return { status: 'unavailable', reason: `the place-bet command ${placeBet.requestId} could not be read: ${decoded.reason}` };
+        return {
+            status: 'unavailable',
+            reason: `the place-bet command ${placeBet.requestId} could not be read: ${decoded.reason}`,
+        };
     }
 
     const body = decoded.body;
@@ -629,7 +633,7 @@ function suppressionRows(
         const settledOn =
             systemSettle.actionType === 'expire'
                 ? "settled on an expire (the deadline sweep's terminal loss)"
-                : 'settled on a system abandon (the sweep\'s settle for a round it found open — since sec-28 the kernel pays it what a cashout would have, so the money is yours either way, but the command you sent went unanswered)';
+                : "settled on a system abandon (the sweep's settle for a round it found open — since sec-28 the kernel pays it what a cashout would have, so the money is yours either way, but the command you sent went unanswered)";
 
         findings.push(`${evidence}, and the round ${settledOn}. ${deliveryEvidence(input, command)}`);
     }
@@ -656,8 +660,7 @@ function deliveryEvidence(input: ProjectionInput, command: ImportedCommand): str
         input.frames.some(
             (frame) =>
                 frame.envelope.relatedRequestId === other.requestId &&
-                (frame.envelope.payloadCase === 'commandAccepted' ||
-                    frame.envelope.payloadCase === 'commandRejected'),
+                (frame.envelope.payloadCase === 'commandAccepted' || frame.envelope.payloadCase === 'commandRejected'),
         ),
     );
     const sends =
@@ -693,7 +696,12 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
         case 'placeBet':
             switch (body.game) {
                 case 'hilo':
-                    return { ok: true, actionTypes: ['place-bet'], payload: EMPTY, how: 'hilo.v1.PlaceBet is an empty message and the hilo place-bet carries no config' };
+                    return {
+                        ok: true,
+                        actionTypes: ['place-bet'],
+                        payload: EMPTY,
+                        how: 'hilo.v1.PlaceBet is an empty message and the hilo place-bet carries no config',
+                    };
                 case 'crash':
                     return crashPlaceBetExpectation(body.autoCashoutPpm);
                 case 'plinko':
@@ -707,13 +715,20 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
                     };
                 case 'hydra':
                     return hydraPlaceBetExpectation(body);
+                case 'hydraV2':
+                    return hydraV2PlaceBetExpectation(body.companions, body.startStage);
             }
 
             break;
         case 'playerAction':
             switch (body.game) {
                 case 'hilo':
-                    return { ok: true, actionTypes: [body.arm], payload: EMPTY, how: `the ${body.arm} arm is an empty message` };
+                    return {
+                        ok: true,
+                        actionTypes: [body.arm],
+                        payload: EMPTY,
+                        how: `the ${body.arm} arm is an empty message`,
+                    };
                 case 'mines':
                     return body.tileIndex === null
                         ? {
@@ -739,6 +754,13 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
                                 ? 'both `fight` and `physical_attack` project to "physical-attack", so the two are indistinguishable on chain'
                                 : 'it is the only arm projecting to this tag'
                         }`,
+                    };
+                case 'hydraV2':
+                    return {
+                        ok: true,
+                        actionTypes: ['roll'],
+                        payload: EMPTY,
+                        how: 'the hydra:v2 roll arm is an empty message',
                     };
             }
 
@@ -795,11 +817,17 @@ export function autoCashoutTickFromPpm(ppm: number): { ok: true; tick: bigint } 
     const value = BigInt(ppm);
 
     if (value <= crash.v1.multiplierPpm(0n)) {
-        return { ok: false, reason: `an auto-cashout target of ${ppm} ppm is at or below m(0) = ${crash.v1.multiplierPpm(0n)} ppm, which the sequencer refuses as INVALID_PAYLOAD` };
+        return {
+            ok: false,
+            reason: `an auto-cashout target of ${ppm} ppm is at or below m(0) = ${crash.v1.multiplierPpm(0n)} ppm, which the sequencer refuses as INVALID_PAYLOAD`,
+        };
     }
 
     if (value > crash.v1.MAX_MULTIPLIER_CAP_PPM) {
-        return { ok: false, reason: `an auto-cashout target of ${ppm} ppm is above the ${crash.v1.MAX_MULTIPLIER_CAP_PPM} ppm (1000×) house cap, which the sequencer refuses as INVALID_PAYLOAD` };
+        return {
+            ok: false,
+            reason: `an auto-cashout target of ${ppm} ppm is above the ${crash.v1.MAX_MULTIPLIER_CAP_PPM} ppm (1000×) house cap, which the sequencer refuses as INVALID_PAYLOAD`,
+        };
     }
 
     return { ok: true, tick: crash.v1.crashTick(value) };
@@ -900,6 +928,33 @@ function hydraPlaceBetExpectation(body: {
     };
 }
 
+/**
+ * The hydra:v2 party size and starting beast: both `optional` on the wire, a u8
+ * each in the engine config (companions 0..=8, start_stage 0..=11).
+ */
+function hydraV2PlaceBetExpectation(companions: number | null, startStage: number | null): Expectation {
+    if (companions === null || companions > 8) {
+        return {
+            ok: false,
+            reason: `the hydra:v2 PlaceBet you signed carries no usable companions (${companions ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
+        };
+    }
+
+    if (startStage === null || startStage > 11) {
+        return {
+            ok: false,
+            reason: `the hydra:v2 PlaceBet you signed carries no usable start_stage (${startStage ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
+        };
+    }
+
+    return {
+        ok: true,
+        actionTypes: ['place-bet'],
+        payload: new Uint8Array([companions, startStage]),
+        how: `borsh(hydra::v2::Config { companions: ${companions}, start_stage: ${startStage} }) — two u8s`,
+    };
+}
+
 // ── helpers ─────────────────────────────────────────────────────────────
 
 const EMPTY = new Uint8Array(0);
@@ -933,6 +988,8 @@ function describe(body: DecodedCommandBody): string {
                     return `a mines PlaceBet with mine_count = ${body.mineCount}`;
                 case 'hydra':
                     return `a hydra PlaceBet with hero = ${body.hero}`;
+                case 'hydraV2':
+                    return `a hydra:v2 PlaceBet with companions = ${body.companions ?? '(absent)'}, start_stage = ${body.startStage ?? '(absent)'}`;
                 default:
                     return 'a hilo PlaceBet';
             }
@@ -964,15 +1021,16 @@ interface DecodedCommand {
  * Decode one stored command frame. Every failure is a stated reason, never a
  * throw: a malformed command in an export must degrade one row, not the run.
  */
-function decodeCommand(
-    commands: ImportedCommand[],
-    requestId: string,
-    known?: ImportedCommand,
-): DecodedCommand {
+function decodeCommand(commands: ImportedCommand[], requestId: string, known?: ImportedCommand): DecodedCommand {
     const command = known ?? commands.find((candidate) => candidate.requestId === requestId);
 
     if (!command) {
-        return { body: null, reason: `this export carries no command for request ${requestId}`, requestId: null, roundId: null };
+        return {
+            body: null,
+            reason: `this export carries no command for request ${requestId}`,
+            requestId: null,
+            roundId: null,
+        };
     }
 
     try {

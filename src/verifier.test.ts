@@ -511,8 +511,7 @@ function buildRound(options: RoundOptions = {}): InboxMessage[] {
     const hashes = Array.from({ length: 50 }, (_, i) =>
         i === Number(SEED_INDEX - BATCH_START) ? seedHash : new Uint8Array(32).fill(i),
     );
-    const claimedPayout =
-        options.claimedPayout ?? honestPayout(options.gameType ?? hilo.v1.GAME_TYPE, options);
+    const claimedPayout = options.claimedPayout ?? honestPayout(options.gameType ?? hilo.v1.GAME_TYPE, options);
 
     return [
         frame(
@@ -932,7 +931,12 @@ describe('verifyRound', () => {
 
         function plinkoRound(transcriptSeedText: string, commitment: Uint8Array): InboxMessage[] {
             const clientSeed = blake2b(new TextEncoder().encode(transcriptSeedText), { dkLen: 32 });
-            const options = { gameType: plinko.v1.GAME_TYPE, actions: PLINKO_ACTIONS, clientSeed, playerCommitment: commitment };
+            const options = {
+                gameType: plinko.v1.GAME_TYPE,
+                actions: PLINKO_ACTIONS,
+                clientSeed,
+                playerCommitment: commitment,
+            };
 
             return buildRound({ ...options, claimedPayout: honestPayout(plinko.v1.GAME_TYPE, options) });
         }
@@ -1023,7 +1027,7 @@ describe('verifyRound', () => {
         const check = report.checks.find((c) => c.id === ACTIONS_AFTER_SETTLE_CHECK_ID);
 
         expect(check?.status).toBe('pass');
-        expect(check?.detail).toContain('the transcript\'s last');
+        expect(check?.detail).toContain("the transcript's last");
     });
 
     it('fails a round with actions after the settle, whose payout still matches', () => {
@@ -1084,7 +1088,11 @@ describe('verifyRound', () => {
         const report = verify(
             buildRound({
                 gameType: hydra.v1.GAME_TYPE,
-                actions: [action('place-bet', new Uint8Array([2, 0, 0, 0])), action('physical-attack'), action('cashout')],
+                actions: [
+                    action('place-bet', new Uint8Array([2, 0, 0, 0])),
+                    action('physical-attack'),
+                    action('cashout'),
+                ],
                 claimedPayout: 0n,
             }),
             { deploymentListed: false },
@@ -1173,9 +1181,9 @@ describe('verifyRound', () => {
         expect(report.verdict).toBe('failed');
         // And the same frames, checked against the instance they WERE signed
         // for, pass — the signature is bound to an instance, not broken.
-        expect(statusOf(verify(buildRound({ domain: OTHER_ROLLUP }), { signingDomain: OTHER_ROLLUP }), 'signatures')).toBe(
-            'pass',
-        );
+        expect(
+            statusOf(verify(buildRound({ domain: OTHER_ROLLUP }), { signingDomain: OTHER_ROLLUP }), 'signatures'),
+        ).toBe('pass');
     });
 
     it('fails a frame signed for the same rollup on another chain (#952)', () => {
@@ -1296,11 +1304,7 @@ describe('verifyRound', () => {
         const tampered = receipts.frames[1].frame.slice();
 
         tampered[1] ^= 0x01;
-        receipts.frames = [
-            receipts.frames[0],
-            { ...receipts.frames[1], frame: tampered },
-            ...receipts.frames.slice(2),
-        ];
+        receipts.frames = [receipts.frames[0], { ...receipts.frames[1], frame: tampered }, ...receipts.frames.slice(2)];
 
         const report = verify(buildRound(), { receipts: { status: 'ok', receipts } });
 
@@ -1315,11 +1319,14 @@ describe('verifyRound', () => {
 
         receipts.commands = [
             receipts.commands[0],
-            { ...receipts.commands[1], frame: commandFrame(SESSION_SEED, {
-                requestId: CASHOUT_REQUEST,
-                sessionId: SESSION_ID,
-                payloadCase: 'playerAction',
-            }) },
+            {
+                ...receipts.commands[1],
+                frame: commandFrame(SESSION_SEED, {
+                    requestId: CASHOUT_REQUEST,
+                    sessionId: SESSION_ID,
+                    payloadCase: 'playerAction',
+                }),
+            },
         ];
 
         const report = verify(buildRound(), { receipts: { status: 'ok', receipts } });
@@ -1607,10 +1614,7 @@ describe('a refusal the round’s own seed contradicts', () => {
 
     /** The player cashed out one tick before the crash, so the round is a win. */
     const CASHOUT_TICK = Number(CRASH_TICK - 1n);
-    const CRASH_ACTIONS = [
-        action('place-bet', MANUAL_BET),
-        action('cashout', new Uint8Array(u32(CASHOUT_TICK))),
-    ];
+    const CRASH_ACTIONS = [action('place-bet', MANUAL_BET), action('cashout', new Uint8Array(u32(CASHOUT_TICK)))];
 
     /**
      * The honest export, with the crash anchor on `RoundStarted` and the peer
@@ -1765,7 +1769,13 @@ describe('a refusal the round’s own seed contradicts', () => {
             receipts: {
                 ...buildReceipts(),
                 commands: [
-                    { requestId: BET_REQUEST, payloadCase: 'placeBet', frame: EXPIRE_BET, sentAtUnixMs: 1, sendCount: 1 },
+                    {
+                        requestId: BET_REQUEST,
+                        payloadCase: 'placeBet',
+                        frame: EXPIRE_BET,
+                        sentAtUnixMs: 1,
+                        sendCount: 1,
+                    },
                     {
                         requestId: PEER_CASHOUT,
                         payloadCase: 'cashOut',
@@ -1967,8 +1977,20 @@ describe('a clean round of each remaining replayable game', () => {
             return buildReceipts({
                 commands: [
                     { requestId: BET_REQUEST, payloadCase: 'placeBet', frame: BET, sentAtUnixMs: 1, sendCount: 1 },
-                    { requestId: REVEAL_REQUEST, payloadCase: 'playerAction', frame: REVEAL, sentAtUnixMs: 2, sendCount: 1 },
-                    { requestId: CASHOUT_REQUEST, payloadCase: 'cashOut', frame: CASHOUT, sentAtUnixMs: 3, sendCount: 1 },
+                    {
+                        requestId: REVEAL_REQUEST,
+                        payloadCase: 'playerAction',
+                        frame: REVEAL,
+                        sentAtUnixMs: 2,
+                        sendCount: 1,
+                    },
+                    {
+                        requestId: CASHOUT_REQUEST,
+                        payloadCase: 'cashOut',
+                        frame: CASHOUT,
+                        sentAtUnixMs: 3,
+                        sendCount: 1,
+                    },
                 ],
                 frames: [
                     frameOf({
@@ -2078,7 +2100,11 @@ describe('a clean round of each remaining replayable game', () => {
             hydra.v1.replay(
                 bytesToHex(SERVER_SEED),
                 bytesToHex(CLIENT_SEED),
-                actions.map((a, actionIndex) => ({ actionIndex, actionType: actionTypeOf(a.tag) ?? '', payload: a.payload })),
+                actions.map((a, actionIndex) => ({
+                    actionIndex,
+                    actionType: actionTypeOf(a.tag) ?? '',
+                    payload: a.payload,
+                })),
                 STAKE_MUTEZ,
             );
         /**
@@ -2088,13 +2114,20 @@ describe('a clean round of each remaining replayable game', () => {
          * settle at the attack and leave the cashout trailing the settle.
          */
         const HERO = hydra.v1.HEROES.findIndex((_, hero) => {
-            const result = replayHydra([action('place-bet', new Uint8Array([hero, 0, 0, 0])), action('physical-attack')]);
+            const result = replayHydra([
+                action('place-bet', new Uint8Array([hero, 0, 0, 0])),
+                action('physical-attack'),
+            ]);
 
             return !result.settled;
         });
 
         /** bet → one surviving physical attack → cashout: three actions, three commands. */
-        const ACTIONS = [action('place-bet', new Uint8Array([HERO, 0, 0, 0])), action('physical-attack'), action('cashout')];
+        const ACTIONS = [
+            action('place-bet', new Uint8Array([HERO, 0, 0, 0])),
+            action('physical-attack'),
+            action('cashout'),
+        ];
 
         const BET = betCommand({ game: 'hydra', hero: HERO, weapon: 1, armour: 1, sprite: 1 });
         const ATTACK = commandFrame(SESSION_SEED, {
@@ -2133,8 +2166,20 @@ describe('a clean round of each remaining replayable game', () => {
             return buildReceipts({
                 commands: [
                     { requestId: BET_REQUEST, payloadCase: 'placeBet', frame: BET, sentAtUnixMs: 1, sendCount: 1 },
-                    { requestId: ATTACK_REQUEST, payloadCase: 'playerAction', frame: ATTACK, sentAtUnixMs: 2, sendCount: 1 },
-                    { requestId: CASHOUT_REQUEST, payloadCase: 'cashOut', frame: CASHOUT, sentAtUnixMs: 3, sendCount: 1 },
+                    {
+                        requestId: ATTACK_REQUEST,
+                        payloadCase: 'playerAction',
+                        frame: ATTACK,
+                        sentAtUnixMs: 2,
+                        sendCount: 1,
+                    },
+                    {
+                        requestId: CASHOUT_REQUEST,
+                        payloadCase: 'cashOut',
+                        frame: CASHOUT,
+                        sentAtUnixMs: 3,
+                        sendCount: 1,
+                    },
                 ],
                 frames: [
                     frameOf({
@@ -2289,7 +2334,15 @@ describe('a clean round of each remaining replayable game', () => {
                 receipts: {
                     status: 'ok',
                     receipts: buildReceipts({
-                        commands: [{ requestId: BET_REQUEST, payloadCase: 'placeBet', frame: bet, sentAtUnixMs: 1, sendCount: 1 }],
+                        commands: [
+                            {
+                                requestId: BET_REQUEST,
+                                payloadCase: 'placeBet',
+                                frame: bet,
+                                sentAtUnixMs: 1,
+                                sendCount: 1,
+                            },
+                        ],
                         frames: [
                             frameOf({
                                 sequence: 2,
@@ -2472,7 +2525,17 @@ describe('locator hints', () => {
         if (kind === 'preview') {
             return {
                 prim: 'Pair',
-                args: [{ string: 'tz1admin' }, [], { prim: 'False' }, { prim: 'None' }, { string: POOL }, { int: '1000' }, { string: 'sr1' }, { string: TENANT }, { int: '0' }],
+                args: [
+                    { string: 'tz1admin' },
+                    [],
+                    { prim: 'False' },
+                    { prim: 'None' },
+                    { string: POOL },
+                    { int: '1000' },
+                    { string: 'sr1' },
+                    { string: TENANT },
+                    { int: '0' },
+                ],
             };
         }
 
@@ -2519,8 +2582,7 @@ describe('locator hints', () => {
 
             return Promise.resolve({ ok: status === 200, status, json: () => Promise.resolve(rows) } as Response);
         }) as unknown as typeof fetch;
-        const vaultOfBigMap = (id: string) =>
-            world.vaults.find((v) => sessionsIdOf(world, v.vault) === id);
+        const vaultOfBigMap = (id: string) => world.vaults.find((v) => sessionsIdOf(world, v.vault) === id);
 
         return {
             locateDeposit: (vaultAddresses, sessionIdHex, levelHint) =>
@@ -2545,7 +2607,10 @@ describe('locator hints', () => {
                                     destination: d.vault,
                                     parameters: {
                                         entrypoint: 'deposit',
-                                        value: { prim: 'Pair', args: [{ bytes: SESSION_HEX }, { prim: 'Pair', args: [] }] },
+                                        value: {
+                                            prim: 'Pair',
+                                            args: [{ bytes: SESSION_HEX }, { prim: 'Pair', args: [] }],
+                                        },
                                     },
                                     metadata: {
                                         operation_result: {
@@ -2557,7 +2622,12 @@ describe('locator hints', () => {
                                                     diff: {
                                                         action: 'update',
                                                         updates: d.firstWrite
-                                                            ? [{ key: { bytes: SESSION_HEX }, value: { prim: 'Pair', args: [] } }]
+                                                            ? [
+                                                                  {
+                                                                      key: { bytes: SESSION_HEX },
+                                                                      value: { prim: 'Pair', args: [] },
+                                                                  },
+                                                              ]
                                                             : [],
                                                     },
                                                 },
@@ -2584,7 +2654,11 @@ describe('locator hints', () => {
     }
 
     /** A stub chain over `messages` and a deposit world, logging every inbox call in order. */
-    function chainOver(messages: InboxMessage[], log: string[] = [], world: DepositWorld = worldWith(T - 1_000)): ChainRunInput['chain'] {
+    function chainOver(
+        messages: InboxMessage[],
+        log: string[] = [],
+        world: DepositWorld = worldWith(T - 1_000),
+    ): ChainRunInput['chain'] {
         return {
             ...depositChainOver(world),
             headLevel: async () => {
@@ -2681,7 +2755,11 @@ describe('locator hints', () => {
         });
 
         expect(result.report.verdict).toBe('verified');
-        expect(result.report.scan).toMatchObject({ fromLevel: Math.min(deposit, batchLevel), toLevel: T, headLevel: HEAD });
+        expect(result.report.scan).toMatchObject({
+            fromLevel: Math.min(deposit, batchLevel),
+            toLevel: T,
+            headLevel: HEAD,
+        });
         expect(log).toContain(`scan ${deposit}-${T}`);
         expect(result.hintedRun).toBeNull();
         expect(result.hints.map((h) => h.fate)).toEqual([
@@ -2705,8 +2783,16 @@ describe('locator hints', () => {
         const otherRound = frame(T + 9, otherBody);
         const messages = [...honest, foreign, otherRound];
         const cases: { name: string; hint: { level: number; operationHash: string }; fate: RegExp }[] = [
-            { name: 'wrong level', hint: transcriptHint(T + 1, `op-level-${T}`), fate: /^ignored: not found at the stated level/ },
-            { name: 'wrong op', hint: transcriptHint(T, 'op-somewhere-else'), fate: /^ignored: not found at the stated level/ },
+            {
+                name: 'wrong level',
+                hint: transcriptHint(T + 1, `op-level-${T}`),
+                fate: /^ignored: not found at the stated level/,
+            },
+            {
+                name: 'wrong op',
+                hint: transcriptHint(T, 'op-somewhere-else'),
+                fate: /^ignored: not found at the stated level/,
+            },
             { name: 'foreign-signed', hint: transcriptHint(T + 7), fate: /^ignored: not authenticated/ },
             { name: 'wrong round', hint: transcriptHint(T + 9), fate: /^ignored: not found at the stated level/ },
         ];
@@ -2856,11 +2942,15 @@ describe('locator hints', () => {
 
         // The copy is outside [head − 20 000, head], so only the hinted window reaches it.
         expect(C_LAYOUT.early).toBeLessThan(HEAD - DEFAULT_SCAN_DEPTH);
-        expect(result.report.references.find((r) => r.summary.startsWith('RoundTranscript'))?.level).toBe(C_LAYOUT.early);
+        expect(result.report.references.find((r) => r.summary.startsWith('RoundTranscript'))?.level).toBe(
+            C_LAYOUT.early,
+        );
         expect(d10(result.report)?.status).toBe('fail');
         expect(d10(result.report)?.detail).toContain('REJECT_SESSION_MISSING');
         expect(findingsOf(result.report)).toContain('REJECT_SESSION_MISSING');
-        expect(findingsOf(result.report)).toContain(`level ${C_LAYOUT.early}) predates the earliest deposit the indexer reports (level ${C_LAYOUT.deposit})`);
+        expect(findingsOf(result.report)).toContain(
+            `level ${C_LAYOUT.early}) predates the earliest deposit the indexer reports (level ${C_LAYOUT.deposit})`,
+        );
         expect(result.report.verdict).toBe('failed');
     });
 
@@ -2896,7 +2986,9 @@ describe('locator hints', () => {
         });
 
         expect(d10(result.report)?.status).toBe('unavailable');
-        expect(d10(result.report)?.detail).toContain('the form names pool other-pool, the signed transcript names pool standard');
+        expect(d10(result.report)?.detail).toContain(
+            'the form names pool other-pool, the signed transcript names pool standard',
+        );
         expect(result.report.verdict).toBe('incomplete');
     });
 
@@ -2945,7 +3037,10 @@ describe('locator hints', () => {
     });
 
     it('D-1(l): a rotation overlap, where the older vault holds the session, is not a failure', async () => {
-        const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, world: rotated('production', true) });
+        const result = await run(round(T - 5), {
+            hints: { transcript: transcriptHint(T) },
+            world: rotated('production', true),
+        });
 
         expect(d10(result.report)?.status).toBe('unavailable');
         expect(d10(result.report)?.detail).toContain('Multi-vault pool; first-deposit proof is per vault');
@@ -2954,7 +3049,10 @@ describe('locator hints', () => {
     });
 
     it('D-1(m): on a rotated pool, a copy below the only binding deposit fails', async () => {
-        const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, world: rotated('production', false) });
+        const result = await run(round(T - 5), {
+            hints: { transcript: transcriptHint(T) },
+            world: rotated('production', false),
+        });
 
         expect(d10(result.report)?.status).toBe('fail');
         expect(findingsOf(result.report)).toContain('The node confirms it as the session-creating deposit');
@@ -2963,9 +3061,17 @@ describe('locator hints', () => {
     });
 
     for (const [name, world, reason] of [
-        ['the older vault lookup returns 500', rotated('production', 'error'), `vault ${VAULT_B} could not be looked up`],
+        [
+            'the older vault lookup returns 500',
+            rotated('production', 'error'),
+            `vault ${VAULT_B} could not be looked up`,
+        ],
         ['the older vault is a preview vault', rotated('preview', false), `vault ${VAULT_B} keeps no sessions big_map`],
-        ['the older vault has no determinable big_map id', rotated('unknown-id', false), `vault ${VAULT_B} keeps no sessions big_map`],
+        [
+            'the older vault has no determinable big_map id',
+            rotated('unknown-id', false),
+            `vault ${VAULT_B} keeps no sessions big_map`,
+        ],
     ] as const) {
         it(`D-1(m) twin: ${name}, so the round is incomplete`, async () => {
             const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, world });
@@ -3035,31 +3141,87 @@ describe('locator hints', () => {
             operationHash: 'op-d',
             vault: VAULT_A,
             firstProven,
-            otherVaults: clear === null ? null : { clear, detail: clear ? 'no other vault' : `vault ${VAULT_B} holds a sessions entry` },
+            otherVaults:
+                clear === null
+                    ? null
+                    : { clear, detail: clear ? 'no other vault' : `vault ${VAULT_B} holds a sessions entry` },
             detail: 'deposit detail',
         });
-        const rows: { name: string; authenticated: boolean; deposit: DepositLocation; status: string; text: string }[] = [
-            { name: 'unauthenticated', authenticated: false, deposit: found(T - 1, true, true), status: 'unavailable', text: 'not authenticated' },
-            { name: 'found, T_e > D', authenticated: true, deposit: found(T - 1, false, null), status: 'pass', text: `a deposit at level ${T - 1}` },
-            { name: 'found, T_e < D, first, clear', authenticated: true, deposit: found(T + 1, true, true), status: 'fail', text: 'REJECT_SESSION_MISSING' },
-            { name: 'found, T_e < D, not first', authenticated: true, deposit: found(T + 1, false, null), status: 'unavailable', text: 'not shown to be the session-creating one' },
-            { name: 'found, T_e < D, first, another vault holds it', authenticated: true, deposit: found(T + 1, true, false), status: 'unavailable', text: 'Multi-vault pool; first-deposit proof is per vault' },
-            { name: 'found, T_e == D', authenticated: true, deposit: found(T, true, true), status: 'unavailable', text: `share level ${T}` },
-            {
-                name: 'none',
-                authenticated: true,
-                deposit: { lookup: 'none', level: null, operationHash: null, vault: null, firstProven: false, otherVaults: null, detail: 'paged to the end' },
-                status: 'unavailable',
-                text: "an indexer's silence is not proof of absence",
-            },
-            {
-                name: 'failed',
-                authenticated: true,
-                deposit: { lookup: 'failed', level: null, operationHash: null, vault: null, firstProven: false, otherVaults: null, detail: 'the indexer returned 500' },
-                status: 'unavailable',
-                text: 'lookup failed: the indexer returned 500',
-            },
-        ];
+        const rows: { name: string; authenticated: boolean; deposit: DepositLocation; status: string; text: string }[] =
+            [
+                {
+                    name: 'unauthenticated',
+                    authenticated: false,
+                    deposit: found(T - 1, true, true),
+                    status: 'unavailable',
+                    text: 'not authenticated',
+                },
+                {
+                    name: 'found, T_e > D',
+                    authenticated: true,
+                    deposit: found(T - 1, false, null),
+                    status: 'pass',
+                    text: `a deposit at level ${T - 1}`,
+                },
+                {
+                    name: 'found, T_e < D, first, clear',
+                    authenticated: true,
+                    deposit: found(T + 1, true, true),
+                    status: 'fail',
+                    text: 'REJECT_SESSION_MISSING',
+                },
+                {
+                    name: 'found, T_e < D, not first',
+                    authenticated: true,
+                    deposit: found(T + 1, false, null),
+                    status: 'unavailable',
+                    text: 'not shown to be the session-creating one',
+                },
+                {
+                    name: 'found, T_e < D, first, another vault holds it',
+                    authenticated: true,
+                    deposit: found(T + 1, true, false),
+                    status: 'unavailable',
+                    text: 'Multi-vault pool; first-deposit proof is per vault',
+                },
+                {
+                    name: 'found, T_e == D',
+                    authenticated: true,
+                    deposit: found(T, true, true),
+                    status: 'unavailable',
+                    text: `share level ${T}`,
+                },
+                {
+                    name: 'none',
+                    authenticated: true,
+                    deposit: {
+                        lookup: 'none',
+                        level: null,
+                        operationHash: null,
+                        vault: null,
+                        firstProven: false,
+                        otherVaults: null,
+                        detail: 'paged to the end',
+                    },
+                    status: 'unavailable',
+                    text: "an indexer's silence is not proof of absence",
+                },
+                {
+                    name: 'failed',
+                    authenticated: true,
+                    deposit: {
+                        lookup: 'failed',
+                        level: null,
+                        operationHash: null,
+                        vault: null,
+                        firstProven: false,
+                        otherVaults: null,
+                        detail: 'the indexer returned 500',
+                    },
+                    status: 'unavailable',
+                    text: 'lookup failed: the indexer returned 500',
+                },
+            ];
 
         for (const row of rows) {
             const { check } = evaluateSessionBeforeTranscript(T, row.authenticated, row.deposit);
@@ -3136,7 +3298,11 @@ describe('locator hints', () => {
                 }),
         });
 
-        expect(result.report.scan).toMatchObject({ toLevel: HEAD, headLevel: HEAD, deposit: { level: deposit, confirmed: true } });
+        expect(result.report.scan).toMatchObject({
+            toLevel: HEAD,
+            headLevel: HEAD,
+            deposit: { level: deposit, confirmed: true },
+        });
         expect(d10(result.report)).toBeUndefined();
         expect(result.report.verdict).toBe('suppressed');
     });

@@ -267,9 +267,7 @@ describe('analyseRejections', () => {
         // progress, at an instant its own published seed says the round was
         // still running. Both halves are signed, and they contradict.
         const report = analyseRejections(
-            withRejection(
-                rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-            ),
+            withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) })),
         );
         const check = only(report);
 
@@ -289,9 +287,7 @@ describe('analyseRejections', () => {
         // by answering with this code instead — the round id is corroborated
         // against the player's own signature either way, so both are checked.
         const report = analyseRejections(
-            withRejection(
-                rejected({ reasonCode: STATE_OUT_OF_SYNC, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-            ),
+            withRejection(rejected({ reasonCode: STATE_OUT_OF_SYNC, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) })),
         );
 
         expect(only(report).status).toBe('fail');
@@ -307,9 +303,7 @@ describe('analyseRejections', () => {
 
         it('reports, never fails, a refusal one tick before the crash', () => {
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(CRASH_TICK - 1n) }),
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(CRASH_TICK - 1n) })),
             );
 
             expect(only(report).status).toBe('pass');
@@ -375,10 +369,9 @@ describe('analyseRejections', () => {
             // Manufactured scenario (a): cashed out at tick 50, the seed
             // crashes far later, and a second CashOut is refused at tick 60.
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: STATE_OUT_OF_SYNC, receivedAtUnixMs: atTick(60n) }),
-                    { actions: CLAIM_SETTLED },
-                ),
+                withRejection(rejected({ reasonCode: STATE_OUT_OF_SYNC, receivedAtUnixMs: atTick(60n) }), {
+                    actions: CLAIM_SETTLED,
+                }),
             );
             const check = only(report);
 
@@ -393,10 +386,9 @@ describe('analyseRejections', () => {
             // settle. This only shows the player their own signed command
             // behind it, and it is scoped by the round id THEY signed.
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(60n) }),
-                    { actions: CLAIM_SETTLED },
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(60n) }), {
+                    actions: CLAIM_SETTLED,
+                }),
             );
 
             expect(only(report).status).toBe('pass');
@@ -408,10 +400,10 @@ describe('analyseRejections', () => {
             // a stray CashOut lands at tick 150. Same answer, and it must not
             // depend on the stamp being anywhere in particular.
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: STATE_OUT_OF_SYNC, receivedAtUnixMs: atTick(150n) }),
-                    { actions: CLAIM_SETTLED, commands: [command(BET, 'placeBet'), command(PEER_CASHOUT, 'cashOut', ROUND)] },
-                ),
+                withRejection(rejected({ reasonCode: STATE_OUT_OF_SYNC, receivedAtUnixMs: atTick(150n) }), {
+                    actions: CLAIM_SETTLED,
+                    commands: [command(BET, 'placeBet'), command(PEER_CASHOUT, 'cashOut', ROUND)],
+                }),
             );
             const check = only(report);
 
@@ -426,7 +418,8 @@ describe('analyseRejections', () => {
             const stamp = atTick(WELL_BEFORE_CRASH);
 
             expect(
-                only(analyseRejections(withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: stamp })))).status,
+                only(analyseRejections(withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: stamp }))))
+                    .status,
             ).toBe('fail');
             expect(
                 only(
@@ -507,9 +500,7 @@ describe('analyseRejections', () => {
         // game rather than a claim about when the command landed. Same stamp
         // that fails above.
         const report = analyseRejections(
-            withRejection(
-                rejected({ reasonCode: ROUND_MODE_AUTO, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-            ),
+            withRejection(rejected({ reasonCode: ROUND_MODE_AUTO, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) })),
         );
 
         expect(report).toEqual({ checks: [], findings: [] });
@@ -597,9 +588,7 @@ describe('analyseRejections', () => {
 
     it('passes a refusal at or after the crash, and reports the margin', () => {
         const report = analyseRejections(
-            withRejection(
-                rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(CRASH_TICK + 3n) }),
-            ),
+            withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(CRASH_TICK + 3n) })),
         );
 
         expect(only(report).status).toBe('pass');
@@ -668,9 +657,7 @@ describe('analyseRejections', () => {
     describe('the trust rule on the refusal’s round id', () => {
         it('trusts an id the player signed into the command it refuses', () => {
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) })),
             );
 
             expect(only(report).status).toBe('fail');
@@ -682,10 +669,9 @@ describe('analyseRejections', () => {
             // about another one. A server-chosen attribution is not evidence,
             // so nothing is concluded — never a `fail` on the server's word.
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-                    { commands: [command(BET, 'placeBet'), command(PEER_CASHOUT, 'cashOut', OTHER_ROUND)] },
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }), {
+                    commands: [command(BET, 'placeBet'), command(PEER_CASHOUT, 'cashOut', OTHER_ROUND)],
+                }),
             );
             const check = only(report);
 
@@ -695,10 +681,9 @@ describe('analyseRejections', () => {
 
         it('declines when the refused command’s arm carries no round id', () => {
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-                    { commands: [command(BET, 'placeBet'), command(PEER_CASHOUT, 'endSession')] },
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }), {
+                    commands: [command(BET, 'placeBet'), command(PEER_CASHOUT, 'endSession')],
+                }),
             );
             const check = only(report);
 
@@ -725,10 +710,9 @@ describe('analyseRejections', () => {
     describe('when the tick model or the anchor is missing', () => {
         it('is unavailable on a game with no tick model', () => {
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-                    { gameType: hilo.v1.GAME_TYPE },
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }), {
+                    gameType: hilo.v1.GAME_TYPE,
+                }),
             );
             const check = only(report);
 
@@ -738,10 +722,11 @@ describe('analyseRejections', () => {
 
         it('is unavailable when no transcript revealed the seed', () => {
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-                    { gameType: null, serverSeedHex: null, clientSeedHex: null },
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }), {
+                    gameType: null,
+                    serverSeedHex: null,
+                    clientSeedHex: null,
+                }),
             );
 
             expect(only(report).status).toBe('unavailable');
@@ -753,10 +738,9 @@ describe('analyseRejections', () => {
             // an unlisted one the replay is refused, so the crash tick is not
             // derived and a contradiction cannot be claimed.
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }),
-                    { deploymentListed: false },
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: atTick(WELL_BEFORE_CRASH) }), {
+                    deploymentListed: false,
+                }),
             );
 
             expect(only(report).status).toBe('unavailable');
@@ -792,9 +776,7 @@ describe('analyseRejections', () => {
             // the server of contradicting its seed on the strength of a clock
             // nobody can reconcile would be the wrong conclusion drawn loudly.
             const report = analyseRejections(
-                withRejection(
-                    rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: ANCHOR - 1_000n }),
-                ),
+                withRejection(rejected({ reasonCode: ROUND_CLOSED, receivedAtUnixMs: ANCHOR - 1_000n })),
             );
 
             expect(only(report).status).toBe('unavailable');

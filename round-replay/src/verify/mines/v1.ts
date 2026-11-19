@@ -240,12 +240,10 @@ export function replay(
                     details: [
                         ['cumulative', ppmToMultiplierString(cumulative)],
                         ...(bankedTotal.amount > 0n
-                            ? ([
-                                  [
-                                      'payout',
-                                      `banked total ${bankedAmountString(bankedTotal)} + the live position`,
-                                  ],
-                              ] as [string, string][])
+                            ? ([['payout', `banked total ${bankedAmountString(bankedTotal)} + the live position`]] as [
+                                  string,
+                                  string,
+                              ][])
                             : []),
                     ],
                     cumulativePpm: cumulative,

@@ -347,10 +347,7 @@ describe('a rewritten action', () => {
     it('fails when a crash auto target became a different tick', () => {
         const result = run({
             gameType: 'crash:v1',
-            actions: [
-                act(0, 'place-bet', new Uint8Array([0x01, ...u32(50)])),
-                act(1, 'cashout', u32(50)),
-            ],
+            actions: [act(0, 'place-bet', new Uint8Array([0x01, ...u32(50)])), act(1, 'cashout', u32(50))],
             commands: [
                 // 2.00x is tick 100, not 50.
                 command(BET, 'placeBet', { game: 'crash', autoCashoutPpm: 2_000_000 }),
@@ -460,10 +457,7 @@ describe('an action bound to no command', () => {
     it('passes a crash auto round settled by the sweep at its committed target', () => {
         const result = run({
             gameType: 'crash:v1',
-            actions: [
-                act(0, 'place-bet', new Uint8Array([0x01, ...u32(100)])),
-                act(1, 'cashout', u32(100)),
-            ],
+            actions: [act(0, 'place-bet', new Uint8Array([0x01, ...u32(100)])), act(1, 'cashout', u32(100))],
             binding: [{ requestId: BET, index: 0 }],
             commands: [command(BET, 'placeBet', { game: 'crash', autoCashoutPpm: 2_000_000 })],
             endCause: 'system-sweep',
@@ -618,7 +612,9 @@ describe('a cashout the server never answered', () => {
             frames: [acceptance(later)],
         });
 
-        expect(result.findings.join(' ')).toContain('1 of the 1 command(s) you sent later in this session WERE answered');
+        expect(result.findings.join(' ')).toContain(
+            '1 of the 1 command(s) you sent later in this session WERE answered',
+        );
     });
 
     it('passes when the server signed a refusal naming the round', () => {
@@ -770,10 +766,7 @@ describe('what the check cannot answer', () => {
         const result = run({
             gameType: 'crash:v1',
             actions: [act(0, 'place-bet', new Uint8Array([0x00])), act(1, 'cashout', u32(0))],
-            commands: [
-                command(BET, 'placeBet', { game: 'crash' }),
-                command(SETTLE, 'cashOut', { game: 'crash' }),
-            ],
+            commands: [command(BET, 'placeBet', { game: 'crash' }), command(SETTLE, 'cashOut', { game: 'crash' })],
         });
 
         expect(result.status).toBe('unavailable');
@@ -790,9 +783,8 @@ interface AutoCashoutVector {
     note: string;
 }
 
-const AUTO_CASHOUT_VECTORS: AutoCashoutVector[] = JSON.parse(
-    readFileSync(fileURLToPath(vectorsUrl('crash')), 'utf8'),
-).auto_cashout_ppm_vectors.vectors;
+const AUTO_CASHOUT_VECTORS: AutoCashoutVector[] = JSON.parse(readFileSync(fileURLToPath(vectorsUrl('crash')), 'utf8'))
+    .auto_cashout_ppm_vectors.vectors;
 
 describe('the ppm → tick auto-cashout policy', () => {
     it('has vectors, or every assertion below is vacuous', () => {
@@ -801,21 +793,18 @@ describe('the ppm → tick auto-cashout policy', () => {
         expect(AUTO_CASHOUT_VECTORS.some((v) => !v.accepted)).toBe(true);
     });
 
-    it.each(AUTO_CASHOUT_VECTORS.map((v) => [v.note, v] as const))(
-        'matches the shared vector: %s',
-        (_note, vector) => {
-            // The SAME table binds the server-side conversion in
-            // `libs/client-commands/src/crash/v1.rs`. Two
-            // implementations of a policy is the shape that drifts silently.
-            const result = autoCashoutTickFromPpm(vector.auto_cashout_ppm);
+    it.each(AUTO_CASHOUT_VECTORS.map((v) => [v.note, v] as const))('matches the shared vector: %s', (_note, vector) => {
+        // The SAME table binds the server-side conversion in
+        // `libs/client-commands/src/crash/v1.rs`. Two
+        // implementations of a policy is the shape that drifts silently.
+        const result = autoCashoutTickFromPpm(vector.auto_cashout_ppm);
 
-            expect(result.ok).toBe(vector.accepted);
+        expect(result.ok).toBe(vector.accepted);
 
-            if (result.ok) {
-                expect(result.tick).toBe(BigInt(vector.auto_cashout_tick as number));
-            }
-        },
-    );
+        if (result.ok) {
+            expect(result.tick).toBe(BigInt(vector.auto_cashout_tick as number));
+        }
+    });
 });
 
 // ── a oneof carrying two arms ───────────────────────────────────────────
@@ -839,10 +828,7 @@ describe('a PlayerAction whose kind oneof carries two arms', () => {
      */
     function twoArmHydraAction(requestId: string): ImportedCommand {
         // hydra.v1.PlayerAction.kind — `fight` = 100 first, `magic_attack` = 102 last.
-        const kinds = new ProtoWriter()
-            .bytes(100, new Uint8Array())
-            .bytes(102, new Uint8Array())
-            .finish();
+        const kinds = new ProtoWriter().bytes(100, new Uint8Array()).bytes(102, new Uint8Array()).finish();
         // casino.v1.PlayerActionCommand { round_id = 1, hydra_v1_action = 104 }.
         const command = new ProtoWriter().bytes(1, encodeUuid(ROUND_ID)).bytes(104, kinds).finish();
         // casino.v1.ClientEnvelope { request_id = 1, session_id = 2, player_action = 102 }.

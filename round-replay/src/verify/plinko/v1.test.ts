@@ -36,10 +36,7 @@ interface RoundVector {
 }
 
 const vectors: { tables: TableVector[]; round_vectors: RoundVector[] } = JSON.parse(
-    readFileSync(
-        fileURLToPath(vectorsUrl('plinko')),
-        'utf8',
-    ),
+    readFileSync(fileURLToPath(vectorsUrl('plinko')), 'utf8'),
 );
 
 describe('plinko:v1 vectors', () => {
@@ -82,10 +79,12 @@ describe('plinko:v1 vectors', () => {
                 actionType: 'place-bet',
                 payload: hexToBytes(rv.place_bet_payload_borsh_hex),
             };
-            const result = replay(rv.server_seed, rv.client_seed, [
-                placeBet,
-                { actionIndex: 1, actionType: 'cashout', payload: new Uint8Array() },
-            ], stakeUnits);
+            const result = replay(
+                rv.server_seed,
+                rv.client_seed,
+                [placeBet, { actionIndex: 1, actionType: 'cashout', payload: new Uint8Array() }],
+                stakeUnits,
+            );
 
             expect(result.settled).toBe(true);
             expect(result.cumulativePpm).toBe(BigInt(rv.multiplier_ppm));
@@ -94,10 +93,12 @@ describe('plinko:v1 vectors', () => {
 
             // sec-28: a system abandon settles at the sealed outcome, exactly
             // what the cashout pays — the kernel substitutes the cashout.
-            const abandoned = replay(rv.server_seed, rv.client_seed, [
-                placeBet,
-                { actionIndex: 1, actionType: 'abandon', payload: new Uint8Array() },
-            ], stakeUnits);
+            const abandoned = replay(
+                rv.server_seed,
+                rv.client_seed,
+                [placeBet, { actionIndex: 1, actionType: 'abandon', payload: new Uint8Array() }],
+                stakeUnits,
+            );
 
             expect(abandoned.settled).toBe(true);
             expect(abandoned.payoutUnits).toBe(result.payoutUnits);

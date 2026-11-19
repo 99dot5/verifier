@@ -54,7 +54,8 @@ function row(id: number, level: number, sessionHex: string): Row {
             entrypoint: 'deposit',
             value: {
                 session_id: sessionHex,
-                session_signature: 'edsigtzza9x2yMZaVc5zadtEsh6mgDDY8ZkNgM5PBvNx5ykKF5dYgSy4WU7JrAHkEzfQAP6o74yYKBtsQvDotwoV8BWw49h9L2y',
+                session_signature:
+                    'edsigtzza9x2yMZaVc5zadtEsh6mgDDY8ZkNgM5PBvNx5ykKF5dYgSy4WU7JrAHkEzfQAP6o74yYKBtsQvDotwoV8BWw49h9L2y',
                 session_public_key: 'edpkv5tf5wXgHDgfN6T4zvwRJshgHsgwmw76SSzp1V6pZSuNjJV9Er',
             },
         },
@@ -72,9 +73,7 @@ function mockIndexer(byVault: Record<string, Row[]>, requested: string[] = []): 
 
         const query = new URL(url).searchParams;
         const wanted = query.get('parameter.session_id');
-        const rows = (byVault[query.get('target') ?? ''] ?? []).filter(
-            (r) => r.parameter?.value.session_id === wanted,
-        );
+        const rows = (byVault[query.get('target') ?? ''] ?? []).filter((r) => r.parameter?.value.session_id === wanted);
 
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(rows) } as Response);
     }) as unknown as typeof fetch;
@@ -199,7 +198,11 @@ describe('locateSessionDeposit', () => {
 
     it('reports an indexer error rather than inventing a bound', async () => {
         const failing = (() =>
-            Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve([]) } as Response)) as unknown as typeof fetch;
+            Promise.resolve({
+                ok: false,
+                status: 503,
+                json: () => Promise.resolve([]),
+            } as Response)) as unknown as typeof fetch;
 
         const located = await locateSessionDeposit({
             tzktApiUrl: TZKT,
@@ -240,14 +243,18 @@ const topUpCall = topUpGroup.contents[0];
 
 /** The receipt's `lazy_storage_diff` entry for the vault's `sessions` big_map. */
 function sessionsDiff(call: RpcManagerOperation) {
-    return (call.metadata?.operation_result?.lazy_storage_diff ?? []).find((entry) => entry.id === sessionsEntryCapture.bigMapId);
+    return (call.metadata?.operation_result?.lazy_storage_diff ?? []).find(
+        (entry) => entry.id === sessionsEntryCapture.bigMapId,
+    );
 }
 
 describe('the deposit receipt shape (captured)', () => {
     it("reads the sessions big_map id from the current vault's storage, as captured", () => {
         expect(sessionsBigMapId(treasuryVaultStorageCapture.storageAtHead)).toBe(treasuryVaultStorageCapture.bigMapId);
         // The flattened sequence form a receipt renders agrees.
-        expect(sessionsBigMapId(treasuryVaultStorageCapture.storageAtHead.args)).toBe(treasuryVaultStorageCapture.bigMapId);
+        expect(sessionsBigMapId(treasuryVaultStorageCapture.storageAtHead.args)).toBe(
+            treasuryVaultStorageCapture.bigMapId,
+        );
     });
 
     it('reads the same id from the storage after the deposits, as captured', () => {
@@ -273,7 +280,11 @@ describe('the deposit receipt shape (captured)', () => {
         expect(firstDepositCall.parameters?.entrypoint).toBe('deposit');
         // Both of the vault's big_maps are listed; only `sessions` is written.
         expect(diff.map((entry) => entry.id).sort()).toEqual([sessionsEntryCapture.bigMapId, PAID_BIG_MAP_ID].sort());
-        expect(sessions).toMatchObject({ kind: 'big_map', id: sessionsEntryCapture.bigMapId, diff: { action: 'update' } });
+        expect(sessions).toMatchObject({
+            kind: 'big_map',
+            id: sessionsEntryCapture.bigMapId,
+            diff: { action: 'update' },
+        });
         expect(sessions?.diff.updates).toHaveLength(1);
         expect(sessions?.diff.updates?.[0].key).toEqual({ bytes: REAL_SESSION_HEX });
         expect(sessions?.diff.updates?.[0].value).toBeDefined();
@@ -327,12 +338,26 @@ describe('the deposit receipt shape (captured)', () => {
             },
         });
 
-        expect(writesSessionEntry(withUpdate({ key: { bytes: REAL_SESSION_HEX } }), sessionsEntryCapture.bigMapId, REAL_SESSION)).toBe(false);
         expect(
-            writesSessionEntry(withUpdate({ key: { bytes: REAL_SESSION_HEX }, value: {} }, '999'), sessionsEntryCapture.bigMapId, REAL_SESSION),
+            writesSessionEntry(
+                withUpdate({ key: { bytes: REAL_SESSION_HEX } }),
+                sessionsEntryCapture.bigMapId,
+                REAL_SESSION,
+            ),
         ).toBe(false);
         expect(
-            writesSessionEntry(withUpdate({ key: { bytes: 'ff'.repeat(16) }, value: {} }), sessionsEntryCapture.bigMapId, REAL_SESSION),
+            writesSessionEntry(
+                withUpdate({ key: { bytes: REAL_SESSION_HEX }, value: {} }, '999'),
+                sessionsEntryCapture.bigMapId,
+                REAL_SESSION,
+            ),
+        ).toBe(false);
+        expect(
+            writesSessionEntry(
+                withUpdate({ key: { bytes: 'ff'.repeat(16) }, value: {} }),
+                sessionsEntryCapture.bigMapId,
+                REAL_SESSION,
+            ),
         ).toBe(false);
     });
 
@@ -408,13 +433,27 @@ function capturedChain(overrides: Partial<DepositChain> & { indexer?: typeof fet
                     overrides.indexer ??
                     mockIndexer({
                         [REAL_VAULT]: [
-                            { id: 2, level: topUpCapture.level, hash: topUpGroup.hash, parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } } },
-                            { id: 1, level: firstDepositCapture.level, hash: firstDepositGroup.hash, parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } } },
+                            {
+                                id: 2,
+                                level: topUpCapture.level,
+                                hash: topUpGroup.hash,
+                                parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } },
+                            },
+                            {
+                                id: 1,
+                                level: firstDepositCapture.level,
+                                hash: firstDepositGroup.hash,
+                                parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } },
+                            },
                         ],
                     }),
             }),
         blockOperations: async (level) =>
-            level === firstDepositCapture.level ? [firstDepositGroup] : level === topUpCapture.level ? [topUpGroup] : [],
+            level === firstDepositCapture.level
+                ? [firstDepositGroup]
+                : level === topUpCapture.level
+                  ? [topUpGroup]
+                  : [],
         contractStorage: async () => sessionsEntryCapture.storageAtHead,
         bigMapHas: async () => false,
         ...overrides,
@@ -449,12 +488,24 @@ describe('resolveSessionDeposit', () => {
             formPoolId: 'standard',
             chain: capturedChain({
                 indexer: mockIndexer({
-                    [REAL_VAULT]: [{ id: 2, level: topUpCapture.level, hash: topUpGroup.hash, parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } } }],
+                    [REAL_VAULT]: [
+                        {
+                            id: 2,
+                            level: topUpCapture.level,
+                            hash: topUpGroup.hash,
+                            parameter: { entrypoint: 'deposit', value: { session_id: REAL_SESSION_HEX } },
+                        },
+                    ],
                 }),
             }),
         });
 
-        expect(located).toMatchObject({ lookup: 'found', level: topUpCapture.level, firstProven: false, otherVaults: null });
+        expect(located).toMatchObject({
+            lookup: 'found',
+            level: topUpCapture.level,
+            firstProven: false,
+            otherVaults: null,
+        });
         expect(located.detail).toContain('not shown to be the session-creating deposit');
     });
 
@@ -492,7 +543,12 @@ describe('resolveSessionDeposit', () => {
                 lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),
                 formPoolId: '',
                 chain: capturedChain({
-                    indexer: (() => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve([]) } as Response)) as unknown as typeof fetch,
+                    indexer: (() =>
+                        Promise.resolve({
+                            ok: false,
+                            status: 500,
+                            json: () => Promise.resolve([]),
+                        } as Response)) as unknown as typeof fetch,
                 }),
             }),
         },
@@ -503,7 +559,9 @@ describe('resolveSessionDeposit', () => {
                 transcript: transcriptCopy(),
                 lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),
                 formPoolId: '',
-                chain: capturedChain({ indexer: (() => Promise.reject(new Error('network down'))) as unknown as typeof fetch }),
+                chain: capturedChain({
+                    indexer: (() => Promise.reject(new Error('network down'))) as unknown as typeof fetch,
+                }),
             }),
         },
         {
@@ -582,7 +640,8 @@ describe('resolveSessionDeposit', () => {
 
                     return sessionsEntryCapture.storageAtHead;
                 },
-                bigMapHas: async (id, expr) => id === sessionsEntryCapture.bigMapId && expr === sessionsEntryCapture.nodeScriptExprHash,
+                bigMapHas: async (id, expr) =>
+                    id === sessionsEntryCapture.bigMapId && expr === sessionsEntryCapture.nodeScriptExprHash,
             }),
         });
 

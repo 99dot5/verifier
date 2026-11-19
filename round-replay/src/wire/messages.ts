@@ -109,7 +109,11 @@ function readTranscriptAction(reader: BorshReader): TranscriptActionWire {
  * so callers can scan a mixed inbox; malformed sequencer frames throw.
  */
 export function decodeExternalMessage(bytes: Uint8Array): DecodedEnvelope | null {
-    if (bytes.length < 2 + 64 + 1 || bytes[0] !== EXTERNAL_MESSAGE_PREFIX[0] || bytes[1] !== EXTERNAL_MESSAGE_PREFIX[1]) {
+    if (
+        bytes.length < 2 + 64 + 1 ||
+        bytes[0] !== EXTERNAL_MESSAGE_PREFIX[0] ||
+        bytes[1] !== EXTERNAL_MESSAGE_PREFIX[1]
+    ) {
         return null;
     }
 

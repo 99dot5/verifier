@@ -169,6 +169,7 @@ export const GAME_SEED_DERIVATIONS: Readonly<Record<string, Derivation>> = {
     'mines:v1': 'v1',
     'plinko:v1': 'v1',
     'hydra:v1': 'v1',
+    'hydra:v2': 'v1',
 };
 
 /**
@@ -219,7 +220,9 @@ export class SeedStream {
         const end = this.offset + n;
 
         if (end > DECISION_STREAM_BYTES) {
-            throw new RangeError(`decision ${this.decision} would read ${end} bytes; the budget is ${DECISION_STREAM_BYTES}`);
+            throw new RangeError(
+                `decision ${this.decision} would read ${end} bytes; the budget is ${DECISION_STREAM_BYTES}`,
+            );
         }
 
         const out = new Uint8Array(n);
@@ -242,7 +245,9 @@ export class SeedStream {
 
     private chunk(index: number): Uint8Array {
         while (this.chunks.length <= index) {
-            this.chunks.push(this.rule.derive(this.gameType, this.serverSeed, this.clientSeed, this.decision, this.chunks.length));
+            this.chunks.push(
+                this.rule.derive(this.gameType, this.serverSeed, this.clientSeed, this.decision, this.chunks.length),
+            );
         }
 
         return this.chunks[index];

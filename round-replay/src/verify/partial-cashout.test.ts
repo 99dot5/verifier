@@ -1,11 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import {
-    ZERO_BANKED,
-    addBanked,
-    bankedAmountString,
-    decodePartialCashout,
-} from './partial-cashout';
+import { ZERO_BANKED, addBanked, bankedAmountString, decodePartialCashout } from './partial-cashout';
 import { TRANSCRIPT_DECIMALS } from './assets';
 import { hiloStep, replay } from './hilo/v1';
 import { ReplayError, type TranscriptAction } from './types';
@@ -71,9 +66,7 @@ describe('decodePartialCashout', () => {
     it('rejects the legacy 20-byte payload', () => {
         // No compatibility path: the trailing scale is a decode failure, not
         // four bytes to skip.
-        expect(() => decodePartialCashout(encodeLegacyPartialCashout(12_500_000n, 6))).toThrow(
-            ReplayError,
-        );
+        expect(() => decodePartialCashout(encodeLegacyPartialCashout(12_500_000n, 6))).toThrow(ReplayError);
     });
 
     it('renders whole and sub-unit amounts', () => {
@@ -103,12 +96,17 @@ describe('hilo replay with a partial cashout', () => {
         const winning = drawn.rankNumeric >= first.rankNumeric ? 'higher' : 'lower';
         const quoted = winning === 'higher' ? first.higherMultiplierPpm : first.lowerMultiplierPpm;
 
-        const result = replay(SERVER, CLIENT, [
-            action(0, 'place-bet'),
-            action(1, 'partial-cashout', encodePartialCashout(30_000_000n)),
-            action(2, winning),
-            action(3, 'cashout'),
-        ], STAKE_UNITS);
+        const result = replay(
+            SERVER,
+            CLIENT,
+            [
+                action(0, 'place-bet'),
+                action(1, 'partial-cashout', encodePartialCashout(30_000_000n)),
+                action(2, winning),
+                action(3, 'cashout'),
+            ],
+            STAKE_UNITS,
+        );
 
         // Discriminating for every seed: the guess step states the decision it
         // drew under and the card it drew, and both are decision 1's — never
@@ -133,17 +131,24 @@ describe('hilo replay with a partial cashout', () => {
         // 12.5 banked out of a 100 stake leaves 87.5 live; the abandon pays
         // both, exactly what a cashout here would, so a forged one gains
         // nothing. The ending is `abandoned` — no decision of the player's ended it.
-        const result = replay(SERVER, CLIENT, [
-            action(0, 'place-bet'),
-            action(1, 'partial-cashout', encodePartialCashout(12_500_000n)),
-            action(2, 'abandon'),
-        ], STAKE_UNITS);
+        const result = replay(
+            SERVER,
+            CLIENT,
+            [
+                action(0, 'place-bet'),
+                action(1, 'partial-cashout', encodePartialCashout(12_500_000n)),
+                action(2, 'abandon'),
+            ],
+            STAKE_UNITS,
+        );
 
         expect(result.outcome).toBe('abandoned');
         expect(result.settled).toBe(true);
         expect(result.bankedUnits).toBe(12_500_000n);
         expect(result.payoutUnits).toBe(STAKE_UNITS);
-        expect(result.steps[2].title).toContain("settles at the position's current value: banked 12.5 + live 87.5 = 100");
+        expect(result.steps[2].title).toContain(
+            "settles at the position's current value: banked 12.5 + live 87.5 = 100",
+        );
         // The chain is left where the bank left it, as a cashout would leave it.
         expect(result.steps[2].cumulativePpm).toBe(1_000_000n);
     });
@@ -152,19 +157,23 @@ describe('hilo replay with a partial cashout', () => {
         // Mirrors `apply_bank`: banking more than is live would mint value, and
         // the kernel rejects the transcript rather than replaying it.
         expect(() =>
-            replay(SERVER, CLIENT, [
-                action(0, 'place-bet'),
-                action(1, 'partial-cashout', encodePartialCashout(STAKE_UNITS + 1n)),
-            ], STAKE_UNITS),
+            replay(
+                SERVER,
+                CLIENT,
+                [action(0, 'place-bet'), action(1, 'partial-cashout', encodePartialCashout(STAKE_UNITS + 1n))],
+                STAKE_UNITS,
+            ),
         ).toThrow(ReplayError);
     });
 
     it('rejects a malformed partial-cashout payload', () => {
         expect(() =>
-            replay(SERVER, CLIENT, [
-                action(0, 'place-bet'),
-                action(1, 'partial-cashout', new Uint8Array(3)),
-            ], STAKE_UNITS),
+            replay(
+                SERVER,
+                CLIENT,
+                [action(0, 'place-bet'), action(1, 'partial-cashout', new Uint8Array(3))],
+                STAKE_UNITS,
+            ),
         ).toThrow(ReplayError);
     });
 });

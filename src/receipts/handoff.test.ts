@@ -10,8 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { readHintHandoff, readReceiptsHandoff, readRoundHandoff } from './handoff';
 
 const TEXT = '{"schema":"99dot5.receipts.v1","note":"hand-off vector"}';
-const GZ =
-    'gz.H4sIAAAAAAACE6tWKk7OSM1NVLJSsrRMyS8x1StKTU7NLCgp1iszVNJRyssvSQXKZSTmpejmp6UplKUml-QXKdUCAENy2fA4AAAA';
+const GZ = 'gz.H4sIAAAAAAACE6tWKk7OSM1NVLJSsrRMyS8x1StKTU7NLCgp1iszVNJRyssvSQXKZSTmpejmp6UplKUml-QXKdUCAENy2fA4AAAA';
 const JSON_FORM = 'json.eyJzY2hlbWEiOiI5OWRvdDUucmVjZWlwdHMudjEiLCJub3RlIjoiaGFuZC1vZmYgdmVjdG9yIn0';
 
 describe('readReceiptsHandoff', () => {

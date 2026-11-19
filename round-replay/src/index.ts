@@ -25,10 +25,4 @@ export {
     type SequencerMessage,
     type TranscriptActionWire,
 } from './wire/messages';
-export {
-    REPLAYERS,
-    UnknownActionTagError,
-    UnsupportedGameError,
-    replayTranscript,
-    supportedGameTypes,
-} from './replay';
+export { REPLAYERS, UnknownActionTagError, UnsupportedGameError, replayTranscript, supportedGameTypes } from './replay';

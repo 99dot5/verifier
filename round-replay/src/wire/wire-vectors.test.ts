@@ -123,14 +123,14 @@ describe('action-tag table', () => {
         }
     });
 
-    it('has exactly twelve tags and rejects anything outside them', () => {
-        expect(ACTION_TAGS).toHaveLength(12);
+    it('has exactly thirteen tags and rejects anything outside them', () => {
+        expect(ACTION_TAGS).toHaveLength(13);
         // The gap between the protocol block and the game vocabulary resolves
         // to nothing: eleven protocol bytes are reserved, not assigned.
         for (let tag = 0x05; tag < GAME_VOCABULARY_START; tag += 1) {
             expect(actionTypeOf(tag)).toBeNull();
         }
-        expect(actionTypeOf(0x17)).toBeNull();
+        expect(actionTypeOf(0x18)).toBeNull();
         expect(actionTypeOf(0xff)).toBeNull();
         // `fight` survives in the steps.action_type CHECK constraint but no
         // engine emits it, so it deliberately gets no tag.
@@ -141,20 +141,14 @@ describe('action-tag table', () => {
         const protocolBlock = ['place-bet', 'cashout', 'partial-cashout', 'abandon', 'expire'];
 
         for (const entry of ACTION_TAGS) {
-            expect(entry.tag < GAME_VOCABULARY_START).toBe(
-                protocolBlock.includes(entry.actionType),
-            );
+            expect(entry.tag < GAME_VOCABULARY_START).toBe(protocolBlock.includes(entry.actionType));
         }
     });
 
     it('classifies the three system-originated actions and nothing else', () => {
         const system = vectors.action_tags.filter((a) => isSystem(a.action_type));
 
-        expect(system.map((a) => a.action_type)).toEqual([
-            'partial-cashout',
-            'abandon',
-            'expire',
-        ]);
+        expect(system.map((a) => a.action_type)).toEqual(['partial-cashout', 'abandon', 'expire']);
     });
 
     it('gives every tag at least one game and refuses an unknown game type', () => {

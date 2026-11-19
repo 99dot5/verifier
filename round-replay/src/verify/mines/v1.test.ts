@@ -45,12 +45,7 @@ const vectors: {
     layout_vectors: LayoutVector[];
     multiplier_tables: { mine_count: number; cumulative_multiplier_ppm: number[] }[];
     round_vectors: RoundVector[];
-} = JSON.parse(
-    readFileSync(
-        fileURLToPath(vectorsUrl('mines')),
-        'utf8',
-    ),
-);
+} = JSON.parse(readFileSync(fileURLToPath(vectorsUrl('mines')), 'utf8'));
 
 describe('mines:v1 vectors', () => {
     it('reproduces every layout vector including the draw intermediates', () => {

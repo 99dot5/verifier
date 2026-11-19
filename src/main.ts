@@ -849,7 +849,10 @@ async function resolveKeySet(signal?: AbortSignal): Promise<ResolvedKeys> {
         });
         const tenantKeys = keysForTenant(lineage, tenantInput.value.trim());
 
-        renderKeySet(lineage, tenantKeys.map((key) => key.edpk));
+        renderKeySet(
+            lineage,
+            tenantKeys.map((key) => key.edpk),
+        );
         renderTenantSlugs(lineage);
         renderPoolSlugs(lineage);
 
@@ -1062,8 +1065,7 @@ function adoptReceiptsScope(statusPrefix: string): void {
         roundIdInput.value = roundId;
         changed.push(`round ${roundId}`);
     } else if (roundIdInput.value.trim().toLowerCase() !== roundId) {
-        receiptsStatus.textContent +=
-            ` — NOTE: these receipts are labelled round ${roundId}, not the round ID entered above`;
+        receiptsStatus.textContent += ` — NOTE: these receipts are labelled round ${roundId}, not the round ID entered above`;
     }
 
     if (previous.tenant !== tenantId) {
@@ -1075,8 +1077,7 @@ function adoptReceiptsScope(statusPrefix: string): void {
     }
 
     if (changed.length > 0) {
-        receiptsStatus.textContent +=
-            ` — filled ${changed.join(', ')} from the receipts (a label, not proof; edit if it looks wrong)`;
+        receiptsStatus.textContent += ` — filled ${changed.join(', ')} from the receipts (a label, not proof; edit if it looks wrong)`;
     }
 
     progress.textContent = 'receipts loaded — press “Fetch from chain & verify”';
@@ -1123,14 +1124,17 @@ function verifyInputBase(
 // them are different reasons the tool is NOT alleging anything, and wording
 // any two of them alike would either hide a finding or invent one.
 const VERDICT_LABELS: Record<VerificationReport['verdict'], string> = {
-        verified: 'VERIFIED — authentic messages, pre-committed seed, correct payout, and your own commands behind it',
-        attested: 'ATTESTED — checked, but weakly: your receipts could not be reconstructed, so only the server’s own signed statement was compared',
-        inconclusive:
-            'INCONCLUSIVE — the scanned range does not bracket this round, or its rollup is not a listed deployment (or its game names a seed derivation this verifier does not implement); see the replay row',
-        undetermined: 'UNDETERMINED — not on chain yet, and no EndSession for this session is on chain either, so nothing shows the operator moved past this round. Not an accusation; try again later',
-        suppressed: 'SUPPRESSED — your receipts are valid, the round is not on chain, and this session’s EndSession is — which is written only after every round of the session settled',
-        failed: 'FAILED — at least one check did not hold; see below',
-        incomplete: 'INCOMPLETE — not all evidence was found; nothing is proven either way',
+    verified: 'VERIFIED — authentic messages, pre-committed seed, correct payout, and your own commands behind it',
+    attested:
+        'ATTESTED — checked, but weakly: your receipts could not be reconstructed, so only the server’s own signed statement was compared',
+    inconclusive:
+        'INCONCLUSIVE — the scanned range does not bracket this round, or its rollup is not a listed deployment (or its game names a seed derivation this verifier does not implement); see the replay row',
+    undetermined:
+        'UNDETERMINED — not on chain yet, and no EndSession for this session is on chain either, so nothing shows the operator moved past this round. Not an accusation; try again later',
+    suppressed:
+        'SUPPRESSED — your receipts are valid, the round is not on chain, and this session’s EndSession is — which is written only after every round of the session settled',
+    failed: 'FAILED — at least one check did not hold; see below',
+    incomplete: 'INCOMPLETE — not all evidence was found; nothing is proven either way',
 };
 
 /**
@@ -1200,9 +1204,11 @@ function renderChecksInto(list: HTMLElement, checks: readonly Check[]): void {
 const PAYOUT_OUTCOME_LABELS: Record<PayoutOutcome, string> = {
     backed: 'BACKED — the payout matches the kernel’s figure, two of the vault’s own signers authorised it, and the ledger holds',
     short: 'SHORT — the fast payout was below the kernel’s figure; the cemented payout pays (or paid) the remainder. Not an accusation',
-    overpaid: 'OVERPAID — the fast payout exceeds what the kernel recorded: two signers paid what the kernel does not back',
+    overpaid:
+        'OVERPAID — the fast payout exceeds what the kernel recorded: two signers paid what the kernel does not back',
     unbacked: 'UNBACKED — a check did not hold; see below',
-    pending: 'PENDING — a fast payout exists, but nothing yet says what the kernel owed: no cemented payout on L1, and no rollup node to ask',
+    pending:
+        'PENDING — a fast payout exists, but nothing yet says what the kernel owed: no cemented payout on L1, and no rollup node to ask',
     unpaid: 'UNPAID — no payout event for this session on any of the pool’s vaults: not ended, or not paid yet',
     unavailable: 'UNAVAILABLE — the lookups could not be made or could not be trusted; see below',
 };

@@ -224,7 +224,14 @@ describe('fetchAdminLineage', () => {
             proposedBy: ROOT,
         });
         expect(lineage.proposals).toEqual([
-            { address: SUCCESSOR, proposedBy: ROOT, level: 102, operationHash: 'op-3', activationLevel: 110, followed: true },
+            {
+                address: SUCCESSOR,
+                proposedBy: ROOT,
+                level: 102,
+                operationHash: 'op-3',
+                activationLevel: 110,
+                followed: true,
+            },
         ]);
 
         // BOTH keys, not just the current one: a receipt signed under the
@@ -254,7 +261,14 @@ describe('fetchAdminLineage', () => {
 
         expect(lineage.administrators.map((a) => a.address)).toEqual([ROOT]);
         expect(lineage.proposals).toEqual([
-            { address: SUCCESSOR, proposedBy: ROOT, level: 102, operationHash: 'op-2', activationLevel: null, followed: false },
+            {
+                address: SUCCESSOR,
+                proposedBy: ROOT,
+                level: 102,
+                operationHash: 'op-2',
+                activationLevel: null,
+                followed: false,
+            },
         ]);
         // The un-activated successor's rotation is NOT evidence: that contract
         // never controlled the rollup, so the kernel never accepted its key.

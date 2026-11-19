@@ -46,10 +46,7 @@ interface RoundVector {
 }
 
 const vectors: { step_vectors: StepVector[]; round_vectors: RoundVector[] } = JSON.parse(
-    readFileSync(
-        fileURLToPath(vectorsUrl('hilo')),
-        'utf8',
-    ),
+    readFileSync(fileURLToPath(vectorsUrl('hilo')), 'utf8'),
 );
 
 describe('hilo:v1 vectors', () => {

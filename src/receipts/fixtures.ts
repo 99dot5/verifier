@@ -90,9 +90,16 @@ const COMMAND_ROUND_ID = 1;
  * `PlayerActionCommand` has only the three games with in-round decisions, at
  * the same numbers.
  */
-export const PLACE_BET_ARM_FIELDS = { hilo: 100, crash: 101, plinko: 102, mines: 103, hydra: 104 } as const;
+export const PLACE_BET_ARM_FIELDS = {
+    hilo: 100,
+    crash: 101,
+    plinko: 102,
+    mines: 103,
+    hydra: 104,
+    hydraV2: 105,
+} as const;
 export const CASH_OUT_ARM_FIELDS = PLACE_BET_ARM_FIELDS;
-export const PLAYER_ACTION_ARM_FIELDS = { hilo: 100, mines: 103, hydra: 104 } as const;
+export const PLAYER_ACTION_ARM_FIELDS = { hilo: 100, mines: 103, hydra: 104, hydraV2: 105 } as const;
 
 // crash.v1.PlaceBet / crash.v1.CashOut / plinko.v1.PlaceBet /
 // mines.v1.PlaceBet / mines.v1.Reveal / hydra.v1.PlaceBet
@@ -106,6 +113,8 @@ const HYDRA_HERO = 1;
 const HYDRA_WEAPON = 2;
 const HYDRA_ARMOUR = 3;
 const HYDRA_SPRITE = 4;
+const HYDRA_V2_COMPANIONS = 1;
+const HYDRA_V2_START_STAGE = 2;
 
 /** `PlayerAction.kind` arm numbers, per game. */
 export const ACTION_KIND_FIELDS: Record<string, number> = {
@@ -117,6 +126,7 @@ export const ACTION_KIND_FIELDS: Record<string, number> = {
     'magic-attack': 102,
     'drink-potion': 103,
     'drink-mana': 104,
+    roll: 100,
 };
 
 /** `casino.v1.StepOrigin` values. */
@@ -288,17 +298,17 @@ export function serverFrame(seed: Uint8Array, spec: ServerFrameSpec): Uint8Array
             }
 
             if (spec.payload.nextServerSeedCommitment) {
-                started.bytes(ROUND_STARTED_NEXT_SERVER_SEED_COMMITMENT, seedCommitment(spec.payload.nextServerSeedCommitment));
+                started.bytes(
+                    ROUND_STARTED_NEXT_SERVER_SEED_COMMITMENT,
+                    seedCommitment(spec.payload.nextServerSeedCommitment),
+                );
             }
 
             if (spec.payload.crashState) {
                 const state = new ProtoWriter();
 
                 state.varint(CRASH_STATE_TICK_QUANTUM_MS, spec.payload.crashState.tickQuantumMs);
-                state.varint(
-                    CRASH_STATE_SERVER_ANCHOR_UNIX_MS,
-                    spec.payload.crashState.serverAnchorUnixMs,
-                );
+                state.varint(CRASH_STATE_SERVER_ANCHOR_UNIX_MS, spec.payload.crashState.serverAnchorUnixMs);
                 started.bytes(ROUND_STARTED_CRASH_STATE, state.finish());
             }
 
@@ -413,7 +423,7 @@ export interface CommandFrameSpec {
  * client newer than the verifier produces.
  */
 export interface CommandGameSpec {
-    game: 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra';
+    game: 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra' | 'hydraV2';
     /** crash `PlaceBet.auto_cashout_ppm` — omitted ⇒ manual mode. */
     autoCashoutPpm?: number;
     /** plinko `PlaceBet`. `risk` is the PROTO enum number (LOW = 1). */
@@ -427,6 +437,10 @@ export interface CommandGameSpec {
     weapon?: number;
     armour?: number;
     sprite?: number;
+    /** hydra v2 `PlaceBet.companions` — `optional`, so 0 is written and omitted ⇒ absent. */
+    companions?: number;
+    /** hydra v2 `PlaceBet.start_stage` — `optional` like `companions`. */
+    startStage?: number;
     /** `PlayerAction.kind` arm name. */
     action?: keyof typeof ACTION_KIND_FIELDS;
     /** mines `Reveal.tile_index`. */
@@ -477,7 +491,10 @@ function commandPayload(spec: CommandFrameSpec): Uint8Array {
         }
     }
 
-    if (spec.game && (spec.payloadCase === 'placeBet' || spec.payloadCase === 'cashOut' || spec.payloadCase === 'playerAction')) {
+    if (
+        spec.game &&
+        (spec.payloadCase === 'placeBet' || spec.payloadCase === 'cashOut' || spec.payloadCase === 'playerAction')
+    ) {
         writer.bytes(armField(spec.payloadCase, spec.game), gameArm(spec.payloadCase, spec.game));
     }
 
@@ -543,6 +560,14 @@ function gameArm(payloadCase: 'placeBet' | 'cashOut' | 'playerAction', game: Com
                     arm.varint(field, tier);
                 }
             }
+        }
+
+        if (game.game === 'hydraV2' && game.companions !== undefined) {
+            arm.varint(HYDRA_V2_COMPANIONS, game.companions);
+        }
+
+        if (game.game === 'hydraV2' && game.startStage !== undefined) {
+            arm.varint(HYDRA_V2_START_STAGE, game.startStage);
         }
 
         return arm.finish();

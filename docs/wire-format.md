@@ -27,7 +27,7 @@ frames per operation, each decoded independently) is:
 [0x09 0x95 | 64-byte Ed25519 signature | borsh(VersionedEnvelope)]
 ```
 
-- `0x09 0x95` is the external-message prefix — a *protocol* marker, not an
+- `0x09 0x95` is the external-message prefix — a _protocol_ marker, not an
   instance one: every 99dot5 rollup on a network shares the inbox and the
   prefix, and which rollup a frame is for is stated by its signature.
 - The signature is `ed25519_sign(blake2b_256(chain_id ‖ rollup_address ‖ payload))`
@@ -52,8 +52,7 @@ frames per operation, each decoded independently) is:
 Borsh 1.x: integers little-endian fixed-width (`u32` = 4 bytes, `u64` = 8);
 `String`/`Vec<u8>` are a `u32`-LE length then the bytes; `[u8; N]` is N raw
 bytes with no prefix; `Vec<T>` is a `u32`-LE count then that many encoded
-elements; enums are one `u8` tag (variants numbered by declaration order from
-0) then the variant's fields; structs are their fields in declaration order.
+elements; enums are one `u8` tag (variants numbered by declaration order from 0) then the variant's fields; structs are their fields in declaration order.
 Trailing bytes after a valid value are an error (the kernel is strict; be
 strict too).
 
@@ -76,7 +75,7 @@ its own rollup, a recovery re-origination, staging beside production). A
 signature over the bare envelope verified on all of them — harvest a frame
 off rollup A's inbox and post it to rollup B's, no key needed. So the injector
 signs `blake2b_256(chain_id ‖ rollup_address ‖ envelope)`, with the two prefix
-fields taken from the tenant's config, and the kernel verifies with *its own*
+fields taken from the tenant's config, and the kernel verifies with _its own_
 identity in their place — the address the host reveals for itself and the
 chain id baked into its durable storage at origination (`/config/chain-id`).
 A frame signed for another instance is simply a signature failure there, and
@@ -164,27 +163,27 @@ frozen alongside the V1 wire: never renumber.
 **Protocol block, `0x00`–`0x0F`** — actions the protocol itself relies on,
 shared by every game that uses them. Five assigned, eleven reserved.
 
-| Tag | `action_type` | Origin | Used by |
-|---:|---|---|---|
-| `0x00` | `place-bet` | player | every game |
-| `0x01` | `cashout` | player | crash, plinko, hilo, mines, hydra |
-| `0x02` | `partial-cashout` | system | hilo, mines, hydra (max-win de-lever) |
-| `0x03` | `abandon` | system | every game (janitor sweep / force-settle) |
-| `0x04` | `expire` | system | crash (deadline sweep on a manual round) |
+|    Tag | `action_type`     | Origin | Used by                                   |
+| -----: | ----------------- | ------ | ----------------------------------------- |
+| `0x00` | `place-bet`       | player | every game                                |
+| `0x01` | `cashout`         | player | crash, plinko, hilo, mines, hydra         |
+| `0x02` | `partial-cashout` | system | hilo, mines, hydra (max-win de-lever)     |
+| `0x03` | `abandon`         | system | every game (janitor sweep / force-settle) |
+| `0x04` | `expire`          | system | crash (deadline sweep on a manual round)  |
 
 **Game vocabulary, `0x10` onward** — appended in order of introduction and
-shared *by name*: a future game that reveals tiles reuses `reveal` rather than
+shared _by name_: a future game that reveals tiles reuses `reveal` rather than
 minting a second tile-reveal tag.
 
-| Tag | `action_type` | Origin | Used by |
-|---:|---|---|---|
-| `0x10` | `higher` | player | hilo |
-| `0x11` | `lower` | player | hilo |
-| `0x12` | `reveal` | player | mines |
-| `0x13` | `physical-attack` | player | hydra |
-| `0x14` | `magic-attack` | player | hydra |
-| `0x15` | `drink-potion` | player | hydra |
-| `0x16` | `drink-mana` | player | hydra |
+|    Tag | `action_type`     | Origin | Used by |
+| -----: | ----------------- | ------ | ------- |
+| `0x10` | `higher`          | player | hilo    |
+| `0x11` | `lower`           | player | hilo    |
+| `0x12` | `reveal`          | player | mines   |
+| `0x13` | `physical-attack` | player | hydra   |
+| `0x14` | `magic-attack`    | player | hydra   |
+| `0x15` | `drink-potion`    | player | hydra   |
+| `0x16` | `drink-mana`      | player | hydra   |
 
 When the protocol block fills, further protocol actions continue at the end of
 the open range — the block is a reservation for readability, not a structural
@@ -204,12 +203,12 @@ knows in a game that does not use it is the kernel's separate
 
 - **hilo:v1** — `place-bet`, `higher`, `lower` and `cashout` are payload-free.
 - **plinko:v1** — `place-bet` carries `borsh(Config { rows: u32, risk: enum
-  u8 (0=low, 1=medium, 2=high) })` (5 bytes); `cashout` is payload-free.
+u8 (0=low, 1=medium, 2=high) })` (5 bytes); `cashout` is payload-free.
 - **mines:v1** — `place-bet` carries `borsh(Config { mine_count: u32 })`
   (4 bytes); `reveal` carries `borsh(tile_index: u32)` (4 bytes); `cashout`
   is payload-free.
 - **crash:v1** — `place-bet` carries `borsh(Config { auto_cashout_tick:
-  Option<u32> })` (5 bytes); `cashout` carries a `u32` tick (4 bytes).
+Option<u32> })` (5 bytes); `cashout` carries a `u32` tick (4 bytes).
 - **hydra:v1** — `place-bet` carries `borsh(Config { hero: u8 })` (1 byte).
 - **partial-cashout** (hilo, mines, hydra) is system-generated and carries
   `borsh(Payload { amount: u128 })` (16 bytes) — the banked amount in
@@ -240,7 +239,7 @@ on 2026-09-09 disproved it, so the protocol limit is the only wall.
 
 The first row is the subtle one. The protocol frames every inbox message with a
 one-byte tag ahead of our `0x0995` prefix, and the kernel reads at most 4096
-bytes of that *framed* message, so the largest payload we can actually put on
+bytes of that _framed_ message, so the largest payload we can actually put on
 the wire is 4095. The cap is `(4096 − 67 − 282) / 21` = 178, and at the cap a
 transcript encodes to 4020 bytes — 4086 as the frame we sign and POST, 4087 as
 the inbox message the kernel reads.
@@ -275,16 +274,16 @@ What makes a round provably fair, from inbox data alone:
    batch it is verified against.
 5. **Not independently verifiable:** how the seed itself was derived. It comes
    from `blake2b_256(b"server-seed" ‖ batch_salt ‖ drand_round_le8 ‖
-   drand_randomness ‖ drand_chain_hash ‖ i_le8)` (the chain hash as its 32 raw bytes), but `batch_salt` is
+drand_randomness ‖ drand_chain_hash ‖ i_le8)` (the chain hash as its 32 raw bytes), but `batch_salt` is
    private and is never published, so the batch-level derivation cannot be
    re-run by a third party. A `SeedBatchReveal` message once existed to publish
    it; it was never produced or handled and has been removed (its precondition
-   was unenforceable — publication to the public inbox *is* the leak).
+   was unenforceable — publication to the public inbox _is_ the leak).
 
-   Note also that drand does **not** currently prevent the operator grinding
-   entropy: the beacon is fetched before the salt is drawn, so the salt is
-   chosen with the beacon in hand. Steps 1-4 above are the real guarantee, and
-   they hold regardless.
+    Note also that drand does **not** currently prevent the operator grinding
+    entropy: the beacon is fetched before the salt is drawn, so the salt is
+    chosen with the beacon in hand. Steps 1-4 above are the real guarantee, and
+    they hold regardless.
 
 ## The client seed
 
@@ -362,7 +361,6 @@ hand-built fixture, `"captured"` for bytes taken from a real injection. A
 synthetic vector cannot catch a decoder drifting from what the sequencer
 actually emits, because the fixture is written by the same understanding it is
 meant to check — so the label is load-bearing, not decoration.
-
 
 ---
 
@@ -444,17 +442,17 @@ reconstructs the same order from the server's own signed statements:
 
 ```jsonc
 {
-  "schema": "99dot5.receipts.v1",
-  "tenantId": "…", "poolId": "…",
-  "sessionIdHex": "…", "roundIdHex": "…",
-  "sequencerPublicKey": "edpk…",
-  "sessionPublicKey": "edpk…",
-  "depositOperationLevel": 4100000,   // optional
-  "commands": [{ "requestId": "…", "payloadCase": "placeBet",
-                 "frameHex": "05…", "sentAtUnixMs": 1700000000000 }],
-  "frames":   [{ "sequence": "3", "payloadCase": "roundStarted",
-                 "relatedRequestId": "…", "frameHex": "06…" }],
-  "roundEndedFrameHex": "06…"
+    "schema": "99dot5.receipts.v1",
+    "tenantId": "…",
+    "poolId": "…",
+    "sessionIdHex": "…",
+    "roundIdHex": "…",
+    "sequencerPublicKey": "edpk…",
+    "sessionPublicKey": "edpk…",
+    "depositOperationLevel": 4100000, // optional
+    "commands": [{ "requestId": "…", "payloadCase": "placeBet", "frameHex": "05…", "sentAtUnixMs": 1700000000000 }],
+    "frames": [{ "sequence": "3", "payloadCase": "roundStarted", "relatedRequestId": "…", "frameHex": "06…" }],
+    "roundEndedFrameHex": "06…",
 }
 ```
 
@@ -487,13 +485,13 @@ The tenant's signing keys are not configured anywhere; they are read off L1.
 Internal transactions to the rollup address carry
 `[0x01 | subtag | Michelson PACK]`, and five subtags matter here:
 
-| Subtag | Message | PACK |
-|---|---|---|
-| `0x00` | `RegisterTenant` | `(string slug, key sequencer_public_key)` |
-| `0x01` | `RegisterPoolVault` | `(string tenant, string pool, address vault, string status)` |
-| `0x05` | `RotateSequencerKey` | `(string tenant, key new_public_key, nat grace_levels)` |
-| `0x07` | `ProposeAdminContract` | `(address new_admin)` |
-| `0x08` | `ActivateAdminContract` | *(no payload — the whole message is two bytes)* |
+| Subtag | Message                 | PACK                                                         |
+| ------ | ----------------------- | ------------------------------------------------------------ |
+| `0x00` | `RegisterTenant`        | `(string slug, key sequencer_public_key)`                    |
+| `0x01` | `RegisterPoolVault`     | `(string tenant, string pool, address vault, string status)` |
+| `0x05` | `RotateSequencerKey`    | `(string tenant, key new_public_key, nat grace_levels)`      |
+| `0x07` | `ProposeAdminContract`  | `(address new_admin)`                                        |
+| `0x08` | `ActivateAdminContract` | _(no payload — the whole message is two bytes)_              |
 
 The PACK encoding needed to read them is small: `05` prefix; `07 07` for a
 `Pair` (an n-tuple is a right comb of them); `01 <u32 BE len> <utf8>` for a
@@ -521,9 +519,9 @@ contract, in one of two ways, and the vault emits a typed contract event for
 each (`sp.emit` with its type, so a node renders the event with the `type`
 beside the `payload`):
 
-| Tag | Emitted by | Payload (by field annotation) |
-|---|---|---|
-| `fast_payout` | `fast_payout(session_id: bytes, amount: mutez, signatures: map key signature)`, the signed fast path | `mutez %fast`, `mutez %paid_now`, `mutez %paid_total`, `bytes %session_id` |
+| Tag               | Emitted by                                                                                                                        | Payload (by field annotation)                                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `fast_payout`     | `fast_payout(session_id: bytes, amount: mutez, signatures: map key signature)`, the signed fast path                              | `mutez %fast`, `mutez %paid_now`, `mutez %paid_total`, `bytes %session_id`     |
 | `cemented_payout` | `execute_cemented_payout((session_id, amount))`, the rollup's own outbox message, executed about two weeks after the session ends | `mutez %cemented`, `mutez %paid_now`, `mutez %paid_total`, `bytes %session_id` |
 
 Read the payload **through its type by annotation**, not by position: the
@@ -586,9 +584,9 @@ rollup — `GET /global/block/finalized/durable/wasm_2_0_0/value?key=…`, a hex
 string or `null` — at two keys under the vault's own `tenant_id` and
 `pool_id`:
 
-| Key | Record (Borsh, in a one-byte envelope: `00` = V1) |
-|---|---|
-| `/tenants/{tenant}/pools/{pool}/sessions/{session_id}` (hyphenated) | `owner: String`, `asset: String`, `balance: u128`, `funding_vault_address: String`, `ended: bool`, `end_reason: Option<String>` |
+| Key                                                                               | Record (Borsh, in a one-byte envelope: `00` = V1)                                                                                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/tenants/{tenant}/pools/{pool}/sessions/{session_id}` (hyphenated)               | `owner: String`, `asset: String`, `balance: u128`, `funding_vault_address: String`, `ended: bool`, `end_reason: Option<String>`                                    |
 | `/tenants/{tenant}/pools/{pool}/transactions/TEZ/session-{session_id}-end-payout` | `account_address: String`, `asset: String`, `kind: u8` (`0` deposit, `1` session-end payout, `2` stake, `3` round-end payout, `4` fund, `5` sweep), `amount: u128` |
 
 A fast payout is backed when the session exists, has ended, was funded

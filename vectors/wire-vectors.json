@@ -78,6 +78,10 @@
     {
       "tag": 22,
       "action_type": "drink-mana"
+    },
+    {
+      "tag": 23,
+      "action_type": "roll"
     }
   ],
   "end_reasons": [

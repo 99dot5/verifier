@@ -136,7 +136,10 @@ export function partialCashoutStep(
         actionType: 'partial-cashout',
         title: `partial-cashout (system) — ${bankedAmountString(banked)} banked to the session balance`,
         details: [
-            ['rule', 'max-win de-lever: value moves from the live position to the balance; the multiplier chain is untouched'],
+            [
+                'rule',
+                'max-win de-lever: value moves from the live position to the balance; the multiplier chain is untouched',
+            ],
             ['banked this step', bankedAmountString(banked)],
             ['banked so far', bankedAmountString(bankedTotal)],
         ],

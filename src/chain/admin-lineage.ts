@@ -610,9 +610,7 @@ export async function fetchAdminLineage(options: LineageOptions): Promise<AdminL
             // progress; the caller is told the key set may be missing a branch.
             ambiguities.push(
                 `administrator ${hop.address} proposed ${activated.length} successors that each activated on L1 (` +
-                    activated
-                        .map((a) => `${a.proposal.address} at level ${a.activation.level}`)
-                        .join(', ') +
+                    activated.map((a) => `${a.proposal.address} at level ${a.activation.level}`).join(', ') +
                     '); the kernel accepts at most one, and which one is not on chain, so the walk followed the ' +
                     'latest activation and the derived key set may be missing a branch',
             );

@@ -402,9 +402,7 @@ const STAMP_CAVEAT =
 
 export function analyseRejections(input: RejectionInput): RejectionReport {
     const rejections = input.frames.filter(
-        (frame) =>
-            frame.envelope.payloadCase === 'commandRejected' &&
-            frame.envelope.roundId === input.roundIdHex,
+        (frame) => frame.envelope.payloadCase === 'commandRejected' && frame.envelope.roundId === input.roundIdHex,
     );
 
     if (rejections.length === 0) {
@@ -636,7 +634,10 @@ function judge(
     }
 
     if (anchor.status !== 'ok') {
-        return { kind: 'unavailable', line: `${label} asserts the round was no longer in progress, but ${anchor.reason}` };
+        return {
+            kind: 'unavailable',
+            line: `${label} asserts the round was no longer in progress, but ${anchor.reason}`,
+        };
     }
 
     const receivedAt = rejection.envelope.receivedAtUnixMs;
@@ -888,15 +889,14 @@ export type Trust = { trusted: true } | { trusted: false; reason: string };
  * It takes the pieces rather than a `RejectionInput` so the other caller does
  * not have to fabricate the seed/game fields it has no use for.
  */
-export function trustRejectionRoundId(
-    rejection: ReceiptFrame,
-    roundIdHex: string,
-    commands: ImportedCommand[],
-): Trust {
+export function trustRejectionRoundId(rejection: ReceiptFrame, roundIdHex: string, commands: ImportedCommand[]): Trust {
     const requestId = rejection.envelope.relatedRequestId;
 
     if (requestId === null) {
-        return { trusted: false, reason: 'the refusal names no related_request_id, so there is no command of yours to compare it with' };
+        return {
+            trusted: false,
+            reason: 'the refusal names no related_request_id, so there is no command of yours to compare it with',
+        };
     }
 
     const command = commands.find((candidate) => candidate.requestId === requestId);

@@ -827,31 +827,14 @@ export type DecodedCommandBody =
     /** `plinko.v1.PlaceBet` — `risk` is the PROTO enum number, not the Borsh tag. */
     | { case: 'placeBet'; game: 'plinko'; rows: number; risk: number }
     | { case: 'placeBet'; game: 'mines'; mineCount: number }
-    /**
-     * `hydra.v1.PlaceBet`. The gear tiers are the PROTO enum numbers (1-based,
-     * `UNSPECIFIED = 0`), `null` when absent — which the sequencer refuses.
-     */
-    | {
-          case: 'placeBet';
-          game: 'hydra';
-          hero: number;
-          weapon: number | null;
-          armour: number | null;
-          sprite: number | null;
-      }
-    /** `hydra.v2.PlaceBet.companions` is `optional`: a solo run (0) is legal, so absent is a real absence. */
+    /** `hydra.v1.PlaceBet.companions` is `optional`: a solo run (0) is legal, so absent is a real absence. */
     /** `start_stage` is `optional` the same way: 0 (the first beast) is legal. */
-    | { case: 'placeBet'; game: 'hydraV2'; companions: number | null; startStage: number | null }
+    | { case: 'placeBet'; game: 'hydra'; companions: number | null; startStage: number | null }
     | { case: 'playerAction'; game: 'hilo'; arm: 'higher' | 'lower' }
     /** `mines.v1.Reveal.tile_index` is `optional`: absent is a real absence. */
     | { case: 'playerAction'; game: 'mines'; arm: 'reveal'; tileIndex: number | null }
-    | {
-          case: 'playerAction';
-          game: 'hydra';
-          arm: 'fight' | 'physical-attack' | 'magic-attack' | 'drink-potion' | 'drink-mana';
-      }
-    | { case: 'playerAction'; game: 'hydraV2'; arm: 'roll' }
-    | { case: 'cashOut'; game: 'hilo' | 'plinko' | 'mines' | 'hydra' | 'hydraV2' }
+    | { case: 'playerAction'; game: 'hydra'; arm: 'roll' }
+    | { case: 'cashOut'; game: 'hilo' | 'plinko' | 'mines' | 'hydra' }
     /** `crash.v1.CashOut.tick` is `optional`: tick 0 is a legal claim. */
     | { case: 'cashOut'; game: 'crash'; tick: number | null }
     /** An arm (or a nested `kind`) this build has no rule for. */
@@ -898,15 +881,15 @@ function oneofBand(number: number): OneofBand {
 }
 
 /** A game version, exactly as `game_type` states it (`game:vN`). */
-export type GameType = 'hilo:v1' | 'crash:v1' | 'plinko:v1' | 'mines:v1' | 'hydra:v1' | 'hydra:v2';
+export type GameType = 'hilo:v1' | 'crash:v1' | 'plinko:v1' | 'mines:v1' | 'hydra:v1';
 
-type Game = 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra' | 'hydraV2';
+type Game = 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra';
 
 /**
  * The game table: one field number per game version, used by every per-game
  * `oneof` that has an arm for it.
  */
-/** A game version's reader key: `hydra:v1` → `hydra`, a later version `hydra:v2` → `hydraV2`. */
+/** A game version's reader key: `hilo:v1` → `hilo`, a later version `crash:v2` → `crashV2`. */
 export function gameOfType(gameType: GameType): Game {
     const [name, version] = gameType.split(':');
 
@@ -919,7 +902,6 @@ export const GAME_ARMS: Readonly<Record<GameType, number>> = {
     'plinko:v1': 102,
     'mines:v1': 103,
     'hydra:v1': 104,
-    'hydra:v2': 105,
 };
 
 /**
@@ -938,7 +920,6 @@ export const COMMAND_GAME_ARMS: Readonly<
         'hilo:v1': GAME_ARMS['hilo:v1'],
         'mines:v1': GAME_ARMS['mines:v1'],
         'hydra:v1': GAME_ARMS['hydra:v1'],
-        'hydra:v2': GAME_ARMS['hydra:v2'],
     },
     cashOut: GAME_ARMS,
 };
@@ -965,36 +946,13 @@ const MINES_MINE_COUNT = 1;
 export const MINES_ACTION_REVEAL = 100;
 const MINES_REVEAL_TILE_INDEX = 1;
 
-// hydra.v1.PlaceBet
-const HYDRA_HERO = 1;
-const HYDRA_WEAPON = 2;
-const HYDRA_ARMOUR = 3;
-const HYDRA_SPRITE = 4;
-
-// hydra.v2.PlaceBet / hydra.v2.PlayerAction.kind
-const HYDRA_V2_COMPANIONS = 1;
-const HYDRA_V2_START_STAGE = 2;
-export const HYDRA_V2_ACTION_ROLL = 100;
+// hydra.v1.PlaceBet / hydra.v1.PlayerAction.kind
+export const HYDRA_COMPANIONS = 1;
+export const HYDRA_START_STAGE = 2;
+export const HYDRA_ACTION_ROLL = 100;
 
 /** `hilo.v1.PlayerAction.kind`. */
 export const HILO_ACTION_ARMS: Record<number, 'higher' | 'lower'> = { 100: 'higher', 101: 'lower' };
-
-/**
- * `hydra.v1.PlayerAction.kind` — FIVE arms, and `fight` is not a synonym the
- * schema documents: it is a separate arm that the sequencer maps onto the same
- * engine action as `physical_attack`. The projection table is what records
- * that, not this reader, which reports the arm the player actually signed.
- */
-export const HYDRA_ACTION_ARMS: Record<
-    number,
-    'fight' | 'physical-attack' | 'magic-attack' | 'drink-potion' | 'drink-mana'
-> = {
-    100: 'fight',
-    101: 'physical-attack',
-    102: 'magic-attack',
-    103: 'drink-potion',
-    104: 'drink-mana',
-};
 
 // casino.v1.CashOutCommand / casino.v1.PlayerActionCommand — `round_id` is
 // field 1 on both, deliberately: one game keeps one number across commands.
@@ -1108,23 +1066,11 @@ function decodePlaceBetBody(bytes: Uint8Array): DecodedCommandBody {
                 };
                 return;
             case 'hydra':
-                // `hero` is a bare `uint32` and hero 0 is a legal selection, so
-                // absent means 0 here — unlike the `optional` scalars above.
                 body = {
                     case: 'placeBet',
                     game: 'hydra',
-                    hero: varintField(field.bytes, HYDRA_HERO) ?? 0,
-                    weapon: varintField(field.bytes, HYDRA_WEAPON),
-                    armour: varintField(field.bytes, HYDRA_ARMOUR),
-                    sprite: varintField(field.bytes, HYDRA_SPRITE),
-                };
-                return;
-            case 'hydraV2':
-                body = {
-                    case: 'placeBet',
-                    game: 'hydraV2',
-                    companions: varintField(field.bytes, HYDRA_V2_COMPANIONS),
-                    startStage: varintField(field.bytes, HYDRA_V2_START_STAGE),
+                    companions: varintField(field.bytes, HYDRA_COMPANIONS),
+                    startStage: varintField(field.bytes, HYDRA_START_STAGE),
                 };
                 return;
         }
@@ -1198,25 +1144,13 @@ function decodePlayerActionBody(bytes: Uint8Array): DecodedCommandBody {
                           };
 
                 return;
-            case 'hydra': {
-                const kind = HYDRA_ACTION_ARMS[armNumber];
-
-                body = kind
-                    ? { case: 'playerAction', game: 'hydra', arm: kind }
-                    : {
-                          case: 'unrecognised',
-                          description: `a hydra PlayerAction kind this build has no rule for (field ${armNumber})`,
-                      };
-
-                return;
-            }
-            case 'hydraV2':
+            case 'hydra':
                 body =
-                    armNumber === HYDRA_V2_ACTION_ROLL
-                        ? { case: 'playerAction', game: 'hydraV2', arm: 'roll' }
+                    armNumber === HYDRA_ACTION_ROLL
+                        ? { case: 'playerAction', game: 'hydra', arm: 'roll' }
                         : {
                               case: 'unrecognised',
-                              description: `a hydra:v2 PlayerAction kind this build has no rule for (field ${armNumber})`,
+                              description: `a hydra:v1 PlayerAction kind this build has no rule for (field ${armNumber})`,
                           };
 
                 return;

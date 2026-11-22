@@ -7,66 +7,72 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { vectorsUrl } from '../vectors-path';
 import { decimalStringToUnits, unitsToDecimalString } from '../ints';
-import { bytesToHex, hexToBytes, SeedStream } from '../seed';
-import { ARMOURS, GAME_TYPE, HEROES, SPRITES, WEAPONS, hydraRolls, replay } from './v1';
+import { hexToBytes } from '../seed';
+import {
+    BEAST_NAMES,
+    BONUS_PER_COMPANION,
+    DIFFICULTY_CLASSES,
+    GAME_TYPE,
+    MAX_COMPANIONS,
+    MAX_CUMULATIVE_MULTIPLIER_PPM,
+    hydraRoll,
+    replay,
+    stepMultiplierPpm,
+    winningFaces,
+} from './v1';
 import { ReplayError, type TranscriptAction } from '../types';
 
 interface RollVector {
     server_seed: string;
     client_seed: string;
     decision: number;
-    seed_hex: string;
-    raw_u64: string[];
-    roll_ppm: number[];
-}
-
-interface Fight {
-    stage: number;
-    decision: number;
-    fight_roll_ppm: number;
-    damage_roll_ppm: number;
-    death_probability_ppm: number;
-    survived: boolean;
-    wounded: boolean;
-    damage_dealt: number;
-    wound_threshold_ppm?: number;
-    step_multiplier_ppm: number;
+    chunk0_hex: string;
+    raw_u32: number;
+    face: number;
 }
 
 interface RoundStep {
     action_index: number;
     action: string;
     payload_borsh_hex: string;
-    gear?: {
-        weapon: string;
-        armour: string;
-        sprite: string;
-    };
-    fight?: Fight;
-    effect: string;
-    multiplier_ppm: number;
+    decision?: number;
+    raw_u32?: number;
+    face?: number;
+    difficulty_class?: number;
+    winning_faces?: number;
+    won?: boolean;
+    step_multiplier_ppm?: number;
     cumulative_multiplier_ppm: number;
-    banked: string;
     live_value: string;
-    amount_won: string;
+    banked: string;
 }
 
 interface RoundVector {
     name: string;
-    server_seed: string;
-    client_seed: string;
-    hero: number;
-    weapon: number;
-    armour: number;
-    sprite: number;
+    companions: number;
+    start_stage: number;
     stake: string;
+    server_seed_hex: string;
+    effective_client_seed_hex: string;
     steps: RoundStep[];
-    final: { outcome: string; cumulative_multiplier_ppm: number; payout: string };
+    final: { outcome: string; slain: number; cumulative_multiplier_ppm: number; payout: string };
 }
 
-const vectors: { roll_vectors: RollVector[]; round_vectors: RoundVector[] } = JSON.parse(
-    readFileSync(fileURLToPath(vectorsUrl('hydra')), 'utf8'),
-);
+interface Vectors {
+    algorithm: {
+        game_type: string;
+        derivation: string;
+        difficulty_classes: number[];
+        beast_names: string[];
+        max_cumulative_multiplier_ppm: number;
+    };
+    roll_vectors: RollVector[];
+    winning_faces: number[][];
+    multiplier_tables: { companions: number; step_multiplier_ppm: number[]; cumulative_multiplier_ppm: number[] }[];
+    round_vectors: RoundVector[];
+}
+
+const vectors: Vectors = JSON.parse(readFileSync(fileURLToPath(vectorsUrl('hydra')), 'utf8'));
 
 function actionsOf(rv: RoundVector): TranscriptAction[] {
     return rv.steps.map((s) => ({
@@ -76,18 +82,8 @@ function actionsOf(rv: RoundVector): TranscriptAction[] {
     }));
 }
 
-function named(name: string): RoundVector {
-    const rv = vectors.round_vectors.find((candidate) => candidate.name === name);
-
-    if (rv === undefined) {
-        throw new Error(`hydra vectors.json has no round named ${name}`);
-    }
-
-    return rv;
-}
-
 function replayVector(rv: RoundVector, actions: TranscriptAction[] = actionsOf(rv)) {
-    return replay(rv.server_seed, rv.client_seed, actions, decimalStringToUnits(rv.stake, 6));
+    return replay(rv.server_seed_hex, rv.effective_client_seed_hex, actions, decimalStringToUnits(rv.stake, 6));
 }
 
 const action = (actionIndex: number, actionType: string, payload: Uint8Array = new Uint8Array()): TranscriptAction => ({
@@ -96,53 +92,60 @@ const action = (actionIndex: number, actionType: string, payload: Uint8Array = n
     payload,
 });
 
-/** `borsh(partial_cashout::Payload { amount: u128 })`. */
-function bank(actionIndex: number, units: bigint): TranscriptAction {
-    return action(
-        actionIndex,
-        'partial-cashout',
-        Uint8Array.from({ length: 16 }, (_, i) => Number((units >> BigInt(8 * i)) & 0xffn)),
-    );
-}
-
 describe('hydra:v1 vectors', () => {
-    it('reproduces every roll vector, raw u64 and Lemire ppm', () => {
+    it('names the game, its derivation, its difficulty classes and its beasts', () => {
+        expect(vectors.algorithm.game_type).toBe(GAME_TYPE);
+        expect(vectors.algorithm.derivation).toBe('v1');
+        expect(vectors.algorithm.difficulty_classes).toEqual(DIFFICULTY_CLASSES);
+        expect(vectors.algorithm.beast_names).toEqual(BEAST_NAMES);
+        expect(BigInt(vectors.algorithm.max_cumulative_multiplier_ppm)).toBe(MAX_CUMULATIVE_MULTIPLIER_PPM);
+    });
+
+    it('pins a run the 1,000x ceiling completes short of the twelfth beast', () => {
+        const capped = vectors.round_vectors.filter((rv) => rv.final.outcome === 'completed' && rv.final.slain < 12);
+
+        expect(capped.length).toBeGreaterThan(0);
+    });
+
+    it('reproduces every roll vector: chunk, raw u32 and face', () => {
         expect(vectors.roll_vectors.length).toBeGreaterThan(0);
 
         for (const v of vectors.roll_vectors) {
-            const rolls = hydraRolls(v.server_seed, v.client_seed, v.decision, v.raw_u64.length);
-            const stream = new SeedStream(GAME_TYPE, v.server_seed, v.client_seed, v.decision);
+            const roll = hydraRoll(v.server_seed, v.client_seed, v.decision);
 
-            stream.take(1);
-            expect(bytesToHex(stream.derivedChunks()[0])).toBe(v.seed_hex);
-            expect(rolls.map((r) => r.raw.toString())).toEqual(v.raw_u64);
-            expect(rolls.map((r) => Number(r.ppm))).toEqual(v.roll_ppm);
+            expect(roll.chunk0Hex).toBe(v.chunk0_hex);
+            expect(roll.rawU32).toBe(v.raw_u32);
+            expect(roll.face).toBe(v.face);
         }
     });
 
-    it('covers potion, mana, magic, partial-cashout, abandon, death and a full clear', () => {
-        // The scenarios this port depends on. If a regeneration drops one,
-        // the per-round assertions below would silently stop covering it.
+    it('reproduces the winning-face and price tables for every party', () => {
+        for (let companions = 0; companions <= MAX_COMPANIONS; companions++) {
+            expect(DIFFICULTY_CLASSES.map((dc) => winningFaces(dc, companions * BONUS_PER_COMPANION))).toEqual(
+                vectors.winning_faces[companions],
+            );
+        }
+
+        for (const table of vectors.multiplier_tables) {
+            const steps = DIFFICULTY_CLASSES.map((dc) =>
+                stepMultiplierPpm(winningFaces(dc, table.companions * BONUS_PER_COMPANION)),
+            );
+
+            expect(steps).toEqual(table.step_multiplier_ppm.map(BigInt));
+        }
+    });
+
+    it('covers a bust, a natural one, a cashout, a bank, an abandon and a full clear', () => {
         const actionsSeen = new Set(vectors.round_vectors.flatMap((rv) => rv.steps.map((s) => s.action)));
 
-        for (const needed of [
-            'physical-attack',
-            'magic-attack',
-            'drink-potion',
-            'drink-mana',
-            'partial-cashout',
-            'cashout',
-            'abandon',
-        ]) {
+        for (const needed of ['roll', 'cashout', 'partial-cashout', 'abandon']) {
             expect(actionsSeen).toContain(needed);
         }
 
         const outcomes = new Set(vectors.round_vectors.map((rv) => rv.final.outcome));
 
         expect(outcomes).toEqual(new Set(['abandoned', 'bust', 'cashed-out', 'completed']));
-        expect(vectors.round_vectors.some((rv) => rv.steps.some((s) => s.fight?.wounded))).toBe(true);
-        expect(vectors.round_vectors.some((rv) => rv.steps.some((s) => s.fight?.damage_dealt === 0))).toBe(true);
-        expect(vectors.round_vectors.some((rv) => rv.steps.some((s) => s.fight?.damage_dealt === 2))).toBe(true);
+        expect(vectors.round_vectors.some((rv) => rv.steps.some((s) => s.face === 1))).toBe(true);
     });
 
     for (const rv of vectors.round_vectors) {
@@ -163,37 +166,20 @@ describe('hydra:v1 vectors', () => {
                 expect(replayed.actionIndex).toBe(s.action_index);
                 expect(replayed.cumulativePpm).toBe(BigInt(s.cumulative_multiplier_ppm));
 
-                if (s.gear !== undefined) {
-                    expect([WEAPONS[rv.weapon].name, ARMOURS[rv.armour].name, SPRITES[rv.sprite].name]).toEqual([
-                        s.gear.weapon,
-                        s.gear.armour,
-                        s.gear.sprite,
-                    ]);
-                    expect(replayed.title).toContain(
-                        `${HEROES[rv.hero].name} with ${s.gear.weapon} weapon, ${s.gear.armour} armour, ${s.gear.sprite} sprite`,
-                    );
-                    expect(WEAPONS.map((w) => w.name)).toContain(s.gear.weapon);
-                    expect(ARMOURS.map((a) => a.name)).toContain(s.gear.armour);
-                    expect(SPRITES.map((p) => p.name)).toContain(s.gear.sprite);
-                }
-
-                if (s.fight !== undefined) {
+                if (s.action === 'roll') {
                     const detail = Object.fromEntries(replayed.details);
 
-                    expect(detail.decision).toBe(String(s.fight.decision));
-                    expect(detail['fight roll (bytes [0..8))']).toMatch(new RegExp(`→ ${s.fight.fight_roll_ppm} ppm$`));
-                    expect(detail['damage roll (bytes [8..16))']).toMatch(
-                        new RegExp(`→ ${s.fight.damage_roll_ppm} ppm$`),
-                    );
-                    expect(detail['death probability']).toMatch(new RegExp(`^${s.fight.death_probability_ppm} ppm`));
+                    expect(detail.decision).toBe(String(s.decision));
+                    expect(detail['roll (bytes [0..4))']).toBe(`${s.raw_u32} → face ${s.face}`);
 
-                    if (s.fight.survived) {
-                        expect(detail['wound threshold']).toMatch(new RegExp(`^${s.fight.wound_threshold_ppm} ppm`));
-                        expect(detail['wound threshold'].includes('wounded')).toBe(s.fight.wounded);
-                        expect(detail.damage).toMatch(new RegExp(`^${s.fight.damage_dealt} `));
-                    } else {
-                        expect(replayed.title).toContain('DIED');
-                    }
+                    const dc = Number(s.difficulty_class);
+                    const beast = `the ${BEAST_NAMES[DIFFICULTY_CLASSES.indexOf(dc)]}`;
+
+                    expect(detail.beast).toMatch(new RegExp(`^${beast}, \\d+ of 12, health ${dc}$`));
+                    expect(detail['winning faces']).toMatch(new RegExp(`^${s.winning_faces} of 20`));
+                    expect(replayed.title).toBe(
+                        `roll ${s.face} against ${beast} (health ${dc}) — ${s.won ? 'slain' : 'missed, round lost'}`,
+                    );
                 }
             }
         });
@@ -201,137 +187,50 @@ describe('hydra:v1 vectors', () => {
 });
 
 describe('hydra:v1 transcript rules', () => {
-    const bankRound = named('bank-then-cashout-pays-banked-plus-live');
-    const clearRound = named('wins-all-12-stages');
+    const rv = vectors.round_vectors.find((candidate) => candidate.name === 'hydra-duo-two-wins-cashout')!;
 
-    it('a system partial-cashout does not move any later roll', () => {
-        // Strip the bank: every attack keeps its decision, so the fight and
-        // damage rolls and the cumulative chain are identical; only the
-        // banked/live split differs.
-        const withBank = replayVector(bankRound);
-        const withoutBank = replayVector(
-            bankRound,
-            actionsOf(bankRound)
-                .filter((a) => a.actionType !== 'partial-cashout')
-                .map((a, actionIndex) => ({ ...a, actionIndex })),
-        );
-        const fightDetails = (r: typeof withBank) =>
-            r.steps.filter((s) => s.actionType === 'physical-attack').map((s) => s.details.slice(0, 5));
+    it('stops at the first settle and never reads what follows', () => {
+        const actions = [...actionsOf(rv), action(rv.steps.length, 'roll')];
+        const result = replayVector(rv, actions);
 
-        expect(fightDetails(withoutBank)).toEqual(fightDetails(withBank));
-        expect(withoutBank.cumulativePpm).toBe(withBank.cumulativePpm);
-        expect(withBank.bankedUnits).toBe(50_000_000n);
-        expect(withoutBank.bankedUnits).toBe(0n);
-    });
-
-    it('free potions and mana do not move any later roll either', () => {
-        // The full clear interleaves potions/mana between attacks; its fight
-        // decisions are exactly 0..n-1, one per attack (the bet draws nothing).
-        const result = replayVector(clearRound);
-        const decisions = result.steps
-            .filter((s) => s.actionType.endsWith('-attack'))
-            .map((s) => Object.fromEntries(s.details).decision);
-
-        expect(decisions).toEqual(decisions.map((_, i) => String(i)));
-    });
-
-    it('abandon before the first attack pays the stake, ending abandoned', () => {
-        const rv = named('abandon-before-first-attack-pays-stake');
-        const result = replayVector(rv);
-
-        expect(result.outcome).toBe('abandoned');
-        expect(result.payoutUnits).toBe(100_000_000n);
-    });
-
-    it('death after a bank pays the banked total', () => {
-        const result = replayVector(named('bank-then-death-pays-banked'));
-
-        expect(result.outcome).toBe('bust');
-        expect(result.cumulativePpm).toBe(0n);
-        expect(result.payoutUnits).toBe(result.bankedUnits);
-        expect(result.payoutUnits).toBe(50_000_000n);
-    });
-
-    it('stops at the settling action and never reads what follows', () => {
-        const rv = named('dies-on-attack-3');
-        const actions = actionsOf(rv);
-        const padded = [...actions, action(actions.length, 'cashout'), action(actions.length + 1, 'bogus')];
-        const result = replayVector(rv, padded);
-
-        expect(result.settledAtIndex).toBe(actions.length - 1);
-        expect(result.steps).toHaveLength(actions.length);
+        expect(result.settledAtIndex).toBe(rv.steps[rv.steps.length - 1].action_index);
         expect(unitsToDecimalString(result.payoutUnits, 6)).toBe(rv.final.payout);
     });
 
-    it('is unsettled when the transcript stops mid-round', () => {
-        const actions = actionsOf(bankRound).slice(0, 2);
-        const result = replayVector(bankRound, actions);
+    it('names the beast a run starts at, by the game’s name', () => {
+        const later = replayVector(rv, [action(0, 'place-bet', Uint8Array.of(3, 5)), action(1, 'cashout')]);
+        const first = replayVector(rv, [action(0, 'place-bet', Uint8Array.of(0, 0)), action(1, 'cashout')]);
+
+        expect(later.steps[0].title).toBe('place-bet — 3 companions, party power +3, from the Cyclops');
+        expect(Object.fromEntries(later.steps[0].details)['first beast']).toBe(
+            'the Cyclops, 6 of 12, health 13, at 1×',
+        );
+        expect(first.steps[0].title).toBe('place-bet — solo, party power +0');
+        expect(Object.fromEntries(first.steps[0].details)['first beast']).toBe('the Lion, 1 of 12, health 8, at 1×');
+    });
+
+    it('returns the stake on a cashout before any roll', () => {
+        const result = replayVector(rv, [actionsOf(rv)[0], action(1, 'cashout')]);
+
+        expect(result.outcome).toBe('cashed-out');
+        expect(unitsToDecimalString(result.payoutUnits, 6)).toBe(rv.stake);
+    });
+
+    it("refuses a bad party, a payload on a roll and another game's action", () => {
+        expect(() => replayVector(rv, [action(0, 'place-bet', Uint8Array.of(MAX_COMPANIONS + 1, 0))])).toThrow(
+            ReplayError,
+        );
+        expect(() => replayVector(rv, [action(0, 'place-bet', Uint8Array.of(2, 12))])).toThrow(ReplayError);
+        expect(() => replayVector(rv, [action(0, 'place-bet', Uint8Array.of(2))])).toThrow(ReplayError);
+        expect(() => replayVector(rv, [action(0, 'place-bet', new Uint8Array())])).toThrow(ReplayError);
+        expect(() => replayVector(rv, [actionsOf(rv)[0], action(1, 'roll', Uint8Array.of(0))])).toThrow(ReplayError);
+        expect(() => replayVector(rv, [actionsOf(rv)[0], action(1, 'higher')])).toThrow(ReplayError);
+    });
+
+    it('leaves a transcript with no settling action unsettled', () => {
+        const result = replayVector(rv, actionsOf(rv).slice(0, 2));
 
         expect(result.settled).toBe(false);
         expect(result.settledAtIndex).toBeNull();
-    });
-
-    describe('rejects what the engine rejects', () => {
-        /** Knight on common/cloth/common: `borsh(Config)`, four bytes. */
-        const knight = new Uint8Array([1, 0, 0, 0]);
-        const seeds = [bankRound.server_seed, bankRound.client_seed] as const;
-        const run = (actions: TranscriptAction[]) => () => replay(...seeds, actions, 100_000_000n);
-        const firstAttack = actionsOf(bankRound).slice(0, 2);
-
-        it.each([
-            ['an empty transcript', []],
-            ['a transcript not opening with place-bet', [action(0, 'physical-attack')]],
-            ['an empty config payload', [action(0, 'place-bet')]],
-            ['a hero-only payload (the pre-gear layout)', [action(0, 'place-bet', new Uint8Array([1]))]],
-            ['a five-byte config payload', [action(0, 'place-bet', new Uint8Array([1, 0, 0, 0, 0]))]],
-            ['an unknown hero', [action(0, 'place-bet', new Uint8Array([6, 0, 0, 0]))]],
-            ['an unknown weapon tier', [action(0, 'place-bet', new Uint8Array([1, 3, 0, 0]))]],
-            ['an unknown armour tier', [action(0, 'place-bet', new Uint8Array([1, 0, 3, 0]))]],
-            ['an unknown sprite tier', [action(0, 'place-bet', new Uint8Array([1, 0, 0, 3]))]],
-            ['a second place-bet', [action(0, 'place-bet', knight), action(1, 'place-bet', knight)]],
-            ['a cashout before the first attack', [action(0, 'place-bet', knight), action(1, 'cashout')]],
-            ['a potion before the first attack', [action(0, 'place-bet', knight), action(1, 'drink-potion')]],
-            ['mana before the first attack', [action(0, 'place-bet', knight), action(1, 'drink-mana')]],
-            ['an unknown action', [action(0, 'place-bet', knight), action(1, 'higher')]],
-            [
-                'a payload on a payload-free action',
-                [action(0, 'place-bet', knight), action(1, 'physical-attack', new Uint8Array([0]))],
-            ],
-            ['a bank larger than the live position', [...firstAttack, bank(2, 10_000_000_000n)]],
-            ['a zero bank', [...firstAttack, bank(2, 0n)]],
-        ] as [string, TranscriptAction[]][])('%s', (_, actions) => {
-            expect(run(actions)).toThrow(ReplayError);
-        });
-
-        it('accepts the fixture bet itself, so each refusal above is its own', () => {
-            expect(run([action(0, 'place-bet', knight)])).not.toThrow();
-        });
-
-        it('a magic attack with no mana left', () => {
-            // Hercules has 1 MP: the first magic attack spends it. Find a seed
-            // pair where it survives, so the second one meets an empty pool.
-            const hercules = new Uint8Array([0, 0, 0, 0]);
-            const magic = [action(0, 'place-bet', hercules), action(1, 'magic-attack')];
-            const survivor = Array.from({ length: 200 }, (_, n) => `server-${n}`).find(
-                (server) => !replay(server, 'client-seed', magic, 100_000_000n).settled,
-            );
-
-            expect(survivor).toBeDefined();
-            expect(() =>
-                replay(survivor as string, 'client-seed', [...magic, action(2, 'magic-attack')], 100_000_000n),
-            ).toThrow(/no mana/);
-        });
-
-        it('a potion at full HP and mana at full MP', () => {
-            // After the wounded first attack of this round HP is 3/4 and MP
-            // is untouched at 1/1: one potion is legal, a second is not, and
-            // mana is never legal.
-            const rv = named('wounded-then-potion-then-cashout');
-            const opening = actionsOf(rv).slice(0, 3);
-
-            expect(opening.map((a) => a.actionType)).toEqual(['place-bet', 'physical-attack', 'drink-potion']);
-            expect(() => replayVector(rv, [...opening, action(3, 'drink-potion')])).toThrow(/full HP/);
-            expect(() => replayVector(rv, [...opening.slice(0, 2), action(2, 'drink-mana')])).toThrow(/full MP/);
-        });
     });
 });

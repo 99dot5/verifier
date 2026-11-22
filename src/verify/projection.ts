@@ -17,26 +17,15 @@
  * the three command messages and asserts the table has a rule for each, so a
  * new arm is a failing test rather than a silently unchecked command.
  *
- * ## Three asymmetries worth stating plainly
+ * ## Two asymmetries worth stating plainly
  *
- * 1. **The arm → tag map is many-to-one, on purpose.** `hydra.v1.PlayerAction`
- *    has FIVE arms and the sequencer maps both `fight` and `physical_attack`
- *    onto `Action::PhysicalAttack`. So the rule is "the arm the player signed
- *    belongs to the SET of arms that project to this tag", never a bijection —
- *    a 1:1 table would false-`fail` every hydra round played with `fight`.
- *    The residual is real and belongs in the report: because that set has more
- *    than one member, a server can swap one for the other undetectably. It is
- *    benign today (identical engine action, identical payout) and it is
- *    exactly the class of unprovable input this proof exists to shrink, so it
- *    is named rather than left unsaid.
- *
- * 2. **`RoundEndedEvent.cause` is a SERVER ASSERTION.** It is used in one
+ * 1. **`RoundEndedEvent.cause` is a SERVER ASSERTION.** It is used in one
  *    direction only: a contradiction between what it claims and what the
  *    player's commands show is a `fail`; agreement with an ABSENT command is
  *    merely the absence of a contradiction, and every line here says so. A
  *    frame that states no cause at all contradicts nothing.
  *
- * 3. **Crash mode provenance is ordered.** Auto-versus-manual is read from the
+ * 2. **Crash mode provenance is ordered.** Auto-versus-manual is read from the
  *    player-signed `PlaceBet` arm; `actions[0]`'s `borsh(Config)` is on chain
  *    but SERVER-AUTHORED, so it is corroboration and a disagreement is the
  *    place-bet row's own `fail`. When the place-bet is not bound to a command,
@@ -134,10 +123,9 @@ const GAME_KEYS: Record<string, CommandGame> = {
     'plinko:v1': 'plinko',
     'mines:v1': 'mines',
     'hydra:v1': 'hydra',
-    'hydra:v2': 'hydraV2',
 };
 
-export type CommandGame = 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra' | 'hydraV2';
+export type CommandGame = 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra';
 
 /**
  * Actions legal at an index NO command of the player's is bound to.
@@ -714,9 +702,7 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
                         how: `borsh(mines::Config { mine_count: ${body.mineCount} })`,
                     };
                 case 'hydra':
-                    return hydraPlaceBetExpectation(body);
-                case 'hydraV2':
-                    return hydraV2PlaceBetExpectation(body.companions, body.startStage);
+                    return hydraPlaceBetExpectation(body.companions, body.startStage);
             }
 
             break;
@@ -744,23 +730,9 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
                 case 'hydra':
                     return {
                         ok: true,
-                        // SET MEMBERSHIP: `fight` and `physical_attack` are two
-                        // arms of one engine action, so both are admissible
-                        // against a `physical-attack` tag.
-                        actionTypes: [HYDRA_ARM_TAGS[body.arm]],
-                        payload: EMPTY,
-                        how: `the hydra ${body.arm} arm is an empty message; ${
-                            body.arm === 'fight' || body.arm === 'physical-attack'
-                                ? 'both `fight` and `physical_attack` project to "physical-attack", so the two are indistinguishable on chain'
-                                : 'it is the only arm projecting to this tag'
-                        }`,
-                    };
-                case 'hydraV2':
-                    return {
-                        ok: true,
                         actionTypes: ['roll'],
                         payload: EMPTY,
-                        how: 'the hydra:v2 roll arm is an empty message',
+                        how: 'the hydra:v1 roll arm is an empty message',
                     };
             }
 
@@ -792,15 +764,6 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
     // which `projection.test.ts` enumerates from the .proto files and asserts.
     return { ok: false, reason: 'no projection rule for this command' };
 }
-
-/** `hydra.v1.PlayerAction` arms → the transcript tag each projects to. */
-const HYDRA_ARM_TAGS: Record<string, string> = {
-    fight: 'physical-attack',
-    'physical-attack': 'physical-attack',
-    'magic-attack': 'magic-attack',
-    'drink-potion': 'drink-potion',
-    'drink-mana': 'drink-mana',
-};
 
 /**
  * The ppm → tick policy, reproduced from
@@ -889,61 +852,22 @@ function plinkoPlaceBetExpectation(rows: number, risk: number): Expectation {
     };
 }
 
-function hydraPlaceBetExpectation(body: {
-    hero: number;
-    weapon: number | null;
-    armour: number | null;
-    sprite: number | null;
-}): Expectation {
-    if (body.hero > 0xff) {
-        return {
-            ok: false,
-            reason: `the hydra PlaceBet you signed carries hero = ${body.hero}, which does not fit the u8 the engine config stores, so what the sequencer would have written is not derivable`,
-        };
-    }
-
-    // The proto tiers are 1-based behind UNSPECIFIED = 0; the engine's are 0-based.
-    const tiers: number[] = [];
-
-    for (const [slot, wire] of [
-        ['weapon', body.weapon],
-        ['armour', body.armour],
-        ['sprite', body.sprite],
-    ] as const) {
-        if (wire === null || wire < 1 || wire > 0x100) {
-            return {
-                ok: false,
-                reason: `the hydra PlaceBet you signed carries no usable ${slot} tier (${wire ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
-            };
-        }
-
-        tiers.push(wire - 1);
-    }
-
-    return {
-        ok: true,
-        actionTypes: ['place-bet'],
-        payload: new Uint8Array([body.hero, ...tiers]),
-        how: `borsh(hydra::Config { hero: ${body.hero}, weapon: ${tiers[0]}, armour: ${tiers[1]}, sprite: ${tiers[2]} }) — four u8s, each proto tier minus one`,
-    };
-}
-
 /**
- * The hydra:v2 party size and starting beast: both `optional` on the wire, a u8
+ * The hydra:v1 party size and starting beast: both `optional` on the wire, a u8
  * each in the engine config (companions 0..=8, start_stage 0..=11).
  */
-function hydraV2PlaceBetExpectation(companions: number | null, startStage: number | null): Expectation {
+function hydraPlaceBetExpectation(companions: number | null, startStage: number | null): Expectation {
     if (companions === null || companions > 8) {
         return {
             ok: false,
-            reason: `the hydra:v2 PlaceBet you signed carries no usable companions (${companions ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
+            reason: `the hydra:v1 PlaceBet you signed carries no usable companions (${companions ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
         };
     }
 
     if (startStage === null || startStage > 11) {
         return {
             ok: false,
-            reason: `the hydra:v2 PlaceBet you signed carries no usable start_stage (${startStage ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
+            reason: `the hydra:v1 PlaceBet you signed carries no usable start_stage (${startStage ?? 'absent'}); the sequencer refuses such a bet, so no transcript can follow from it`,
         };
     }
 
@@ -951,7 +875,7 @@ function hydraV2PlaceBetExpectation(companions: number | null, startStage: numbe
         ok: true,
         actionTypes: ['place-bet'],
         payload: new Uint8Array([companions, startStage]),
-        how: `borsh(hydra::v2::Config { companions: ${companions}, start_stage: ${startStage} }) — two u8s`,
+        how: `borsh(hydra::v1::Config { companions: ${companions}, start_stage: ${startStage} }) — two u8s`,
     };
 }
 
@@ -987,9 +911,7 @@ function describe(body: DecodedCommandBody): string {
                 case 'mines':
                     return `a mines PlaceBet with mine_count = ${body.mineCount}`;
                 case 'hydra':
-                    return `a hydra PlaceBet with hero = ${body.hero}`;
-                case 'hydraV2':
-                    return `a hydra:v2 PlaceBet with companions = ${body.companions ?? '(absent)'}, start_stage = ${body.startStage ?? '(absent)'}`;
+                    return `a hydra:v1 PlaceBet with companions = ${body.companions ?? '(absent)'}, start_stage = ${body.startStage ?? '(absent)'}`;
                 default:
                     return 'a hilo PlaceBet';
             }

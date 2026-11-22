@@ -18,7 +18,7 @@ import { REPLAYERS } from './replay';
 import { GAME_SEED_DERIVATIONS } from './verify/seed';
 
 const VERIFY_DIR = fileURLToPath(new URL('./verify/', import.meta.url));
-// A game name is lower-case letters then digits (`hydra v2`), never a leading digit.
+// A game name is lower-case letters and digits, never a leading digit.
 const GAME_TYPE_SHAPE = /^([a-z][a-z0-9]*):v(\d+)$/;
 
 function portPath(gameType: string): string {

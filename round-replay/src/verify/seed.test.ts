@@ -22,7 +22,7 @@ import {
 } from './seed';
 import { VECTOR_DIRS, vectorsUrl, type VectorGame } from './vectors-path';
 
-/** `hydra/v2` → `hydra:v2`: the game type a vectors directory pins. */
+/** `hydra/v1` → `hydra:v1`: the game type a vectors directory pins. */
 const gameTypeOf = (game: VectorGame): string => VECTOR_DIRS[game].replace('/', ':');
 
 /** gameType "hilo:v1", server "11"×32, client "22"×32, decision 3, chunk 1. */
@@ -182,7 +182,7 @@ describe('SeedStream', () => {
 });
 
 describe('shared example in the vectors files', () => {
-    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra', 'hydraV2'];
+    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra'];
 
     it.each(GAMES)('%s vectors.json states the same preimage and digest', (game) => {
         const file: { algorithm?: { preimage_example_hex?: string; preimage_example_digest_hex?: string } } =
@@ -197,7 +197,7 @@ describe('game → seed derivation table', () => {
     // Each engine's SEED_DERIVATION const is written into its vectors file as
     // algorithm.derivation by the generator's mirror table; this table must
     // name the same rule for every game.
-    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra', 'hydraV2'];
+    const GAMES: VectorGame[] = ['crash', 'hilo', 'mines', 'plinko', 'hydra'];
 
     it('lists exactly the games that ship vectors', () => {
         expect(Object.keys(GAME_SEED_DERIVATIONS).sort()).toEqual(GAMES.map(gameTypeOf).sort());

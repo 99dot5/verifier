@@ -169,7 +169,6 @@ export const GAME_SEED_DERIVATIONS: Readonly<Record<string, Derivation>> = {
     'mines:v1': 'v1',
     'plinko:v1': 'v1',
     'hydra:v1': 'v1',
-    'hydra:v2': 'v1',
 };
 
 /**

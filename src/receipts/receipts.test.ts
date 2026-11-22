@@ -1096,7 +1096,7 @@ describe('client seed in the export fixture', () => {
         // The fixture covers every arm of all three command messages, so a
         // shrunken set means the fixture stopped exercising them rather than
         // the reader getting better.
-        expect(arms.size).toBeGreaterThanOrEqual(15);
+        expect(arms.size).toBeGreaterThanOrEqual(14);
     });
 });
 
@@ -1341,5 +1341,33 @@ describe('game arms on the real-encoder export fixtures', () => {
 
         expect(games).toContain('crash');
         expect(games.size).toBeGreaterThanOrEqual(5);
+    });
+
+    /**
+     * Both hydra `PlaceBet` fields are `optional`: a solo bet from the first
+     * beast states 0 for each, and the play client's encoding must reach this
+     * reader as two present zeros, never as an absent field.
+     */
+    it.each([
+        ['hydra-party-rolls', { companions: 2, startStage: 3 }],
+        ['hydra-solo-cashout', { companions: 0, startStage: 0 }],
+    ] as const)('reads the hydra bet of client %s as the player stated it', (name, expected) => {
+        const testCase = FIXTURE.cases.find((c) => c.name === name);
+
+        if (!testCase) {
+            throw new Error(`no fixture case ${name}`);
+        }
+
+        const imported = importReceipts(JSON.stringify(testCase.export));
+
+        if (imported.status !== 'ok') {
+            throw new Error(`${name}: ${imported.message}`);
+        }
+
+        const bets = imported.receipts.commands
+            .map((command) => decodeClientEnvelope(splitSignedFrame(command.frame).body).commandBody)
+            .filter((body) => body?.case === 'placeBet');
+
+        expect(bets).toEqual([{ case: 'placeBet', game: 'hydra', ...expected }]);
     });
 });

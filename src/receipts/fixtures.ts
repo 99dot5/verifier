@@ -96,10 +96,9 @@ export const PLACE_BET_ARM_FIELDS = {
     plinko: 102,
     mines: 103,
     hydra: 104,
-    hydraV2: 105,
 } as const;
 export const CASH_OUT_ARM_FIELDS = PLACE_BET_ARM_FIELDS;
-export const PLAYER_ACTION_ARM_FIELDS = { hilo: 100, mines: 103, hydra: 104, hydraV2: 105 } as const;
+export const PLAYER_ACTION_ARM_FIELDS = { hilo: 100, mines: 103, hydra: 104 } as const;
 
 // crash.v1.PlaceBet / crash.v1.CashOut / plinko.v1.PlaceBet /
 // mines.v1.PlaceBet / mines.v1.Reveal / hydra.v1.PlaceBet
@@ -109,23 +108,14 @@ const PLINKO_ROWS = 1;
 const PLINKO_RISK = 2;
 const MINES_MINE_COUNT = 1;
 const MINES_REVEAL_TILE_INDEX = 1;
-const HYDRA_HERO = 1;
-const HYDRA_WEAPON = 2;
-const HYDRA_ARMOUR = 3;
-const HYDRA_SPRITE = 4;
-const HYDRA_V2_COMPANIONS = 1;
-const HYDRA_V2_START_STAGE = 2;
+export const HYDRA_COMPANIONS = 1;
+export const HYDRA_START_STAGE = 2;
 
 /** `PlayerAction.kind` arm numbers, per game. */
 export const ACTION_KIND_FIELDS: Record<string, number> = {
     higher: 100,
     lower: 101,
     reveal: 100,
-    fight: 100,
-    'physical-attack': 101,
-    'magic-attack': 102,
-    'drink-potion': 103,
-    'drink-mana': 104,
     roll: 100,
 };
 
@@ -423,7 +413,7 @@ export interface CommandFrameSpec {
  * client newer than the verifier produces.
  */
 export interface CommandGameSpec {
-    game: 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra' | 'hydraV2';
+    game: 'hilo' | 'crash' | 'plinko' | 'mines' | 'hydra';
     /** crash `PlaceBet.auto_cashout_ppm` — omitted ⇒ manual mode. */
     autoCashoutPpm?: number;
     /** plinko `PlaceBet`. `risk` is the PROTO enum number (LOW = 1). */
@@ -431,15 +421,9 @@ export interface CommandGameSpec {
     risk?: number;
     /** mines `PlaceBet.mine_count`. */
     mineCount?: number;
-    /** hydra `PlaceBet.hero`. */
-    hero?: number;
-    /** hydra `PlaceBet` gear tiers, PROTO enum numbers (1-based; omitted ⇒ absent). */
-    weapon?: number;
-    armour?: number;
-    sprite?: number;
-    /** hydra v2 `PlaceBet.companions` — `optional`, so 0 is written and omitted ⇒ absent. */
+    /** hydra `PlaceBet.companions` — `optional`, so 0 is written and omitted ⇒ absent. */
     companions?: number;
-    /** hydra v2 `PlaceBet.start_stage` — `optional` like `companions`. */
+    /** hydra `PlaceBet.start_stage` — `optional` like `companions`. */
     startStage?: number;
     /** `PlayerAction.kind` arm name. */
     action?: keyof typeof ACTION_KIND_FIELDS;
@@ -546,28 +530,12 @@ function gameArm(payloadCase: 'placeBet' | 'cashOut' | 'playerAction', game: Com
             arm.varint(MINES_MINE_COUNT, game.mineCount);
         }
 
-        if (game.game === 'hydra') {
-            if (game.hero) {
-                arm.varint(HYDRA_HERO, game.hero);
-            }
-
-            for (const [field, tier] of [
-                [HYDRA_WEAPON, game.weapon],
-                [HYDRA_ARMOUR, game.armour],
-                [HYDRA_SPRITE, game.sprite],
-            ] as const) {
-                if (tier) {
-                    arm.varint(field, tier);
-                }
-            }
+        if (game.game === 'hydra' && game.companions !== undefined) {
+            arm.varint(HYDRA_COMPANIONS, game.companions);
         }
 
-        if (game.game === 'hydraV2' && game.companions !== undefined) {
-            arm.varint(HYDRA_V2_COMPANIONS, game.companions);
-        }
-
-        if (game.game === 'hydraV2' && game.startStage !== undefined) {
-            arm.varint(HYDRA_V2_START_STAGE, game.startStage);
+        if (game.game === 'hydra' && game.startStage !== undefined) {
+            arm.varint(HYDRA_START_STAGE, game.startStage);
         }
 
         return arm.finish();

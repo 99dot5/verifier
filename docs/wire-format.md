@@ -180,10 +180,10 @@ minting a second tile-reveal tag.
 | `0x10` | `higher`          | player | hilo    |
 | `0x11` | `lower`           | player | hilo    |
 | `0x12` | `reveal`          | player | mines   |
-| `0x13` | `physical-attack` | player | hydra   |
-| `0x14` | `magic-attack`    | player | hydra   |
-| `0x15` | `drink-potion`    | player | hydra   |
-| `0x16` | `drink-mana`      | player | hydra   |
+| `0x17` | `roll`            | player | hydra   |
+
+`0x13`–`0x16` are retired and never reused: they belong to no game, and a
+transcript carrying one is refused as `reject-action-not-for-game`.
 
 When the protocol block fills, further protocol actions continue at the end of
 the open range — the block is a reservation for readability, not a structural
@@ -209,7 +209,8 @@ u8 (0=low, 1=medium, 2=high) })` (5 bytes); `cashout` is payload-free.
   is payload-free.
 - **crash:v1** — `place-bet` carries `borsh(Config { auto_cashout_tick:
 Option<u32> })` (5 bytes); `cashout` carries a `u32` tick (4 bytes).
-- **hydra:v1** — `place-bet` carries `borsh(Config { hero: u8 })` (1 byte).
+- **hydra:v1** — `place-bet` carries `borsh(Config { companions: u8,
+  start_stage: u8 })` (2 bytes); `roll` and `cashout` are payload-free.
 - **partial-cashout** (hilo, mines, hydra) is system-generated and carries
   `borsh(Payload { amount: u128 })` (16 bytes) — the banked amount in
   atomic units of the session's asset; no scale rides with it, so one banked

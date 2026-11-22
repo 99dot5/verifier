@@ -74,17 +74,42 @@ function act(index: number, actionType: string | null, payload: Uint8Array = new
     return { index, actionType, payload };
 }
 
-/** A hydra bet's gear as signed: PROTO tiers (legendary weapon, cloth armour, rare sprite). */
-const HYDRA_GEAR = { weapon: 3, armour: 1, sprite: 2 };
-/** The same bet for hero 2 as the transcript carries it: `borsh(Config)`, engine tiers 0-based. */
-const HYDRA_BET_PAYLOAD = new Uint8Array([2, 2, 0, 1]);
-
 function u32(value: number): Uint8Array {
     const bytes = new Uint8Array(4);
 
     new DataView(bytes.buffer).setUint32(0, value, true);
 
     return bytes;
+}
+
+/** A hydra round: bet, `rolls` rolls, then the closing action. The roll commands carry the signed `roll` arm. */
+function hydraRound(
+    bet: { companions?: number; startStage?: number },
+    betPayload: number[],
+    rolls: number,
+    closing: 'cashout' | null = 'cashout',
+): Partial<ProjectionInput> {
+    const MOVES = ['22222222-2222-4222-8222-222222222221', '22222222-2222-4222-8222-222222222222'];
+    const moves = MOVES.slice(0, rolls);
+
+    return {
+        gameType: 'hydra:v1',
+        actions: [
+            act(0, 'place-bet', new Uint8Array(betPayload)),
+            ...moves.map((_, i) => act(i + 1, 'roll')),
+            ...(closing === null ? [] : [act(moves.length + 1, 'cashout')]),
+        ],
+        binding: [
+            { requestId: BET, index: 0 },
+            ...moves.map((requestId, i) => ({ requestId, index: i + 1 })),
+            ...(closing === null ? [] : [{ requestId: SETTLE, index: moves.length + 1 }]),
+        ],
+        commands: [
+            command(BET, 'placeBet', { game: 'hydra', ...bet }),
+            ...moves.map((requestId) => command(requestId, 'playerAction', { game: 'hydra', action: 'roll' })),
+            ...(closing === null ? [] : [command(SETTLE, 'cashOut', { game: 'hydra' })]),
+        ],
+    };
 }
 
 /** A signed, decoded `CommandRejected` naming a round. */
@@ -197,6 +222,20 @@ describe('a clean round of each game', () => {
         expect(result.status).toBe('pass');
     });
 
+    it('passes for hydra, with the party and start stage the player stated', () => {
+        const result = run(hydraRound({ companions: 3, startStage: 4 }, [3, 4], 2));
+
+        expect(result.status).toBe('pass');
+        expect(result.detail).toContain('companions: 3, start_stage: 4');
+    });
+
+    it('passes for a solo run from the first beast: zero is a stated value, not an absence', () => {
+        const result = run(hydraRound({ companions: 0, startStage: 0 }, [0, 0], 1));
+
+        expect(result.status).toBe('pass');
+        expect(result.detail).toContain('companions: 0, start_stage: 0');
+    });
+
     it('passes for crash, comparing the tick the player claimed', () => {
         const result = run({
             gameType: 'crash:v1',
@@ -204,29 +243,6 @@ describe('a clean round of each game', () => {
             commands: [
                 command(BET, 'placeBet', { game: 'crash' }),
                 command(SETTLE, 'cashOut', { game: 'crash', tick: 40 }),
-            ],
-        });
-
-        expect(result.status).toBe('pass');
-    });
-
-    it('passes for hydra, whose round the verifier cannot replay', () => {
-        // There is no hydra replayer, so the round's payout proof is
-        // unavailable end to end. The PROJECTION still runs: the table covers
-        // all five games, and a missing replayer must not take a proof that
-        // does work down with it.
-        const result = run({
-            gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, 'physical-attack'), act(2, 'cashout')],
-            binding: [
-                { requestId: BET, index: 0 },
-                { requestId: MOVE, index: 1 },
-                { requestId: SETTLE, index: 2 },
-            ],
-            commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
-                command(MOVE, 'playerAction', { game: 'hydra', action: 'physical-attack' }),
-                command(SETTLE, 'cashOut', { game: 'hydra' }),
             ],
         });
 
@@ -307,41 +323,26 @@ describe('a rewritten action', () => {
         expect(result.detail).toContain('rows = 8');
     });
 
-    it('fails when the hydra hero was rewritten', () => {
-        const result = run({
-            gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', new Uint8Array([5, 2, 0, 1])), act(1, 'cashout')],
-            commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
-                command(SETTLE, 'cashOut', { game: 'hydra' }),
-            ],
-        });
+    it('fails when the hydra party was rewritten', () => {
+        const result = run(hydraRound({ companions: 3, startStage: 4 }, [5, 4], 1));
 
         expect(result.status).toBe('fail');
-        expect(result.detail).toContain('hero = 2');
+        expect(result.detail).toContain('companions: 3');
     });
 
-    it('fails when the hydra gear was rewritten', () => {
-        const result = run({
-            gameType: 'hydra:v1',
-            // Signed legendary/cloth/rare; the transcript says common/plate/rare.
-            actions: [act(0, 'place-bet', new Uint8Array([2, 0, 2, 1])), act(1, 'cashout')],
-            commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
-                command(SETTLE, 'cashOut', { game: 'hydra' }),
-            ],
-        });
+    it('fails when the hydra start stage was rewritten', () => {
+        const result = run(hydraRound({ companions: 3, startStage: 4 }, [3, 0], 1));
 
         expect(result.status).toBe('fail');
-        expect(result.detail).toContain('weapon: 2, armour: 0, sprite: 1');
+        expect(result.detail).toContain('start_stage: 4');
     });
 
-    it('cannot derive a hydra bet that names no gear tier', () => {
-        const body = decodeClientEnvelope(
-            splitSignedFrame(command(BET, 'placeBet', { game: 'hydra', hero: 2 }).frame).body,
-        ).commandBody;
+    it('fails when a signed hydra roll was published as another action', () => {
+        const round = hydraRound({ companions: 0, startStage: 0 }, [0, 0], 1);
+        const result = run({ ...round, actions: [act(0, 'place-bet', new Uint8Array([0, 0])), act(1, 'abandon'), act(2, 'cashout')] });
 
-        expect(body).toEqual({ case: 'placeBet', game: 'hydra', hero: 2, weapon: null, armour: null, sprite: null });
+        expect(result.status).toBe('fail');
+        expect(result.detail).toContain('roll');
     });
 
     it('fails when a crash auto target became a different tick', () => {
@@ -374,57 +375,6 @@ describe('a rewritten action', () => {
     });
 });
 
-// ── hydra's set membership ──────────────────────────────────────────────
-
-describe('hydra fight and physical_attack', () => {
-    function hydraRound(arm: 'fight' | 'physical-attack') {
-        return run({
-            gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, 'physical-attack'), act(2, 'cashout')],
-            binding: [
-                { requestId: BET, index: 0 },
-                { requestId: MOVE, index: 1 },
-                { requestId: SETTLE, index: 2 },
-            ],
-            commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
-                command(MOVE, 'playerAction', { game: 'hydra', action: arm }),
-                command(SETTLE, 'cashOut', { game: 'hydra' }),
-            ],
-        });
-    }
-
-    it('both project to physical-attack, so neither false-fails', () => {
-        // A bijection table would fail every round played with `fight`, which
-        // is the gap this case exists to keep closed.
-        expect(hydraRound('fight').status).toBe('pass');
-        expect(hydraRound('physical-attack').status).toBe('pass');
-    });
-
-    it('names the residual: the two are indistinguishable on chain', () => {
-        expect(hydraRound('fight').detail).toContain('indistinguishable on chain');
-    });
-
-    it('still fails a magic attack written as a physical one', () => {
-        const result = run({
-            gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, 'physical-attack'), act(2, 'cashout')],
-            binding: [
-                { requestId: BET, index: 0 },
-                { requestId: MOVE, index: 1 },
-                { requestId: SETTLE, index: 2 },
-            ],
-            commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
-                command(MOVE, 'playerAction', { game: 'hydra', action: 'magic-attack' }),
-                command(SETTLE, 'cashOut', { game: 'hydra' }),
-            ],
-        });
-
-        expect(result.status).toBe('fail');
-    });
-});
-
 // ── steps with no bound command ─────────────────────────────────────────
 
 describe('an action bound to no command', () => {
@@ -438,6 +388,19 @@ describe('an action bound to no command', () => {
         });
 
         expect(result.status).toBe('pass');
+    });
+
+    it('passes a hydra de-lever and abandon: both are the sequencer’s own steps', () => {
+        const round = hydraRound({ companions: 2, startStage: 1 }, [2, 1], 1, null);
+        const bound = round.binding?.slice(0, 2) ?? [];
+
+        expect(
+            run({
+                ...round,
+                actions: [...(round.actions ?? []), act(2, 'partial-cashout', new Uint8Array(16)), act(3, 'abandon')],
+                binding: bound,
+            }).status,
+        ).toBe('pass');
     });
 
     it('passes an abandon and an expire for the same reason', () => {
@@ -756,6 +719,18 @@ describe('what the check cannot answer', () => {
         expect(result.detail).toContain('manual or auto mode');
     });
 
+    it.each([
+        ['companions', { startStage: 4 }, 'companions (absent)'],
+        ['start_stage', { companions: 3 }, 'start_stage (absent)'],
+        ['companions', { companions: 9, startStage: 4 }, 'companions (9)'],
+        ['start_stage', { companions: 3, startStage: 12 }, 'start_stage (12)'],
+    ])('is unavailable for a hydra bet whose %s is absent or out of range', (_field, bet, expected) => {
+        const result = run(hydraRound(bet, [3, 4], 1));
+
+        expect(result.status).toBe('unavailable');
+        expect(result.detail).toContain(expected);
+    });
+
     it('is unavailable for an action tag this build does not know', () => {
         const result = run({ actions: [act(0, 'place-bet'), act(1, null)] });
 
@@ -826,11 +801,11 @@ describe('a PlayerAction whose kind oneof carries two arms', () => {
      * verifies a command's signature (the frames-signed check is about SERVER
      * frames), so the bytes under test are the protobuf and nothing else.
      */
-    function twoArmHydraAction(requestId: string): ImportedCommand {
-        // hydra.v1.PlayerAction.kind — `fight` = 100 first, `magic_attack` = 102 last.
-        const kinds = new ProtoWriter().bytes(100, new Uint8Array()).bytes(102, new Uint8Array()).finish();
-        // casino.v1.PlayerActionCommand { round_id = 1, hydra_v1_action = 104 }.
-        const command = new ProtoWriter().bytes(1, encodeUuid(ROUND_ID)).bytes(104, kinds).finish();
+    function twoArmHiloAction(requestId: string): ImportedCommand {
+        // hilo.v1.PlayerAction.kind — `higher` = 100 first, `lower` = 101 last.
+        const kinds = new ProtoWriter().bytes(100, new Uint8Array()).bytes(101, new Uint8Array()).finish();
+        // casino.v1.PlayerActionCommand { round_id = 1, hilo_v1_action = 100 }.
+        const command = new ProtoWriter().bytes(1, encodeUuid(ROUND_ID)).bytes(100, kinds).finish();
         // casino.v1.ClientEnvelope { request_id = 1, session_id = 2, player_action = 102 }.
         const envelope = new ProtoWriter()
             .bytes(1, encodeUuid(requestId))
@@ -847,43 +822,43 @@ describe('a PlayerAction whose kind oneof carries two arms', () => {
         };
     }
 
-    /** The hydra round the command sits in: bet, the contested action, cashout. */
-    function hydraRound(middle: string, overrides: Partial<ProjectionInput> = {}) {
+    /** The hilo round the command sits in: bet, the contested action, cashout. */
+    function hiloRound(middle: string, overrides: Partial<ProjectionInput> = {}) {
         return run({
-            gameType: 'hydra:v1',
-            actions: [act(0, 'place-bet', HYDRA_BET_PAYLOAD), act(1, middle), act(2, 'cashout')],
+            gameType: 'hilo:v1',
+            actions: [act(0, 'place-bet'), act(1, middle), act(2, 'cashout')],
             binding: [
                 { requestId: BET, index: 0 },
                 { requestId: MOVE, index: 1 },
                 { requestId: SETTLE, index: 2 },
             ],
             commands: [
-                command(BET, 'placeBet', { game: 'hydra', hero: 2, ...HYDRA_GEAR }),
-                twoArmHydraAction(MOVE),
-                command(SETTLE, 'cashOut', { game: 'hydra' }),
+                command(BET, 'placeBet', { game: 'hilo' }),
+                twoArmHiloAction(MOVE),
+                command(SETTLE, 'cashOut', { game: 'hilo' }),
             ],
             ...overrides,
         });
     }
 
     it('decodes the LAST arm, which is the one prost acts on', () => {
-        const frame = twoArmHydraAction(MOVE).frame;
+        const frame = twoArmHiloAction(MOVE).frame;
         const body = decodeClientEnvelope(splitSignedFrame(frame).body).commandBody;
 
-        expect(body).toEqual({ case: 'playerAction', game: 'hydra', arm: 'magic-attack' });
+        expect(body).toEqual({ case: 'playerAction', game: 'hilo', arm: 'lower' });
     });
 
-    it('passes against the magic-attack the sequencer would have written', () => {
-        expect(hydraRound('magic-attack').status).toBe('pass');
+    it('passes against the lower the sequencer would have written', () => {
+        expect(hiloRound('lower').status).toBe('pass');
     });
 
-    it('fails against the physical-attack the FIRST arm would have projected to', () => {
+    it('fails against the higher the FIRST arm would have projected to', () => {
         // The case that makes the last-wins rule load-bearing rather than a
         // preference: read first-wins, this transcript would have passed.
-        const result = hydraRound('physical-attack');
+        const result = hiloRound('higher');
 
         expect(result.status).toBe('fail');
-        expect(result.detail).toContain('magic-attack');
+        expect(result.detail).toContain('lower');
     });
 });
 

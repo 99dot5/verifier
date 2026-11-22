@@ -20,9 +20,8 @@ import type { RoundTranscriptMessage } from './wire/messages';
  */
 export const REPLAYERS: Record<string, Replayer> = {
     [crash.v1.GAME_TYPE]: crash.v1.replay,
-    [hydra.v2.GAME_TYPE]: hydra.v2.replay,
-    [hilo.v1.GAME_TYPE]: hilo.v1.replay,
     [hydra.v1.GAME_TYPE]: hydra.v1.replay,
+    [hilo.v1.GAME_TYPE]: hilo.v1.replay,
     [plinko.v1.GAME_TYPE]: plinko.v1.replay,
     [mines.v1.GAME_TYPE]: mines.v1.replay,
 };

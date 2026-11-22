@@ -2,28 +2,27 @@
  * hydra:v1 — integer reimplementation of `libs/games/src/hydra/v1/engine.rs` +
  * `math.rs`, pinned against `libs/games/src/hydra/v1/testdata/vectors.json`.
  *
- * The player picks a hero and a tier for each gear slot (the place-bet
- * payload, `borsh(Config { hero, weapon, armour, sprite })`, four `u8`s), so
- * the bet draws nothing and, under the decision law, leaves the counter at 0.
- * Each attack, physical or magic, is the next decision, starting at 0, and
- * draws the fight roll from bytes [0..8) and the damage roll from [8..16) —
- * both, even when the fight is fatal. A roll is the raw `u64`
- * reduced onto [0, 1e6) by Lemire's wide multiply, `(raw × 1e6) >> 64`.
+ * The player picks a party of 0–8 companions at the bet and then rolls a d20
+ * against twelve beasts of rising difficulty class. A roll beats a beast when
+ * the face is a natural 20, or when it is not a natural 1 and
+ * `face + companions ≥ dc`. Each roll is priced at fair odds for the
+ * faces that win, times the house edge — charged on every roll, so RTP is
+ * 99.5% per roll and `0.995^k` over the round. Slaying the twelfth beast
+ * settles the round as completed, and so does a win after which the next
+ * win would carry the cumulative multiplier past 1,000× (the ceiling); a miss
+ * is a bust that pays the banked total.
  *
- * `drink-potion`, `drink-mana`, `cashout`, `partial-cashout` and `abandon`
- * draw nothing and do not advance the decision, so a system step the
- * sequencer inserts cannot move a later roll.
+ * Randomness: the bet draws nothing (the player picks the party), so the
+ * k-th roll is decision k−1. A roll reads the first 4 bytes of its stream as
+ * a little-endian u32 and maps it onto a face by Lemire: `((raw × 20) >> 32)
+ * + 1`. Cashout, partial-cashout and abandon draw nothing.
  *
- * Every surviving attack is its own bet, priced at `0.995 / P(survive)`, so
- * RTP is 99.5% per attack and `0.995^n` over the round. The payout follows the
- * banked/live fold of `partial_cashout.rs`: the live part rounds at the asset
- * grain on every surviving attack, a death pays the banked total, cashout and
- * a full clear pay `banked + live`, and the system `abandon` pays
- * `banked + live` too (sec-28) with outcome `lose`.
+ * `partial-cashout` (the max-win de-lever) and `abandon` are SYSTEM-ONLY;
+ * `abandon` pays `banked + live`, what a cashout would pay.
  */
 import { HOUSE_EDGE_PPM, SCALE_PPM } from '../constants';
 import { divHalfUp, mulPpm, ppmToMultiplierString } from '../ints';
-import { SeedStream, rawU64 } from '../seed';
+import { SeedStream, bytesToHex } from '../seed';
 import { ReplayError, type Ending, type ReplayResult, type StepWorking, type TranscriptAction } from '../types';
 import { abandonStep } from '../hilo/v1';
 import {
@@ -41,249 +40,130 @@ import {
 } from '../partial-cashout';
 
 export const GAME_TYPE = 'hydra:v1';
-
-/** The twelve labours. */
-export const TOTAL_STAGES = 12;
-
-const MIN_DEATH_PPM = 10_000n;
-const MAX_DEATH_PPM = 900_000n;
-/** `MIN_ATTACK_DEATH_PPM`: the whole-attack floor after health shielding (#1381). */
-const MIN_ATTACK_DEATH_PPM = 15_000n;
-const ATK_REDUCTION_PER_POINT = 8_000n;
-const MATK_REDUCTION_PER_POINT = 10_000n;
-const DEF_REDUCTION_PER_POINT = 8_000n;
-const BASE_DEATH_START_PPM = 200_000n;
-const BASE_DEATH_STEP_PPM = 63_636n;
-const MISS_THRESHOLD_PPM = 100_000n;
-const CRIT_THRESHOLD_PPM = 850_000n;
-
-export type AttackType = 'physical' | 'magic';
-
-interface HeroStats {
-    name: string;
-    atk: number;
-    def: number;
-    matk: number;
-    mdef: number;
-    hp: number;
-    mp: number;
-}
-
-/** Index = hero id (`math::Hero`). */
-export const HEROES: readonly HeroStats[] = [
-    { name: 'hercules', atk: 5, def: 2, matk: 0, mdef: 1, hp: 3, mp: 1 },
-    { name: 'knight', atk: 2, def: 5, matk: 0, mdef: 3, hp: 4, mp: 1 },
-    { name: 'magician-boy', atk: 0, def: 1, matk: 5, mdef: 2, hp: 2, mp: 5 },
-    { name: 'magician-girl', atk: 1, def: 1, matk: 4, mdef: 4, hp: 2, mp: 4 },
-    { name: 'amazonian', atk: 4, def: 2, matk: 2, mdef: 1, hp: 3, mp: 2 },
-    { name: 'dev', atk: 1, def: 1, matk: 1, mdef: 1, hp: 1, mp: 1 },
-];
-
-/** (name, atk, matk) per weapon tier. */
-export const WEAPONS = [
-    { name: 'common', atk: 1, matk: 0 },
-    { name: 'rare', atk: 2, matk: 1 },
-    { name: 'legendary', atk: 2, matk: 3 },
-] as const;
-/** (name, def, mdef) per armour tier. */
-export const ARMOURS = [
-    { name: 'cloth', def: 0, mdef: 1 },
-    { name: 'chain', def: 2, mdef: 1 },
-    { name: 'plate', def: 4, mdef: 0 },
-] as const;
-/** (name, atk, def, matk, mdef) per sprite tier. */
-export const SPRITES = [
-    { name: 'common', atk: 0, def: 0, matk: 1, mdef: 1 },
-    { name: 'rare', atk: 1, def: 1, matk: 1, mdef: 1 },
-    { name: 'legendary', atk: 2, def: 1, matk: 2, mdef: 2 },
-] as const;
-
-/** (physical, magic) bonus per stage, ppm. Positive = harder with that type. */
-const MONSTER_BONUSES: readonly (readonly [bigint, bigint])[] = [
-    [0n, 0n],
-    [20_000n, -20_000n],
-    [-20_000n, 20_000n],
-    [0n, 0n],
-    [-30_000n, 30_000n],
-    [30_000n, -30_000n],
-    [0n, 0n],
-    [-20_000n, 20_000n],
-    [20_000n, -20_000n],
-    [10_000n, -10_000n],
-    [30_000n, -30_000n],
-    [0n, 0n],
-];
-
-/** Hits each monster takes. */
-export const MONSTER_HP = [1, 2, 1, 2, 1, 2, 2, 2, 3, 3, 3, 4] as const;
-
-export const MONSTER_NAMES = [
+export const DIE_FACES = 20;
+export const MAX_COMPANIONS = 8;
+export const BONUS_PER_COMPANION = 1;
+/** The twelve beasts' difficulty classes; 19 is skipped so the last is a DC 20. */
+export const DIFFICULTY_CLASSES: readonly number[] = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20];
+export const STAGES = DIFFICULTY_CLASSES.length;
+/**
+ * The twelve beasts' names, in the order they are fought: the names the game
+ * shows. Display only (a beast is priced by its DC alone), pinned to the
+ * vectors' `algorithm.beast_names`, which the game client pins to as well.
+ */
+export const BEAST_NAMES: readonly string[] = [
     'Lion',
     'Hydra',
-    'Hind',
     'Boar',
-    'Stables',
-    'Birds',
-    'Bull',
-    'Mares',
-    'Belt',
-    'Cattle',
-    'Apples',
+    'Chimera',
+    'Harpy',
+    'Cyclops',
+    'Minotaur',
+    'Griffin',
+    'Medusa',
+    'Siren',
+    'Typhon',
     'Cerberus',
-] as const;
+];
+/** The ceiling on a run's cumulative multiplier, 1,000× in ppm. */
+export const MAX_CUMULATIVE_MULTIPLIER_PPM = 1_000_000_000n;
 
-export interface Roll {
-    raw: bigint;
-    /** `(raw × 1e6) >> 64`, in [0, 1e6). */
-    ppm: bigint;
+/** Whether `face` beats `dc` with the party's `bonus`. */
+export function wins(face: number, dc: number, bonus: number): boolean {
+    return face === DIE_FACES || (face !== 1 && face + bonus >= dc);
 }
 
-/** `count` rolls of one decision: 8 stream bytes each, little-endian `u64`. */
-export function hydraRolls(serverSeed: string, clientSeed: string, decision: number, count: number): Roll[] {
-    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, decision);
+/** How many of the twenty faces beat `dc` with `bonus` (always 1..=19). */
+export function winningFaces(dc: number, bonus: number): number {
+    let count = 0;
 
-    return Array.from({ length: count }, () => {
-        const raw = rawU64(stream.take(8));
-
-        return { raw, ppm: (raw * SCALE_PPM) >> 64n };
-    });
-}
-
-/** 0 (miss), 1 (hit) or 2 (crit). */
-export function damageFromRoll(rollPpm: bigint): number {
-    if (rollPpm < MISS_THRESHOLD_PPM) {
-        return 0;
-    }
-
-    return rollPpm >= CRIT_THRESHOLD_PPM ? 2 : 1;
-}
-
-export interface EffectiveStats {
-    atk: bigint;
-    def: bigint;
-    matk: bigint;
-    mdef: bigint;
-}
-
-/** Hero base + weapon + armour + sprite. */
-export function effectiveStats(hero: number, weapon: number, armour: number, sprite: number): EffectiveStats {
-    const h = HEROES[hero];
-    const w = WEAPONS[weapon];
-    const a = ARMOURS[armour];
-    const s = SPRITES[sprite];
-
-    return {
-        atk: BigInt(h.atk + w.atk + s.atk),
-        def: BigInt(h.def + a.def + s.def),
-        matk: BigInt(h.matk + w.matk + s.matk),
-        mdef: BigInt(h.mdef + a.mdef + s.mdef),
-    };
-}
-
-function clamp(value: bigint, min: bigint, max: bigint): bigint {
-    return value < min ? min : value > max ? max : value;
-}
-
-/** The pre-health-shielding death chance, `math.rs`'s `single_hit_death`. */
-function singleHitDeathPpm(attack: AttackType, offensive: bigint, stage: number): bigint {
-    const base = BASE_DEATH_START_PPM + BigInt(stage) * BASE_DEATH_STEP_PPM;
-    const [physicalBonus, magicBonus] = MONSTER_BONUSES[stage];
-    const adjusted = base + (attack === 'physical' ? physicalBonus : magicBonus);
-    const perPoint = attack === 'physical' ? ATK_REDUCTION_PER_POINT : MATK_REDUCTION_PER_POINT;
-
-    return clamp(adjusted - offensive * perPoint, MIN_DEATH_PPM, MAX_DEATH_PPM);
-}
-
-/** `single^health` folded with `mul_ppm`, clamped to [MIN_ATTACK_DEATH_PPM, 999 999]. Dies iff fight roll < this. */
-export function deathProbabilityPpm(attack: AttackType, offensive: bigint, stage: number, health: number): bigint {
-    if (stage >= TOTAL_STAGES || health === 0) {
-        throw new ReplayError(`no death probability at stage ${stage} with ${health} HP`);
-    }
-
-    const single = singleHitDeathPpm(attack, offensive, stage);
-    let effective = single;
-
-    for (let i = 1; i < health; i++) {
-        effective = mulPpm(effective, single);
-    }
-
-    return clamp(effective, MIN_ATTACK_DEATH_PPM, SCALE_PPM - 1n);
-}
-
-/** A surviving attack wounds iff `health > 1 && death <= roll < this`. */
-export function woundThresholdPpm(attack: AttackType, offensive: bigint, defensive: bigint, stage: number): bigint {
-    const wound = singleHitDeathPpm(attack, offensive, stage) - defensive * DEF_REDUCTION_PER_POINT;
-
-    return wound > 0n ? wound : 0n;
-}
-
-/** `half_up(half_up(1e12 / survival) × 995 000 / 1e6)` — the edge on every attack. */
-export function stepMultiplierPpm(attack: AttackType, offensive: bigint, stage: number, health: number): bigint {
-    const survival = SCALE_PPM - deathProbabilityPpm(attack, offensive, stage, health);
-
-    return mulPpm(divHalfUp(SCALE_PPM * SCALE_PPM, survival), HOUSE_EDGE_PPM);
-}
-
-export interface HydraConfig {
-    hero: number;
-    weapon: number;
-    armour: number;
-    sprite: number;
-}
-
-/**
- * Borsh `Config { hero, weapon, armour, sprite }`: exactly four bytes, a known
- * hero and a known tier in each slot — the engine's `validate_config`.
- */
-export function decodeConfig(payload: Uint8Array): HydraConfig {
-    if (payload.length !== 4) {
-        throw new ReplayError(`hydra place-bet payload must be 4 bytes, got ${payload.length}`);
-    }
-
-    const [hero, weapon, armour, sprite] = payload;
-
-    if (hero >= HEROES.length) {
-        throw new ReplayError(`invalid hydra hero ${hero}`);
-    }
-
-    for (const [slot, tier, tiers] of [
-        ['weapon', weapon, WEAPONS.length],
-        ['armour', armour, ARMOURS.length],
-        ['sprite', sprite, SPRITES.length],
-    ] as const) {
-        if (tier >= tiers) {
-            throw new ReplayError(`invalid hydra ${slot} tier ${tier}`);
+    for (let face = 1; face <= DIE_FACES; face++) {
+        if (wins(face, dc, bonus)) {
+            count++;
         }
     }
 
-    return { hero, weapon, armour, sprite };
+    return count;
+}
+
+/** `half_up(half_up(20e6 / faces) × 995000 / 1e6)`. */
+export function stepMultiplierPpm(faces: number): bigint {
+    if (!Number.isInteger(faces) || faces < 1 || faces > DIE_FACES) {
+        throw new ReplayError(`winning faces must be 1..=20, got ${faces}`);
+    }
+
+    return mulPpm(divHalfUp(BigInt(DIE_FACES) * SCALE_PPM, BigInt(faces)), HOUSE_EDGE_PPM);
+}
+
+export interface Roll {
+    decision: number;
+    chunk0Hex: string;
+    rawU32: number;
+    face: number;
+}
+
+/** The roll drawn at `decision`: the stream's first 4 bytes, little-endian, onto 1..=20. */
+export function hydraRoll(serverSeed: string, clientSeed: string, decision: number): Roll {
+    const stream = new SeedStream(GAME_TYPE, serverSeed, clientSeed, decision);
+    const bytes = stream.take(4);
+    const raw = (bytes[0] | (bytes[1] << 8) | (bytes[2] << 16)) + bytes[3] * 0x1000000;
+    const face = Number((BigInt(raw) * BigInt(DIE_FACES)) >> 32n) + 1;
+
+    return { decision, chunk0Hex: bytesToHex(stream.derivedChunks()[0]), rawU32: raw, face };
+}
+
+export interface HydraConfig {
+    companions: number;
+    /** The 0-based beast the run starts at (0 is the first). */
+    startStage: number;
+}
+
+/** Borsh-decode a place-bet `Config { companions: u8, start_stage: u8 }`. */
+export function decodeConfig(payload: Uint8Array): HydraConfig {
+    if (payload.length !== 2) {
+        throw new ReplayError(`hydra:v1 place-bet payload must be 2 bytes, got ${payload.length}`);
+    }
+
+    const companions = payload[0];
+    const startStage = payload[1];
+
+    if (companions > MAX_COMPANIONS) {
+        throw new ReplayError(`hydra:v1 companions must be 0..=${MAX_COMPANIONS}, got ${companions}`);
+    }
+
+    if (startStage >= STAGES) {
+        throw new ReplayError(`hydra:v1 start_stage must be 0..${STAGES}, got ${startStage}`);
+    }
+
+    return { companions, startStage };
 }
 
 function ensureEmpty(action: TranscriptAction): void {
     if (action.payload.length !== 0) {
         throw new ReplayError(
-            `hydra ${action.actionType} carries a ${action.payload.length}-byte payload; it takes none`,
+            `hydra:v1 ${action.actionType} carries a ${action.payload.length}-byte payload; it takes none`,
         );
     }
 }
 
-interface HydraState {
-    hero: number;
-    weapon: number;
-    armour: number;
-    sprite: number;
-    maxHealth: number;
-    health: number;
-    maxMana: number;
-    mana: number;
-    monster: number;
-    monsterHp: number;
-    totalAttacks: number;
-    /** The decision the next attack draws under: 0 after the bet, +1 per attack. */
-    decision: number;
+/** A beast as the game names it, from its 0-based `stage`: "the Cyclops". */
+function beastName(stage: number): string {
+    return `the ${BEAST_NAMES[stage]}`;
 }
 
-/** Replay a full hydra transcript exactly the way the rollup kernel does. */
+/**
+ * The detail row for a beast: "the Cyclops, 6 of 12, health 13". The game
+ * shows a beast's difficulty class as its health, so the replay says so too.
+ */
+function beastDetail(stage: number): string {
+    return `${beastName(stage)}, ${stage + 1} of ${STAGES}, health ${DIFFICULTY_CLASSES[stage]}`;
+}
+
+function partyLabel(companions: number): string {
+    return companions === 0 ? 'solo' : `${companions} companion${companions === 1 ? '' : 's'}`;
+}
+
+/** Replay a full hydra:v1 transcript exactly the way the rollup kernel does. */
 export function replay(
     serverSeed: string,
     clientSeed: string,
@@ -291,32 +171,25 @@ export function replay(
     stakeUnits: bigint,
 ): ReplayResult {
     if (actions.length === 0 || actions[0].actionType !== 'place-bet') {
-        throw new ReplayError('hydra transcript must start with place-bet');
+        throw new ReplayError('hydra:v1 transcript must start with place-bet');
     }
 
-    const config = decodeConfig(actions[0].payload);
-    const heroStats = HEROES[config.hero];
-    const s: HydraState = {
-        ...config,
-        maxHealth: heroStats.hp,
-        health: heroStats.hp,
-        maxMana: heroStats.mp,
-        mana: heroStats.mp,
-        monster: 0,
-        monsterHp: MONSTER_HP[0],
-        totalAttacks: 0,
-        decision: 0,
-    };
-    const stats = effectiveStats(s.hero, s.weapon, s.armour, s.sprite);
+    const { companions, startStage } = decodeConfig(actions[0].payload);
+    const bonus = companions * BONUS_PER_COMPANION;
     const steps: StepWorking[] = [
         {
             actionIndex: 0,
             actionType: 'place-bet',
-            title: `place-bet — ${heroStats.name} with ${WEAPONS[s.weapon].name} weapon, ${ARMOURS[s.armour].name} armour, ${SPRITES[s.sprite].name} sprite`,
+            title: `place-bet — ${partyLabel(companions)}, party power +${bonus}${
+                startStage > 0 ? `, from ${beastName(startStage)}` : ''
+            }`,
             details: [
-                ['gear', 'chosen by the player on the bet; the bet draws nothing'],
-                ['effective stats', `ATK ${stats.atk}, DEF ${stats.def}, MATK ${stats.matk}, MDEF ${stats.mdef}`],
-                ['HP / MP', `${s.health} / ${s.mana}`],
+                ['first beast', `${beastDetail(startStage)}, at 1×`],
+                [
+                    'rule',
+                    `a roll wins on a natural 20, or when it is not a natural 1 and face + party power ${bonus} ≥ the beast's health`,
+                ],
+                ['beast health', DIFFICULTY_CLASSES.join(', ')],
             ],
             cumulativePpm: SCALE_PPM,
         },
@@ -324,68 +197,48 @@ export function replay(
     let cumulative = SCALE_PPM;
     let outcome: Ending = 'bust';
     let settled = false;
+    // The ladder position: the beast the run started at plus those slain.
+    let slain = startStage;
+    let decision = 0;
     let bankedTotal = ZERO_BANKED;
     let position: Position = openPosition(stakeUnits);
 
     for (const action of actions.slice(1)) {
         if (settled) {
-            // The kernel stops at the first settle and never reads what follows
-            // (libs/smart-rollup/src/games.rs); the verifier's
-            // actions-after-settle check reports any such entries.
+            // The kernel stops at the first settle and never reads what follows.
             break;
         }
 
         switch (action.actionType) {
-            case 'physical-attack':
-            case 'magic-attack': {
+            case 'roll': {
                 ensureEmpty(action);
 
-                const attack: AttackType = action.actionType === 'physical-attack' ? 'physical' : 'magic';
-
-                if (s.monster >= TOTAL_STAGES) {
-                    throw new ReplayError('hydra attack after all twelve stages were cleared');
-                }
-
-                if (attack === 'magic' && s.mana === 0) {
-                    throw new ReplayError('hydra magic-attack with no mana');
-                }
-
-                const offensive = attack === 'physical' ? stats.atk : stats.matk;
-                const defensive = attack === 'physical' ? stats.def : stats.mdef;
-                const stage = s.monster;
-                const decision = s.decision;
-                const healthBefore = s.health;
-                const monsterHpBefore = s.monsterHp;
-                // Both rolls, always: the fight roll, then the damage roll.
-                const [fight, damageRoll] = hydraRolls(serverSeed, clientSeed, decision, 2);
-                const death = deathProbabilityPpm(attack, offensive, stage, healthBefore);
-                const head: [string, string][] = [
-                    ['decision', String(decision)],
-                    ['monster', `${MONSTER_NAMES[stage]} (stage ${stage}), HP ${monsterHpBefore}`],
-                    ['fight roll (bytes [0..8))', `${fight.raw} → ${fight.ppm} ppm`],
-                    ['damage roll (bytes [8..16))', `${damageRoll.raw} → ${damageRoll.ppm} ppm`],
-                    ['death probability', `${death} ppm at ${healthBefore} HP (dies iff fight roll < it)`],
+                const dc = DIFFICULTY_CLASSES[slain];
+                const faces = winningFaces(dc, bonus);
+                const step = stepMultiplierPpm(faces);
+                const roll = hydraRoll(serverSeed, clientSeed, decision);
+                const won = wins(roll.face, dc, bonus);
+                const details: [string, string][] = [
+                    ['decision', String(roll.decision)],
+                    ['roll (bytes [0..4))', `${roll.rawU32} → face ${roll.face}`],
+                    ['beast', beastDetail(slain)],
+                    ['winning faces', `${faces} of 20 (${faces * 5}%)`],
+                    ['step multiplier', ppmToMultiplierString(step)],
                 ];
 
-                if (attack === 'magic') {
-                    s.mana -= 1;
-                }
+                decision++;
 
-                s.totalAttacks += 1;
-                s.decision += 1;
-
-                if (fight.ppm < death) {
-                    s.health = 0;
+                if (!won) {
                     cumulative = 0n;
                     position = loseLive(position);
                     outcome = 'bust';
                     settled = true;
                     steps.push({
                         actionIndex: action.actionIndex,
-                        actionType: action.actionType,
-                        title: `${action.actionType} vs ${MONSTER_NAMES[stage]} — DIED, round lost`,
+                        actionType: 'roll',
+                        title: `roll ${roll.face} against ${beastName(slain)} (health ${dc}) — missed, round lost`,
                         details: [
-                            ...head,
+                            ...details,
                             ...(bankedTotal.amount > 0n
                                 ? ([
                                       [
@@ -400,46 +253,32 @@ export function replay(
                     break;
                 }
 
-                const step = stepMultiplierPpm(attack, offensive, stage, healthBefore);
-                const woundThreshold = woundThresholdPpm(attack, offensive, defensive, stage);
-                const wounded = healthBefore > 1 && fight.ppm >= death && fight.ppm < woundThreshold;
-
-                if (wounded) {
-                    s.health = Math.max(healthBefore - 1, 1);
-                }
-
-                const damage = damageFromRoll(damageRoll.ppm);
-                const monsterHpAfter = Math.max(0, monsterHpBefore - damage);
-                let cleared = false;
-
-                if (monsterHpAfter === 0) {
-                    s.monster = stage + 1;
-
-                    if (s.monster >= TOTAL_STAGES) {
-                        s.monsterHp = 0;
-                        cleared = true;
-                    } else {
-                        s.monsterHp = MONSTER_HP[s.monster];
-                    }
-                } else {
-                    s.monsterHp = monsterHpAfter;
-                }
-
                 cumulative = mulPpm(cumulative, step);
                 position = foldLive(position, step);
+                slain++;
+
+                const allSlain = slain >= STAGES;
+                const capped =
+                    !allSlain &&
+                    mulPpm(cumulative, stepMultiplierPpm(winningFaces(DIFFICULTY_CLASSES[slain], bonus))) >
+                        MAX_CUMULATIVE_MULTIPLIER_PPM;
+                const cleared = allSlain || capped;
+
                 steps.push({
                     actionIndex: action.actionIndex,
-                    actionType: action.actionType,
-                    title: `${action.actionType} vs ${MONSTER_NAMES[stage]} — survived${wounded ? ' wounded' : ''}, ${['miss', 'hit', 'crit'][damage]}${cleared ? ' — all twelve stages cleared, round won' : ''}`,
+                    actionType: 'roll',
+                    title: `roll ${roll.face} against ${beastName(slain - 1)} (health ${dc}) — slain`,
                     details: [
-                        ...head,
-                        [
-                            'wound threshold',
-                            `${woundThreshold} ppm${wounded ? ` — wounded, HP ${healthBefore} → ${s.health}` : ''}`,
-                        ],
-                        ['damage', `${damage} (monster HP ${monsterHpBefore} → ${monsterHpAfter})`],
-                        ['step multiplier', ppmToMultiplierString(step)],
+                        ...details,
                         ['cumulative', ppmToMultiplierString(cumulative)],
+                        ...(allSlain
+                            ? ([['auto-settle', 'all twelve beasts slain — round completed']] as [string, string][])
+                            : capped
+                              ? ([['auto-settle', 'the next win would pass 1,000× — round completed']] as [
+                                    string,
+                                    string,
+                                ][])
+                              : []),
                     ],
                     cumulativePpm: cumulative,
                 });
@@ -450,42 +289,8 @@ export function replay(
                 }
                 break;
             }
-            case 'drink-potion':
-            case 'drink-mana': {
-                ensureEmpty(action);
-
-                const potion = action.actionType === 'drink-potion';
-
-                if (s.totalAttacks === 0) {
-                    throw new ReplayError(`hydra ${action.actionType} before the first attack`);
-                }
-
-                if (potion ? s.health >= s.maxHealth : s.mana >= s.maxMana) {
-                    throw new ReplayError(`hydra ${action.actionType} at full ${potion ? 'HP' : 'MP'}`);
-                }
-
-                if (potion) {
-                    s.health += 1;
-                } else {
-                    s.mana += 1;
-                }
-
-                steps.push({
-                    actionIndex: action.actionIndex,
-                    actionType: action.actionType,
-                    title: `${action.actionType} — ${potion ? `HP ${s.health}/${s.maxHealth}` : `MP ${s.mana}/${s.maxMana}`}`,
-                    details: [['rule', 'free: draws nothing and does not advance the decision']],
-                    cumulativePpm: cumulative,
-                });
-                break;
-            }
             case 'cashout':
                 ensureEmpty(action);
-
-                if (s.totalAttacks === 0) {
-                    throw new ReplayError('hydra cashout requires at least one attack');
-                }
-
                 steps.push({
                     actionIndex: action.actionIndex,
                     actionType: 'cashout',
@@ -514,14 +319,12 @@ export function replay(
             }
             case 'abandon':
                 ensureEmpty(action);
-                // Admissible before the first attack (unlike a cashout): the
-                // sweep's only settling action for an untouched round.
                 outcome = 'abandoned';
                 steps.push(abandonStep(action.actionIndex, position, cumulative));
                 settled = true;
                 break;
             default:
-                throw new ReplayError(`unknown hydra action: ${action.actionType}`);
+                throw new ReplayError(`unknown hydra:v1 action: ${action.actionType}`);
         }
     }
 
@@ -531,8 +334,6 @@ export function replay(
         cumulativePpm: cumulative,
         outcome,
         settled,
-        // Every settling path pushes its step last, so the final step is the
-        // settling action.
         settledAtIndex: settled ? steps[steps.length - 1].actionIndex : null,
         payoutUnits: positionValue(position),
         bankedUnits: position.bankedUnits,

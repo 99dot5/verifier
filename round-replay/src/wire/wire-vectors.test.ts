@@ -151,12 +151,33 @@ describe('action-tag table', () => {
         expect(system.map((a) => a.action_type)).toEqual(['partial-cashout', 'abandon', 'expire']);
     });
 
-    it('gives every tag at least one game and refuses an unknown game type', () => {
+    it('gives every tag but the retired ones a game and refuses an unknown game type', () => {
+        // The original Hydra tags (ADR 0042) stay decodable and belong to no game.
+        const retired = ['physical-attack', 'magic-attack', 'drink-potion', 'drink-mana'];
         const games = Object.keys(GAME_VOCABULARIES);
 
         for (const { actionType } of ACTION_TAGS) {
-            expect(games.some((game) => allowedIn(actionType, game))).toBe(true);
+            expect(
+                games.some((game) => allowedIn(actionType, game)),
+                actionType,
+            ).toBe(!retired.includes(actionType));
             expect(allowedIn(actionType, 'labours:v1')).toBe(false);
+        }
+    });
+
+    it('gives hydra:v1 the roll and the retired attack tags to nobody', () => {
+        // `roll` is the only game action D20 Hydra has; the original rules' tags
+        // (ADR 0042) are no longer a hydra:v1 action, so a transcript carrying one is refused.
+        expect(tagOf('roll')).toBe(0x17);
+        expect(allowedIn('roll', 'hydra:v1')).toBe(true);
+        expect(allowedIn('partial-cashout', 'hydra:v1')).toBe(true);
+
+        for (const game of Object.keys(GAME_VOCABULARIES).filter((g) => g !== 'hydra:v1')) {
+            expect(allowedIn('roll', game)).toBe(false);
+        }
+
+        for (const retired of ['physical-attack', 'magic-attack', 'drink-potion', 'drink-mana']) {
+            expect(allowedIn(retired, 'hydra:v1')).toBe(false);
         }
     });
 

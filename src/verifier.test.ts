@@ -1067,7 +1067,7 @@ describe('verifyRound', () => {
         const report = verify(
             buildRound({
                 gameType: hydra.v1.GAME_TYPE,
-                actions: [action('place-bet', new Uint8Array([2, 0, 0, 0])), action('cashout'), action('abandon')],
+                actions: [action('place-bet', new Uint8Array([0, 0])), action('cashout'), action('abandon')],
                 claimedPayout: 0n,
             }),
             { deploymentListed: false },
@@ -1083,16 +1083,12 @@ describe('verifyRound', () => {
     });
 
     it('is unavailable for an unreplayed round when the shape cannot place the settle', () => {
-        // The cashout is last, but an earlier attack may have lost and settled
+        // The cashout is last, but an earlier roll may have lost and settled
         // the round first; only a replay could say.
         const report = verify(
             buildRound({
                 gameType: hydra.v1.GAME_TYPE,
-                actions: [
-                    action('place-bet', new Uint8Array([2, 0, 0, 0])),
-                    action('physical-attack'),
-                    action('cashout'),
-                ],
+                actions: [action('place-bet', new Uint8Array([0, 0])), action('roll'), action('cashout')],
                 claimedPayout: 0n,
             }),
             { deploymentListed: false },
@@ -2095,7 +2091,8 @@ describe('a clean round of each remaining replayable game', () => {
     });
 
     describe('hydra:v1', () => {
-        const ATTACK_REQUEST = '55555555-5555-4555-8555-555555555555';
+        const ROLL_REQUEST = '55555555-5555-4555-8555-555555555555';
+        const START_STAGE = 0;
         const replayHydra = (actions: WireAction[]) =>
             hydra.v1.replay(
                 bytesToHex(SERVER_SEED),
@@ -2107,38 +2104,29 @@ describe('a clean round of each remaining replayable game', () => {
                 })),
                 STAKE_MUTEZ,
             );
+        const betActions = (companions: number) => [action('place-bet', new Uint8Array([companions, START_STAGE]))];
         /**
-         * The first hero whose physical attack SURVIVES under this file's
-         * seeds without clearing the round, taken from the replayer itself
-         * (pinned against the shared vectors by `hydra/v1.test.ts`). A death would
-         * settle at the attack and leave the cashout trailing the settle.
+         * Two different parties whose first roll WINS under this file's seeds,
+         * taken from the replayer itself (pinned against the shared vectors by
+         * `hydra/v1.test.ts`). A win leaves the round open for the cashout; a
+         * loss would settle it at the roll and leave the cashout trailing.
          */
-        const HERO = hydra.v1.HEROES.findIndex((_, hero) => {
-            const result = replayHydra([
-                action('place-bet', new Uint8Array([hero, 0, 0, 0])),
-                action('physical-attack'),
-            ]);
+        const [WINNING_PARTY, OTHER_PARTY] = [...Array(hydra.v1.MAX_COMPANIONS + 1).keys()].filter(
+            (c) => !replayHydra([...betActions(c), action('roll')]).settled,
+        );
+        /** bet → one winning roll → cashout: three actions, three commands. */
+        const ACTIONS = [...betActions(WINNING_PARTY), action('roll'), action('cashout')];
 
-            return !result.settled;
-        });
-
-        /** bet → one surviving physical attack → cashout: three actions, three commands. */
-        const ACTIONS = [
-            action('place-bet', new Uint8Array([HERO, 0, 0, 0])),
-            action('physical-attack'),
-            action('cashout'),
-        ];
-
-        const BET = betCommand({ game: 'hydra', hero: HERO, weapon: 1, armour: 1, sprite: 1 });
-        const ATTACK = commandFrame(SESSION_SEED, {
-            requestId: ATTACK_REQUEST,
+        const BET = betCommand({ game: 'hydra', companions: WINNING_PARTY, startStage: START_STAGE });
+        const ROLL = commandFrame(SESSION_SEED, {
+            requestId: ROLL_REQUEST,
             sessionId: SESSION_ID,
             payloadCase: 'playerAction',
             roundId: ROUND_ID,
-            game: { game: 'hydra', action: 'physical-attack' },
+            game: { game: 'hydra', action: 'roll' },
         });
         const CASHOUT = cashOutCommand({ game: 'hydra' });
-        const COMMITMENT = computeCommitment([BET, ATTACK, CASHOUT]);
+        const COMMITMENT = computeCommitment([BET, ROLL, CASHOUT]);
 
         function frameOf(spec: ServerFrameSpec) {
             return {
@@ -2167,9 +2155,9 @@ describe('a clean round of each remaining replayable game', () => {
                 commands: [
                     { requestId: BET_REQUEST, payloadCase: 'placeBet', frame: BET, sentAtUnixMs: 1, sendCount: 1 },
                     {
-                        requestId: ATTACK_REQUEST,
+                        requestId: ROLL_REQUEST,
                         payloadCase: 'playerAction',
-                        frame: ATTACK,
+                        frame: ROLL,
                         sentAtUnixMs: 2,
                         sendCount: 1,
                     },
@@ -2197,13 +2185,13 @@ describe('a clean round of each remaining replayable game', () => {
                     frameOf({
                         sequence: 4,
                         sessionId: SESSION_ID,
-                        relatedRequestId: ATTACK_REQUEST,
+                        relatedRequestId: ROLL_REQUEST,
                         payload: { case: 'commandAccepted' },
                     }),
                     frameOf({
                         sequence: 5,
                         sessionId: SESSION_ID,
-                        relatedRequestId: ATTACK_REQUEST,
+                        relatedRequestId: ROLL_REQUEST,
                         payload: { case: 'roundUpdated', roundId: ROUND_ID, actionIndex: 1, origin: 'player' },
                     }),
                     frameOf({
@@ -2218,12 +2206,14 @@ describe('a clean round of each remaining replayable game', () => {
             });
         }
 
-        function round(actions: WireAction[] = ACTIONS) {
-            return buildRound({ gameType: hydra.v1.GAME_TYPE, actions, playerCommitment: COMMITMENT });
+        function round(actions: WireAction[] = ACTIONS, claimedPayout?: bigint) {
+            return buildRound({ gameType: hydra.v1.GAME_TYPE, actions, playerCommitment: COMMITMENT, claimedPayout });
         }
 
-        it('finds a hero whose attack survives, or the round below is a loss', () => {
-            expect(HERO).toBeGreaterThanOrEqual(0);
+        it('finds two winning parties, or the cases below are vacuous', () => {
+            expect(WINNING_PARTY).toBeDefined();
+            expect(OTHER_PARTY).toBeDefined();
+            expect(OTHER_PARTY).not.toBe(WINNING_PARTY);
             expect(replayHydra(ACTIONS).outcome).toBe('cashed-out');
         });
 
@@ -2237,43 +2227,147 @@ describe('a clean round of each remaining replayable game', () => {
             expect(nonPassing(report)).toEqual(OPTIONAL_CHECKS);
         });
 
-        it('fails when the claimed payout is not what the attack paid', () => {
+        it('pays more than the stake, so the roll actually moved the position', () => {
+            const report = verify(round(), { receipts: { status: 'ok', receipts: receipts() } });
+
+            expect(report.replay?.cumulativePpm).toBeGreaterThan(1_000_000n);
+        });
+
+        it('fails when the claimed payout is not what the roll paid', () => {
             const honest = honestPayout(hydra.v1.GAME_TYPE, { gameType: hydra.v1.GAME_TYPE, actions: ACTIONS });
-            const report = verify(
-                buildRound({
-                    gameType: hydra.v1.GAME_TYPE,
-                    actions: ACTIONS,
-                    playerCommitment: COMMITMENT,
-                    claimedPayout: honest + 1n,
-                }),
-                { receipts: { status: 'ok', receipts: receipts() } },
-            );
+            const report = verify(round(ACTIONS, honest + 1n), { receipts: { status: 'ok', receipts: receipts() } });
 
             expect(honest).not.toBe(STAKE_MUTEZ);
             expect(statusOf(report, 'replay-payout')).toBe('fail');
             expect(report.verdict).toBe('failed');
         });
 
-        it('fails the projection when the attack is published as magic', () => {
+        it('fails the projection when the published party is not the one you signed', () => {
             // The commitment covers the command bytes, which are untouched;
-            // only the projection sees the swapped action.
-            const swapped = [ACTIONS[0], action('magic-attack'), ACTIONS[2]];
-            const replayed = replayHydra(swapped);
-            const report = verify(
-                buildRound({
-                    gameType: hydra.v1.GAME_TYPE,
-                    actions: swapped,
-                    playerCommitment: COMMITMENT,
-                    // Keep the payout honest for whatever the swap replays to, so
-                    // the projection is the check that fails.
-                    claimedPayout: replayed.payoutUnits,
-                }),
-                { receipts: { status: 'ok', receipts: receipts() } },
-            );
+            // only the projection sees the rewritten bet. The payout is
+            // claimed honestly for the swapped party, so the projection is
+            // the check that fails.
+            const swapped = [...betActions(OTHER_PARTY), ACTIONS[1], ACTIONS[2]];
+            const report = verify(round(swapped, replayHydra(swapped).payoutUnits), {
+                receipts: { status: 'ok', receipts: receipts() },
+            });
 
             expect(statusOf(report, PROJECTION_CHECK_ID)).toBe('fail');
             expect(statusOf(report, 'commitment-vs-chain')).toBe('pass');
             expect(report.verdict).toBe('failed');
+        });
+
+        it('fails the projection when the signed roll is published as an abandon', () => {
+            const swapped = [ACTIONS[0], action('abandon'), ACTIONS[2]];
+            const report = verify(round(swapped, replayHydra(swapped).payoutUnits), {
+                receipts: { status: 'ok', receipts: receipts() },
+            });
+
+            expect(statusOf(report, PROJECTION_CHECK_ID)).toBe('fail');
+            expect(statusOf(report, 'commitment-vs-chain')).toBe('pass');
+            expect(report.verdict).toBe('failed');
+        });
+
+        describe('a busted round', () => {
+            /**
+             * A solo run from the last beast faces DC 20, where only a natural
+             * 20 wins; the guard asks the replayer rather than assuming this
+             * file's seeds miss.
+             */
+            const BUST_BET = [action('place-bet', new Uint8Array([0, hydra.v1.STAGES - 1]))];
+            const BUST_ACTIONS = [...BUST_BET, action('roll')];
+            const BUST_BET_COMMAND = betCommand({ game: 'hydra', companions: 0, startStage: hydra.v1.STAGES - 1 });
+            const BUST_COMMITMENT = computeCommitment([BUST_BET_COMMAND, ROLL]);
+            const BUST_ENDED_SPEC: ServerFrameSpec = {
+                sequence: 5,
+                sessionId: SESSION_ID,
+                relatedRequestId: ROLL_REQUEST,
+                payload: {
+                    case: 'roundEnded',
+                    roundId: ROUND_ID,
+                    actionIndex: 1,
+                    playerCommitment: BUST_COMMITMENT,
+                    cause: 'player-action',
+                },
+            };
+
+            function bustReceipts(): ImportedReceipts {
+                return buildReceipts({
+                    commands: [
+                        {
+                            requestId: BET_REQUEST,
+                            payloadCase: 'placeBet',
+                            frame: BUST_BET_COMMAND,
+                            sentAtUnixMs: 1,
+                            sendCount: 1,
+                        },
+                        {
+                            requestId: ROLL_REQUEST,
+                            payloadCase: 'playerAction',
+                            frame: ROLL,
+                            sentAtUnixMs: 2,
+                            sendCount: 1,
+                        },
+                    ],
+                    frames: [
+                        frameOf({
+                            sequence: 2,
+                            sessionId: SESSION_ID,
+                            relatedRequestId: BET_REQUEST,
+                            payload: { case: 'commandAccepted' },
+                        }),
+                        frameOf({
+                            sequence: 3,
+                            sessionId: SESSION_ID,
+                            relatedRequestId: BET_REQUEST,
+                            payload: { case: 'roundStarted', roundId: ROUND_ID, ...openerSeedFields(undefined) },
+                        }),
+                        frameOf({
+                            sequence: 4,
+                            sessionId: SESSION_ID,
+                            relatedRequestId: ROLL_REQUEST,
+                            payload: { case: 'commandAccepted' },
+                        }),
+                        frameOf(BUST_ENDED_SPEC),
+                    ],
+                    roundEndedFrame: serverFrame(SIGNING_SEED, BUST_ENDED_SPEC),
+                });
+            }
+
+            function bustRound(claimedPayout: bigint) {
+                return buildRound({
+                    gameType: hydra.v1.GAME_TYPE,
+                    actions: BUST_ACTIONS,
+                    playerCommitment: BUST_COMMITMENT,
+                    claimedPayout,
+                });
+            }
+
+            it('busts on the first roll under this file’s seeds, or the cases below are vacuous', () => {
+                const replayed = replayHydra(BUST_ACTIONS);
+
+                expect(replayed.outcome).toBe('bust');
+                expect(replayed.settled).toBe(true);
+                expect(replayed.payoutUnits).toBe(0n);
+            });
+
+            it('verifies a busted hydra round end to end, paying nothing', () => {
+                const report = verify(bustRound(0n), { receipts: { status: 'ok', receipts: bustReceipts() } });
+
+                expect(report.verdict).toBe('verified');
+                expect(report.replay?.outcome).toBe('bust');
+                expect(report.replay?.settledAtIndex).toBe(1);
+                expect(nonPassing(report)).toEqual(OPTIONAL_CHECKS);
+            });
+
+            it('fails when a busted round claims a payout', () => {
+                const report = verify(bustRound(STAKE_MUTEZ), {
+                    receipts: { status: 'ok', receipts: bustReceipts() },
+                });
+
+                expect(statusOf(report, 'replay-payout')).toBe('fail');
+                expect(report.verdict).toBe('failed');
+            });
         });
     });
 

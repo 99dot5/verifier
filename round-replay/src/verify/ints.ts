@@ -1,12 +1,12 @@
 /**
- * Integer fixed-point primitives mirroring `libs/game-engine-core/src/fixed_point.rs`.
+ * Integer fixed-point primitives mirroring the Rust engine core's fixed-point module.
  *
  * Everything is `bigint`; there is deliberately not a single floating-point
  * operation in this directory. The engines are integer-only (the rollup is
  * `no_std` and its CI forbids float instructions), which is what lets this
  * TypeScript reimplementation reproduce the on-chain results EXACTLY — every
  * function here is pinned against the golden vectors in
- * `libs/games/src/<game>/v1/testdata/vectors.json`.
+ * each game's `vectors.json`.
  */
 
 export const SCALE_PPM = 1_000_000n;
@@ -14,7 +14,7 @@ export const SCALE_PPM = 1_000_000n;
 /**
  * Round-half-up (midpoint away from zero) division for non-negative operands
  * — the only domain the game math touches. Mirrors
- * `fixed_point.rs::div_round(HalfUp)`.
+ * the engine core's `div_round(HalfUp)`.
  */
 export function divHalfUp(numerator: bigint, denominator: bigint): bigint {
     if (numerator < 0n || denominator <= 0n) {

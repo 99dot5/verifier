@@ -1,10 +1,10 @@
 /**
- * Importing a player's exported receipts (design §12.3).
+ * Importing a player's exported receipts.
  *
  * The export is a JSON document the PLAYER hands the verifier. That makes it
  * the one input here that nobody signed as a whole — deliberately, because
  * every frame inside it is already signed by the sequencer and every command
- * by the session key (§12.6). Signing the container would imply the container
+ * by the session key. Signing the container would imply the container
  * is the evidence; it is not, the frames are.
  *
  * Two consequences shape this module:
@@ -26,7 +26,7 @@ export const RECEIPTS_SCHEMA = '99dot5.receipts.v1';
 
 /**
  * Who built a receipts document: the player's own browser, or the sequencer
- * on request from its stored rows (ADR 0029). An UNSIGNED self-label.
+ * on request from its stored rows. An UNSIGNED self-label.
  */
 export type ReceiptsSource = 'client' | 'sequencer';
 
@@ -45,8 +45,8 @@ export interface ImportedCommand {
     /** The complete `[0x05 | signature(64) | protobuf]` frame as sent. */
     frame: Uint8Array;
     /**
-     * When the client sent it. A HUMAN READABILITY HINT, labelled as such in
-     * the design: ordering comes from the server's step index and the
+     * When the client sent it. A HUMAN READABILITY HINT, never evidence:
+     * ordering comes from the server's step index and the
      * suppression bracket from L1, so nothing in a verdict may read this.
      */
     sentAtUnixMs: number;
@@ -100,7 +100,7 @@ export interface ImportedReceipts {
     locatorHints: LocatorHints | null;
     commands: ImportedCommand[];
     frames: ImportedFrame[];
-    /** D13's whole input, called out separately so it survives a partial export. */
+    /** The signed `RoundEnded` that states the commitment, called out separately so it survives a partial export. */
     roundEndedFrame: Uint8Array;
 }
 

@@ -2,7 +2,7 @@
 /**
  * The cross-language pins of the signing rule.
  *
- * `libs/smart-rollup-messages/testdata/wire-vectors.json` is written by an
+ * The shared `wire-vectors.json` is written by an
  * independent Python Borsh writer and asserted by the Rust wire crate, the
  * Rust sequencer core, the replay library and this file. The action-tag
  * table, the seed hashing rules and the `RoundTranscript` encodings are
@@ -11,7 +11,7 @@
  * What is pinned here:
  *   - the signing digest of every `RoundTranscript` vector under the shared
  *     signing domain,
- *   - the really-signed frame per `SequencerMessage` variant (#954): decoded,
+ *   - the really-signed frame per `SequencerMessage` variant: decoded,
  *     and its signature VERIFIED under the fixture's key and signing domain
  *     with `@noble/ed25519` — the fourth implementation of
  *     `ed25519(blake2b-256(chain_id ‖ rollup_address ‖ envelope))` held to the
@@ -99,7 +99,7 @@ const vectors: WireVectors = JSON.parse(
 );
 
 describe('round transcript encodings', () => {
-    it('reproduces the signing digest of every vector under the shared signing domain (#952)', () => {
+    it('reproduces the signing digest of every vector under the shared signing domain', () => {
         // The one cross-language pin of the signing rule: blake2b-256 over
         // `chain_id ‖ rollup_address ‖ envelope`, where the two prefix fields
         // are the raw base58check payloads the generator decoded
@@ -128,7 +128,7 @@ describe('round transcript encodings', () => {
     });
 });
 
-describe('really-signed frames (#954)', () => {
+describe('really-signed frames', () => {
     const domain = { chainId: vectors.signing_domain.chain_id, rollupAddress: vectors.signing_domain.rollup_address };
     const kinds = {
         seed_batch: 'seed-batch',
@@ -179,7 +179,7 @@ describe('really-signed frames (#954)', () => {
 
             // …and not with one payload byte flipped, one signature byte
             // flipped, or under another rollup's domain — a frame signed for
-            // one instance is a plain signature failure everywhere else (#952).
+            // one instance is a plain signature failure everywhere else.
             const flippedPayload = Uint8Array.from(decoded!.signedPayload);
 
             flippedPayload[flippedPayload.length - 1] ^= 0x01;

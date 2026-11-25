@@ -44,8 +44,8 @@ const LIVE_PROPOSE = '0107050a0000001601e1a24fc87223233b225c2d388e5fbb1446b8e47b
 const LIVE_TENANT = '99dot5-shadownet';
 // A PUBLIC key read off L1 (the RegisterTenant above), not a secret: the scanner's
 // generic-api-key rule matches on the `KEY` in the name plus the hex entropy.
-// `infisical scan` honours only the gitleaks signature — its docs' `infisical-scan:ignore`
-// is not in the CLI (detect/detect.go, gitleaksAllowSignature) and did not suppress this.
+// The secret scanner honours only the gitleaks signature (`gitleaks:allow`); the
+// tool-specific ignore comment its docs describe is not implemented and did not suppress this.
 const LIVE_KEY_HEX = '30715c3d90bd2f37acccf74fb3cfe1654445b0a5b6f37892b1d5085e839e5717'; // gitleaks:allow
 const LIVE_PROPOSED_ADMIN = 'KT1V9p3YByfpVs1QWmnZPHTNHDy9XaNPLTqz';
 
@@ -90,7 +90,7 @@ describe('decodeAdminPayload', () => {
     });
 
     it("decodes the live RegisterPoolVault, which names the pool's vault", () => {
-        // The vault address is what the deposit bracket (§8.3(d)) is checked
+        // The vault address is what the deposit bracket is checked
         // against, so it is derived from the same lineage as the keys rather
         // than being a second address a reader has to take on trust.
         expect(decodeAdminPayload(LIVE_REGISTER_POOL_VAULT)).toEqual({
@@ -235,7 +235,7 @@ describe('fetchAdminLineage', () => {
         ]);
 
         // BOTH keys, not just the current one: a receipt signed under the
-        // pre-rotation key stays valid evidence (D7).
+        // pre-rotation key stays valid evidence.
         expect(keysForTenant(lineage, LIVE_TENANT).map((k) => k.rawHex)).toEqual([
             LIVE_KEY_HEX,
             bytesToHex(ROTATED_KEY),

@@ -1,6 +1,6 @@
 /**
- * mines:v1 — integer reimplementation of `libs/games/src/mines/v1/engine.rs` +
- * `math.rs`, pinned against `libs/games/src/mines/v1/testdata/vectors.json`.
+ * mines:v1 — integer reimplementation of the Rust mines:v1 engine and its
+ * maths, pinned against mines' `vectors.json`.
  *
  * The mine layout is fixed at bet time by a partial Fisher–Yates shuffle
  * driven by the seed stream; gameplay actions derive nothing. Each safe
@@ -9,15 +9,16 @@
  * `0.995^k` over the round. Revealing the last safe tile auto-settles as a win.
  *
  * Two SYSTEM-ONLY transcript steps back the max-win cap
- * (docs/specs/max-win-cap.md): `partial-cashout` (banks part of the position
+ * (the most one round may pay): `partial-cashout` (banks part of the position
  * to the session balance — chain untouched; the layout and step pricing are
  * index-insensitive in mines) and `abandon`, which settles at the position's
  * current value, `banked + live` — what a cashout would pay — with outcome
- * `lose` (sec-28; it used to forfeit the live part, and before any reveal
- * that is the stake). A mine hit pays the banked total (0 when nothing was
+ * `lose` (it used to forfeit the live part, and before any reveal that is
+ * the stake, until a security fix: no player signs an abandon, so forfeiting
+ * on it made forging one profitable). A mine hit pays the banked total (0 when nothing was
  * banked).
  *
- * The payout follows the banked/live fold of `partial_cashout.rs` — the live
+ * The payout follows the banked/live fold (`partial-cashout.ts`) — the live
  * part rounds at the asset grain on every safe reveal — not
  * `floor(stake × cumulative)`.
  */
@@ -89,8 +90,7 @@ export function deriveLayout(serverSeed: string, clientSeed: string, mineCount: 
  * `fair = half_up((25 − k) × 1e6 / (safe − k))` with `safe = 25 − mine_count`.
  * The house edge is charged on every reveal: each k pays
  * `half_up(fair × 995000 / 1e6)` — every reveal, not just the first — so the
- * cumulative is `0.995^k × fair(k)` and round RTP compounds with depth. See
- * `docs/specs/per-decision-house-edge.md`.
+ * cumulative is `0.995^k × fair(k)` and round RTP compounds with depth.
  */
 export function stepMultiplierPpm(mineCount: number, revealedCount: number): bigint {
     const safe = TOTAL_TILES - mineCount;
@@ -160,8 +160,8 @@ export function replay(
 
     for (const action of actions.slice(1)) {
         if (settled) {
-            // The kernel stops at the first settle and never reads what follows
-            // (libs/smart-rollup/src/games.rs); the verifier's
+            // The kernel stops at the first settle and never reads what follows;
+            // the verifier's
             // actions-after-settle check reports any such entries.
             break;
         }

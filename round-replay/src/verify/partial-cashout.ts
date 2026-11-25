@@ -1,6 +1,6 @@
 /**
- * The system `partial-cashout` transcript step (max-win forced de-lever —
- * docs/specs/max-win-cap.md, slice 2): the sequencer banks part of the live
+ * The system `partial-cashout` transcript step (the forced de-lever that
+ * enforces the pool's max-win cap): the sequencer banks part of the live
  * position to the session balance before an action whose winning outcome
  * would breach the pool's max-win cap. The multiplier chain is untouched;
  * the banked amount is the step's whole payload.
@@ -11,11 +11,12 @@ import { SCALE_PPM, divHalfUp, unitsToDecimalString } from './ints';
 import { ReplayError, type StepWorking } from './types';
 
 /**
- * The compounding games' value model (`libs/games/src/partial_cashout.rs`),
+ * The compounding games' value model (the Rust engines' partial-cashout fold),
  * in integer atomic units: the position splits into `banked` (already the
  * player's) and `live` (still at risk). Every winning step folds `live`;
  * a `partial-cashout` moves value from `live` to `banked`; a loss zeroes
- * `live`; a cashout — and, since sec-28, an `abandon` — pays `banked + live`.
+ * `live`; a cashout and an `abandon` both pay `banked + live` (an abandon is
+ * the one step no player signs, so forfeiting on it would reward forging one).
  */
 export interface Position {
     bankedUnits: bigint;
@@ -86,7 +87,7 @@ export interface BankedAmount {
 
 /**
  * Borsh `Payload { amount: u128 (16 bytes LE) }` — mirrors
- * `libs/games/src/partial_cashout.rs`.
+ * the Rust engines' partial-cashout payload.
  *
  * There is no `scale` on the wire: one banked amount has exactly one
  * encoding, and the grain comes from the session's asset (see `./assets`).

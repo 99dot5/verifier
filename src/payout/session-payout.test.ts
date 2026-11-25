@@ -265,7 +265,7 @@ describe('verifySessionPayout', () => {
         });
 
         expect(disagreed.outcome).toBe('unpaid');
-        expect(disagreed.findings[0]).toContain('indexer and node disagree');
+        expect(disagreed.findings[0]).toContain('the indexer and the Tezos RPC disagree');
 
         const failing: PayoutChain = {
             ...base,

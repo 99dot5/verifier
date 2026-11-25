@@ -1,7 +1,7 @@
 /**
  * The chain-fetch flow behind "Fetch from chain & verify", without the DOM.
  *
- * Order (D1): the lineage keys first, then the locator hints, then the
+ * Order: the lineage keys first, then the locator hints, then the
  * session's deposit, and only then the scan, because the hints and the
  * deposit decide the scan's bounds.
  *
@@ -17,14 +17,14 @@
  *     alone when the deposit level D is unknown). A transcript copy matters
  *     only once its seed is pending, at a level >= B; from B on, a copy posted
  *     before the deposit is APPLIED as a session-missing reject that burns the
- *     seed (rollup `rounds.rs`, step 8), so the window must start at min(D, B)
+ *     seed in the rollup kernel, so the window must start at min(D, B)
  *     and not at D. Without a confirmed batch hint the lower bound is not
  *     narrowed. There is no seed-age fallback: `MAX_SEED_AGE_LEVELS` bounds
  *     the transcript ABOVE the batch, not a scan below it.
  *
  * The one failure a hint can manufacture is a `commitment-order` fail against
  * the hinted batch copy: a later duplicate of the batch makes that check
- * stricter. Only that case re-runs without the batch hint (D6); every other
+ * stricter. Only that case re-runs without the batch hint; every other
  * hinted verdict stands, because it rests on authenticated L1 messages inside
  * the bounds above.
  *
@@ -86,7 +86,7 @@ export interface ChainRunInput {
     /** The form's pool field, '' when empty; only compared with the signed transcript's pool. */
     formPoolId: string;
     chain: ChainSource;
-    /** Called once with the preliminary pass, when there is one (D5). */
+    /** Called once with the preliminary pass, when there is one. */
     onPreliminary?(preliminary: PreliminaryReport): void;
     onProgress?(text: string): void;
 }
@@ -108,7 +108,7 @@ export type PreliminaryReport = Omit<VerificationReport, 'verdict'> & { label: s
 export interface ChainRunResult {
     /** The report whose verdict stands. */
     report: VerificationReport;
-    /** The run with the batch hint, when the narrowed fallback (D6) re-ran without it; `report` is then the re-run. */
+    /** The run with the batch hint, when the narrowed fallback re-ran without it; `report` is then the re-run. */
     hintedRun: VerificationReport | null;
     preliminary: PreliminaryReport | null;
     hints: HintOutcome[];
@@ -136,7 +136,7 @@ export async function runChainVerification(input: ChainRunInput): Promise<ChainR
         batchLevel === null ? unhintedLower : depositLevel === null ? batchLevel : Math.min(depositLevel, batchLevel);
     // A batch hint at or above T (a later duplicate) leaves nothing to scan
     // below it; the window then collapses to T and the confirmed batch rides
-    // along as an added message, which D6 below then re-checks.
+    // along as an added message, which the fallback below then re-checks.
     const from = Math.min(lower, upper);
     const confirmedMessages = [confirmed.transcript, confirmed.batch].filter((m): m is InboxMessage => m !== null);
     const scanOf = (fromLevel: number): ScanContext => ({ fromLevel, toLevel: upper, headLevel: head, deposit });
@@ -158,7 +158,7 @@ export async function runChainVerification(input: ChainRunInput): Promise<ChainR
     let preliminary: PreliminaryReport | null = null;
 
     if (transcriptLevel !== null && batchLevel !== null && batchLevel < transcriptLevel - DEFAULT_SCAN_DEPTH) {
-        // D5: show the recent end first. Its window can miss a copy in
+        // The preliminary pass: show the recent end first. Its window can miss a copy in
         // [B, D), so it never states a verdict.
         const preliminaryFrom = Math.min(
             upper,
@@ -186,7 +186,7 @@ export async function runChainVerification(input: ChainRunInput): Promise<ChainR
         return { report: hinted, hintedRun: null, preliminary, hints: confirmed.outcomes };
     }
 
-    // D6: the batch hint is dropped and the unhinted depth is scanned,
+    // The narrowed fallback: the batch hint is dropped and the unhinted depth is scanned,
     // anchored at the upper bound. The confirmed transcript stays; the hinted
     // batch copy stays only if the scan itself reaches it.
     const rerunFrom = Math.min(unhintedLower, upper);
@@ -330,7 +330,7 @@ export async function resolveReceiptsDeposit(input: {
     input.onProgress?.(located.detail);
 
     // `confirmed` means "this level came from L1", the only kind of lower
-    // bound §8.3(d) admits; a lookup that found nothing yields no bound.
+    // bound the suppression ladder admits; a lookup that found nothing yields no bound.
     return located.lookup === 'found' && located.level !== null ? { level: located.level, confirmed: true } : null;
 }
 
@@ -340,7 +340,7 @@ interface ConfirmedHints {
     outcomes: HintOutcome[];
 }
 
-/** D2: confirm each hint against its own block only; anything unconfirmable is absent. */
+/** Confirm each hint against its own block only; anything unconfirmable is absent. */
 async function confirmHints(input: ChainRunInput, keys: KeySet): Promise<ConfirmedHints> {
     const outcomes: HintOutcome[] = input.hints.malformed.map((finding) => ({
         hint: 'malformed',
@@ -480,7 +480,7 @@ function failsOnHintedBatch(report: VerificationReport, batch: InboxMessage | nu
     );
 }
 
-/** Each hint's fate, stated at the top of the report's findings (D8). */
+/** Each hint's fate, stated at the top of the report's findings. */
 function withHintFates(report: VerificationReport, source: string, outcomes: HintOutcome[]): VerificationReport {
     const fates = outcomes.map((o) =>
         o.hint === 'malformed'

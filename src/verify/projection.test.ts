@@ -525,7 +525,7 @@ describe('a cashout the server never answered', () => {
     it('treats a round settled on a system abandon as the same shape', () => {
         // A dropped cashout on plinko (or hilo/mines) is settled by the sweep's
         // `abandon`, not by crash's `expire`; the shape is the same and so is
-        // the report. Since sec-28 the kernel pays the abandon what the cashout
+        // the report. The kernel now pays the abandon what the cashout
         // would have, so this is about the unanswered command, not the money.
         const result = run({
             gameType: 'plinko:v1',
@@ -770,7 +770,7 @@ describe('the ppm → tick auto-cashout policy', () => {
 
     it.each(AUTO_CASHOUT_VECTORS.map((v) => [v.note, v] as const))('matches the shared vector: %s', (_note, vector) => {
         // The SAME table binds the server-side conversion in
-        // `libs/client-commands/src/crash/v1.rs`. Two
+        // the sequencer's crash command decoder. Two
         // implementations of a policy is the shape that drifts silently.
         const result = autoCashoutTickFromPpm(vector.auto_cashout_ppm);
 

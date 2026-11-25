@@ -8,14 +8,14 @@ import { wireVectorsUrl } from './wire-vectors-path';
 
 /**
  * The golden frame, taken from the shared cross-language vector file so this
- * decoder, the Rust wire crate and `tools/operator-cli/src/decode.rs` all pin
+ * decoder, the Rust wire crate and the operator's decoder all pin
  * the same bytes.
  *
  * It is currently `source: "synthetic"` — a fixture, deliberately labelled as
  * one. A synthetic golden cannot catch a decoder drifting away from what the
  * sequencer actually emits, because the fixture is written by the same
  * understanding it is meant to check. Replacing it with a real shadownet
- * capture (`tools/capture-inbox-vector.sh`, `source: "captured"`) is a release
+ * capture (`source: "captured"`) is a release
  * gate on the first round settled under the transcript kernel, not an
  * optional follow-up.
  */
@@ -138,7 +138,7 @@ describe('seed commitment hash', () => {
     it('hashes the ASCII hex string, not the raw bytes it spells', () => {
         // blake2b-256 of the 64 ASCII characters of the seed string. Distinct
         // from blake2b-256 of the 32 decoded bytes — the commitment is over
-        // the string, mirroring seed_provisioner/seeds.rs::hash_seed. The
+        // the string, mirroring the seed provisioner's hash_seed. The
         // transcript wire carries the RAW bytes, which makes this the exact
         // mistake the new format invites; wire-vectors.test.ts pins both
         // digests against the shared vector.

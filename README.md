@@ -19,13 +19,25 @@ trust this tool exists to remove.
 | `round-replay/`                               | The engine ports: TypeScript implementations of the game algorithms (pure `bigint`), the sequencer→rollup wire decoder (Borsh), and the rule for which actions of a transcript are replayed. Asserted against the same vectors by its own test suite.                                                                                                                                                                                                                                                                                                                                                                                          |
 | `src/verify/`                                 | The checks built on the replay: stake and seed-commitment checks, rejection classification, and the round projection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `src/wire/`                                   | Ed25519 signature verification (`ed25519(blake2b-256(payload))`), pinned by a golden message captured from a real on-chain injection, and the protobuf reader/writer for play receipts.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `src/chain/`                                  | Readers for public chain sources: TzKT (locates `smart_rollup_add_messages` operations), a Tezos archive node RPC (supplies the message bytes), the **administrator lineage walk** (derives the tenant's signing keys from L1), and the deposit lookup that derives the scan's lower bound from L1.                                                                                                                                                                                                                                                                                                                                            |
+| `src/chain/`                                  | Readers for public chain sources: TzKT (its inbox content locates this rollup's messages), a Tezos node RPC (supplies every judged message, applied only), the **administrator lineage walk** (derives the tenant's signing keys from L1), and the deposit lookup that derives the scan's lower bound from L1.                                                                                                                                                                                                                                                                                                                                 |
 | `src/payout/`                                 | The **session payout** check: the vault's `fast_payout` / `cemented_payout` events read by annotation, the fast payout's signatures re-verified over the shared `PACK(("fast-payout:v1", …))` payload against the vault's `payout_signers`, the paid-ledger rule, and the kernel's figure — from the cemented payout on L1, or from the kernel's own records on a rollup node you run. Pinned to `vectors/fast-payout-vectors.json` and replayed over `vectors/payout-watcher/*.snapshot.json`, the recorded node answers the public payout watcher (the operator-independent Rust checker) is tested on, so both tools read one set of bytes. |
 | `src/receipts/`                               | Importing a player's exported receipts, and reconstructing a round's `player_commitment` from them. A port of the play client's own algorithm, held to it by the shared fixture.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `src/verifier.ts`                             | The orchestrator: gathers a round's messages, proves the seed commitment ordering, replays the game, recomputes the payout.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `index.html`, `src/main.ts`, `src/styles.css` | The verifier web app itself — the page this repository deploys to GitHub Pages.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `.github/workflows/deploy-pages.yml`          | The Pages deployment. It living here is the provenance story (see below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `docs/wire-format.md`                         | Byte-level wire specification, the session payout's events, payload and kernel records included — enough to re-implement all of this from scratch in any language.                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+## Opening a round from a link
+
+The page reads a round from its URL fragment, which the browser never sends to
+a server: `#receipts=<gz|json>.<base64url>` loads a receipts export, and
+`#round=<uuid>` fills the round field. Beside a round id a link may carry
+`transcriptLevel`, `transcriptOp`, `seedBatchLevel` and `seedBatchOp` (where
+the round's transcript and seed batch sit on L1: hints confirmed against L1,
+never evidence) and `tenant` and `pool` (which deployment and pool the round
+was played on: labels that pick form defaults, never proof). Loaded receipts'
+own tenant and pool win over the link's. `src/receipts/handoff.ts` reads them
+all.
 
 ## The engine ports (`round-replay/`)
 
@@ -110,7 +122,7 @@ len ‖ client_seed ‖ decision u32 LE ‖ chunk u32 LE)`, keyed by the
 2. **Commitment** — the `server_seed`'s hash was published in a `SeedBatch`
    inbox message at an L1 level strictly before the round's own message (a
    round reaches L1 as ONE `RoundTranscript`, written when it settles — there
-   is no `RoundCreated` any more, ADR 0020 — so the comparison is against the
+   is no separate `RoundCreated` message — so the comparison is against the
    settle level, which is exactly the comparison the kernel makes),
    and the seed revealed at settlement hashes back to it
    (`blake2b-256` over the ASCII hex string). Seeds are derived from
@@ -227,10 +239,47 @@ would imply the container is the evidence; it is not — the frames are.
 
 ## Trust posture
 
-- Read the chain through **any** indexer and archive node — the verifier
-  app defaults to public third-party endpoints (TzKT, rpc.tzkt.io) and every
+- Read the chain through **any** indexer and node — the verifier app
+  defaults to public third-party endpoints (TzKT, rpc.tzkt.io) and every
   endpoint is user-configurable. No 99dot5 infrastructure is in the trust
   path.
+- **The indexer decides which levels are read; the node proves what is
+  judged.** The verifier reads from the Tezos RPC the levels where the indexer's
+  applied inbox rows hold a message starting with this rollup's prefix, plus
+  the window's two ends, up to 8 random levels and a tail of at most 10
+  levels above the indexer's head. An indexer that omits a level, or alters a
+  message's first bytes, hides it unless one of those reads catches it; there
+  is no completeness proof yet. Every judged message comes from the Tezos
+  RPC, and only `applied` messages count. No indexer byte reaches a check.
+- **Unread is never empty.** A level that cannot be read, a contradiction
+  between indexer and node, or a declined download gives no report. Busy
+  endpoints are tried up to 5 times, 2, 4, 8 and 16 s apart, and a request
+  that receives nothing for 20 s is tried again too; **Retry**
+  fetches only what is still missing. Above 50 MB the page asks first, showing
+  the estimate. Old levels need an archive node: a pruned node leaves them
+  unread and the verifier names its history limit. The report's "L1 head" is
+  the newest level both the Tezos RPC and the indexer can serve.
+- **A game export is located first**. It carries no locator
+  hints, so the verifier maps the round's latest server-signed
+  `CommandAccepted` or `CommandRejected` time to an L1 level through the
+  indexer, scans near it for the round's authenticated transcript at level T,
+  and looks for the seed batch among the transcript sender's applied
+  operations, confirming each candidate in its own block from the Tezos RPC;
+  the lowest confirmed is B. The round is judged over
+  `[min(T − 20,000, D, B − 2,000), U]` (D the session's first deposit, U the
+  highest level the search read), which below T always contains the default
+  window. The time and the sender are hints: they choose where to look and
+  never supply a judged message. Every located report states its window in a
+  `Time location:` finding and a residual line: batch copies below that window
+  were not read unless the transcript's sender posted them. A round that
+  cannot be located gets the default window, the 20,000 levels below the
+  head, with the reason stated. On mainnet a game export's window spans at
+  least about 20,600 levels, so it asks before downloading.
+- **Fair use.** TzKT publishes no rate limit, so the verifier paces itself:
+  one indexer request at a time, at least 500 ms apart, the gap doubling after
+  each HTTP 429 up to 4 s; at most 2 block reads at once from the Tezos RPC;
+  and large downloads only with your consent. For heavy use, point the TzKT
+  field at your own instance.
 - The sequencer public keys used for signature checks are derived from L1, not
   configured here — see "Where the signing keys come from". The only pinned
   value is the origination administrator, and it is pinned because a lineage
@@ -238,7 +287,7 @@ would imply the container is the evidence; it is not — the frames are.
 - The **session key** your commands verify under comes from the export, so that
   half proves your receipts are internally consistent with the key your client
   used — not that L1 bound that key to the session. The binding lives in the
-  vault contract's `sessions` big_map; this build does not read it.
+  vault contract's `sessions` big map; this build does not read it.
 - The Tezos smart rollup independently replays every round with the revealed
   seed and credits **its own** computed payout — the sequencer's claim is
   advisory. This repository lets you check the same thing the rollup checks.

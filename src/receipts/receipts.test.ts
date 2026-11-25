@@ -2,10 +2,10 @@
 /**
  * The receipts half: the commitment rule against the cross-language vectors,
  * the protobuf reader against frames this suite builds, the import's shape
- * validation, and the ported reconstruction against every §5.3 outcome.
+ * validation, and the ported reconstruction against every outcome it can reach.
  *
  * The commitment and signing vectors are the pins that matter most. They are
- * written by `libs/proto-definitions/scripts/gen_receipt_vectors.py` and
+ * written by an independent Python generator and
  * asserted by the sequencer's Rust tests and the play client's TypeScript
  * ones; this file is the third reader of the same bytes, so a drift between
  * any two implementations surfaces here instead of in a dispute.
@@ -933,7 +933,7 @@ describe('recomputeRoundCommitment', () => {
      * round carrying a refusal from a reconstructed commitment to
      * `unavailable` — with the export fixture failing on a reason that names
      * none of this. The fixture exercises the path; this states the rule. Its
-     * twin lives in `libs/casino-client/src/receipts/recompute.test.ts`.
+     * twin lives in the play client's own reconstruction tests.
      */
     it('excludes a command whose only frame is a commandRejected from the fold', () => {
         const LATE_CASHOUT = '44444444-4444-4444-8444-444444444444';
@@ -1012,7 +1012,7 @@ const FIXTURE = JSON.parse(readFileSync(fileURLToPath(receiptsExportFixtureUrl()
  * this file builds its own frames, so it can only prove the verifier agrees
  * with itself. These documents come from the other side of the protocol, and
  * the reconstruction they expect is the one the play client computes — so the
- * two implementations of §5.3 are held to identical answers, including the
+ * two implementations of the reconstruction are held to identical answers, including the
  * de-lever case where one of them says `unavailable` on purpose.
  */
 describe('client seed in the export fixture', () => {

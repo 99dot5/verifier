@@ -43,7 +43,7 @@ import rawNetworks from './networks.json';
  * exactly what makes it the trust anchor. The lineage walk starts here and
  * follows `ProposeAdminContract` (0x0107) → `ActivateAdminContract` (0x0108)
  * hops forward; every key any administrator in that chain registered is
- * admissible evidence (ADR 0022 D7). Pinning the KEY instead — what this file
+ * admissible evidence: a key valid at delivery stays valid. Pinning the KEY instead — what this file
  * used to do — pins a value that legitimately rotates.
  */
 export interface OriginationAdministrator {
@@ -84,7 +84,7 @@ export interface NetworkConfig {
     label: string;
     /**
      * The network's `NetX…` chain id. Every sequencer signature is computed
-     * over the chain and the rollup the message was signed for (#952), so the
+     * over the chain and the rollup the message was signed for, so the
      * verifier needs this beside the selected deployment's rollup address to
      * check any signature at all — and a frame another deployment signed
      * under the same slug fails that check, exactly as it would on this

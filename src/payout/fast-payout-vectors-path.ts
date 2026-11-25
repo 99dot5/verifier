@@ -2,9 +2,8 @@
  * Resolves the shared fast-payout vector file and the public payout
  * watcher's recorded node snapshots the payout tests assert against. In this
  * public export they live in the repository's own vectors/ directory; in the
- * 99dot5 monorepo the same module points at the operator CLI's and the
- * watcher's own test files, so the identical tests pin both trees to the
- * identical bytes.
+ * 99dot5 source tree the same module points at the files these copies are
+ * taken from, so the identical tests pin both trees to the identical bytes.
  */
 
 export function fastPayoutVectorsUrl(): URL {

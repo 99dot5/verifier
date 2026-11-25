@@ -4,13 +4,12 @@
  * The injector signs `blake2b-256(chain_id ‖ rollup_address ‖
  * borsh(VersionedEnvelope))` — the Tezos convention of a Blake2b pre-hash,
  * applied explicitly, over the SIGNING DOMAIN then the envelope (mirrors
- * `services/sequencer/src/injector/signer.rs`, the kernel's
- * `libs/smart-rollup/src/signature.rs`, and the layout owned by
- * `libs/smart-rollup-messages/src/signing.rs`). The domain is the raw
+ * the sequencer's injector signer, the rollup kernel's signature check and
+ * the wire crate's signing layout). The domain is the raw
  * base58check payloads of the chain (`NetX…`, 4 bytes) and the rollup
  * (`sr1…`, 20 bytes) the message was signed for, and it is NOT on the wire:
  * the kernel hashes its own identity in, so a signature is valid on one
- * rollup on one chain only (#952). A verifier therefore needs to know which
+ * rollup on one chain only. A verifier therefore needs to know which
  * instance it is checking against — the selected network's chain id and the
  * selected deployment's rollup address — and a frame signed for any other
  * instance simply fails to verify, exactly as it would on that kernel.
@@ -22,7 +21,7 @@
  * derivable from L1 without any operator input.
  *
  * `@noble/ed25519` v2 ships without a hash; wire its synchronous SHA-512 in
- * once, as an import side effect (same pattern as libs/casino-client).
+ * once, as an import side effect (the same pattern the play client uses).
  */
 import * as ed from '@noble/ed25519';
 import { blake2b } from '@noble/hashes/blake2.js';
@@ -186,7 +185,7 @@ export function encodeScriptExprHash(hash: Uint8Array): string {
 }
 
 /**
- * The instance a sequencer message was signed for (#952): the network's
+ * The instance a sequencer message was signed for: the network's
  * `NetX…` chain id and the deployment's `sr1…` rollup address, in the forms
  * `networks.json` and the operator's `tenants.yaml` spell them.
  */
@@ -305,7 +304,7 @@ function sha256sha256(bytes: Uint8Array): Uint8Array {
     return sha256(sha256(bytes));
 }
 
-// ── Play-receipt frames (ADR 0022) ──────────────────────────────────────
+// ── Play-receipt frames ─────────────────────────────────────────────────
 
 /** Tag byte of a signed server frame: `[0x06 | signature(64) | protobuf]`. */
 export const SERVER_FRAME_TAG = 0x06;
@@ -318,8 +317,8 @@ export const SIGNATURE_LENGTH = 64;
 /**
  * Domain separator hashed in front of a SERVER frame's protobuf body.
  *
- * ASCII `99dot5:server-frame:v1`, owned by `services/sequencer/src/codec.rs`
- * and pinned by `libs/proto-definitions/testdata/receipt-vectors.json`. The
+ * ASCII `99dot5:server-frame:v1`, owned by the sequencer's frame codec
+ * and pinned by the shared `receipt-vectors.json`. The
  * sequencer key signs both WS frames and rollup inbox messages through the
  * same `ed25519(blake2b-256(bytes))` chain, so the two prefixes — this ASCII
  * tag here, the 24-byte chain + rollup domain on the inbox side — are the

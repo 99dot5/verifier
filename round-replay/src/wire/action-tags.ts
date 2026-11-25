@@ -1,6 +1,6 @@
 /**
  * The global action-tag table, mirroring
- * `libs/smart-rollup-messages/src/v1/action_tag.rs` (the single source of
+ * the Rust wire crate's v1 action-tag table (the single source of
  * truth) and pinned against `testdata/wire-vectors.json` by
  * `wire-vectors.test.ts`.
  *
@@ -55,10 +55,10 @@ export const ACTION_TAGS: readonly ActionTagEntry[] = [
     { tag: 0x10, actionType: 'higher', system: false }, // hilo
     { tag: 0x11, actionType: 'lower', system: false }, // hilo
     { tag: 0x12, actionType: 'reveal', system: false }, // mines (payload: u32 tile index)
-    { tag: 0x13, actionType: 'physical-attack', system: false }, // retired by ADR 0042; in no vocabulary; never reuse
-    { tag: 0x14, actionType: 'magic-attack', system: false }, // retired by ADR 0042; in no vocabulary; never reuse
-    { tag: 0x15, actionType: 'drink-potion', system: false }, // retired by ADR 0042; in no vocabulary; never reuse
-    { tag: 0x16, actionType: 'drink-mana', system: false }, // retired by ADR 0042; in no vocabulary; never reuse
+    { tag: 0x13, actionType: 'physical-attack', system: false }, // retired with the original Hydra rules; in no vocabulary; never reuse
+    { tag: 0x14, actionType: 'magic-attack', system: false }, // retired with the original Hydra rules; in no vocabulary; never reuse
+    { tag: 0x15, actionType: 'drink-potion', system: false }, // retired with the original Hydra rules; in no vocabulary; never reuse
+    { tag: 0x16, actionType: 'drink-mana', system: false }, // retired with the original Hydra rules; in no vocabulary; never reuse
     { tag: 0x17, actionType: 'roll', system: false }, // hydra
 ] as const;
 

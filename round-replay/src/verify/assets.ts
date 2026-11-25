@@ -1,7 +1,7 @@
 /**
  * Asset decimals, for the one asset this verifier renders.
  *
- * SOURCE OF TRUTH: `money::decimals_for` in `libs/money/src/lib.rs`, which
+ * SOURCE OF TRUTH: `money::decimals_for` in the Rust money crate, which
  * holds `ASSET_REGISTRY` — the compiled table the sequencer and the rollup
  * kernel both resolve a round's grain from. TypeScript cannot link that
  * crate, so this file is a mirror and must be edited whenever the registry

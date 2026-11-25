@@ -1,5 +1,5 @@
 /**
- * The seed-commitment proofs (ADR 0025, issue 1234): WHICH committed seed a
+ * The seed-commitment proofs: WHICH committed seed a
  * round was settled against, and WHEN the server chose it.
  *
  * The on-chain proof shows that the revealed seed was committed at an earlier

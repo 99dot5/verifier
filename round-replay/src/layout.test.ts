@@ -1,6 +1,6 @@
 // @vitest-environment node
 /**
- * The per-version port layout, mirroring `libs/games/src/<game>/v<N>/`: every
+ * The per-version port layout, mirroring the Rust engines' one module per game version: every
  * game version the replay table serves is its own `verify/<game>/v<N>.ts`,
  * reachable as `<game>.v<N>` from the barrel, and every such file on disk is
  * wired into both `REPLAYERS` and `GAME_SEED_DERIVATIONS`. A launched port is

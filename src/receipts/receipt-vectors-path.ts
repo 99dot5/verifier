@@ -1,8 +1,8 @@
 /**
  * Resolves the shared play-receipt vector files the receipt tests assert
  * against. In this public export they live in the repository's own vectors/
- * directory; in the 99dot5 monorepo the same module points at
- * libs/proto-definitions/testdata, so the identical tests pin both trees to
+ * directory; in the 99dot5 source tree the same module points at the
+ * protobuf schema's own test data, so the identical tests pin both trees to
  * the identical bytes.
  */
 

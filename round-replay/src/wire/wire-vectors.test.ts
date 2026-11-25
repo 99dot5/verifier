@@ -2,7 +2,7 @@
 /**
  * The cross-language pins the replay engine depends on.
  *
- * `libs/smart-rollup-messages/testdata/wire-vectors.json` is written by an
+ * The shared `wire-vectors.json` is written by an
  * independent Python Borsh writer and asserted by the Rust wire crate, the
  * Rust sequencer core and this file. Three implementations, one set of bytes:
  * if any two of them drift, the third fails here rather than on chain.
@@ -152,7 +152,7 @@ describe('action-tag table', () => {
     });
 
     it('gives every tag but the retired ones a game and refuses an unknown game type', () => {
-        // The original Hydra tags (ADR 0042) stay decodable and belong to no game.
+        // The original Hydra rules' tags stay decodable and belong to no game.
         const retired = ['physical-attack', 'magic-attack', 'drink-potion', 'drink-mana'];
         const games = Object.keys(GAME_VOCABULARIES);
 
@@ -167,7 +167,7 @@ describe('action-tag table', () => {
 
     it('gives hydra:v1 the roll and the retired attack tags to nobody', () => {
         // `roll` is the only game action D20 Hydra has; the original rules' tags
-        // (ADR 0042) are no longer a hydra:v1 action, so a transcript carrying one is refused.
+        // are no longer a hydra:v1 action, so a transcript carrying one is refused.
         expect(tagOf('roll')).toBe(0x17);
         expect(allowedIn('roll', 'hydra:v1')).toBe(true);
         expect(allowedIn('partial-cashout', 'hydra:v1')).toBe(true);
@@ -234,7 +234,7 @@ describe('server-seed commitment rule', () => {
 });
 
 describe('round transcript encodings', () => {
-    it('covers the shapes the plan requires', () => {
+    it('covers every shape the vectors must carry', () => {
         expect(vectors.round_transcript.length).toBeGreaterThanOrEqual(5);
         expect(vectors.message_tags).toEqual({ seed_batch: 0, round_transcript: 1, end_session: 2 });
     });

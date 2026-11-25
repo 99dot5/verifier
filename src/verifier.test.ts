@@ -112,7 +112,7 @@ function uuid(hyphenated: string): number[] {
 
 /**
  * Shadownet and the fixture rollup — the SIGNING DOMAIN every test frame is
- * signed for (#952). Hashed ahead of the envelope, never on the wire; the
+ * signed for. Hashed ahead of the envelope, never on the wire; the
  * verifier must be told which instance it is checking against.
  */
 const DOMAIN: SigningDomain = { chainId: 'NetXsqzbfFenSTS', rollupAddress: 'sr1TMxAUtDA4sDL7C4r39L18iQjhRcBRzd8a' };
@@ -276,7 +276,7 @@ interface ReceiptShape {
     /** `RoundStartedEvent.stake`; `null` writes no field (a producer predating it). */
     openerStake?: MoneySpec | null;
     /**
-     * `RoundStartedEvent.server_seed_commitment` (ADR 0025);
+     * `RoundStartedEvent.server_seed_commitment`;
      * the honest default is the chain's commitment at its index; `null`
      * models a server omitting the required message.
      */
@@ -749,7 +749,7 @@ describe('verifyRound', () => {
     });
 
     it('FAILS a round whose opener named a different seed commitment than the chain reveals', () => {
-        // The post-bet swap (ADR 0025): the server opened the round against one
+        // The post-bet swap: the server opened the round against one
         // committed seed and settled it against another. Every on-chain proof
         // replays the swapped seed and passes; only the signed opener sees it.
         const shape = { openerSeed: { hash: new Uint8Array(32).fill(0x42), index: SEED_INDEX } };
@@ -771,7 +771,7 @@ describe('verifyRound', () => {
     });
 
     it('FAILS a round settled against a seed other than the one the player echoed', () => {
-        // The #1234 shape made visible: the server promised one seed, the
+        // The pre-bet swap made visible: the server promised one seed, the
         // player signed its hash into the bet, and the transcript reveals a
         // different seed — chosen with the client seed already in hand.
         const echoed = new Uint8Array(32).fill(0x24);
@@ -1165,8 +1165,8 @@ describe('verifyRound', () => {
         expect(report.verdict).toBe('failed');
     });
 
-    it('fails a frame signed for another rollup, under the same slug and key (#952)', () => {
-        // The t10_06 replay: the same tenant, the same key, on a second rollup
+    it('fails a frame signed for another rollup, under the same slug and key', () => {
+        // The cross-deployment replay: the same tenant, the same key, on a second rollup
         // on the same chain. The frame is byte-identical on the wire apart
         // from its signature, and that signature was computed over the OTHER
         // rollup's address — so it does not verify for this one, exactly as
@@ -1182,7 +1182,7 @@ describe('verifyRound', () => {
         ).toBe('pass');
     });
 
-    it('fails a frame signed for the same rollup on another chain (#952)', () => {
+    it('fails a frame signed for the same rollup on another chain', () => {
         const mainnet: SigningDomain = { ...DOMAIN, chainId: 'NetXdQprcVkpaWU' };
         const report = verify(buildRound({ domain: mainnet }));
 
@@ -1388,7 +1388,7 @@ describe('verifyRound', () => {
 
     it('is INCONCLUSIVE when the deposit level could not be confirmed on L1', () => {
         // A player-supplied bracket is a bracket the player can widen, so an
-        // unconfirmed hint is treated as no hint at all (§8.3(d)).
+        // unconfirmed hint is treated as no hint at all: the bound must come from L1.
         const report = verify(withoutTranscript(), {
             scan: { ...BRACKETING_SCAN, deposit: { level: BRACKETING_SCAN.deposit!.level, confirmed: false } },
         });
@@ -2528,7 +2528,7 @@ describe('the seed the settled RoundEnded frame reveals', () => {
     });
 });
 
-// ── Locator hints: confirmed, then used to relocate the scan (US-D2) ─────
+// ── Locator hints: confirmed, then used to relocate the scan ─────────────
 //
 // `runChainVerification` is the shell's fetch flow without the DOM. The chain
 // is a stub over a fixed message list: `scanRange` returns what lies in the
@@ -2780,7 +2780,7 @@ describe('locator hints', () => {
             malformed?: string[];
             /** The suppression bracket's deposit (`scan.deposit`). */
             deposit?: number | null;
-            /** The deposit world D10 reads; defaults to one first deposit at `deposit` (or T − 1 000). */
+            /** The deposit world session-before-transcript reads; defaults to one first deposit at `deposit` (or T − 1 000). */
             world?: DepositWorld;
             keys?: KeySet;
             receipts?: ReceiptsInput;
@@ -2829,7 +2829,7 @@ describe('locator hints', () => {
     const transcriptHint = (level: number, operationHash = `op-level-${level}`) => ({ level, operationHash });
     const batchHint = (level: number, operationHash: string | null = `op-level-${level}`) => ({ level, operationHash });
 
-    it('resolves the keys, then the hints, then the deposit, and only then scans (D1)', async () => {
+    it('resolves the keys, then the hints, then the deposit, and only then scans', async () => {
         const log: string[] = [];
 
         await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, deposit: T - 50, log });
@@ -2936,7 +2936,7 @@ describe('locator hints', () => {
         expect(result.report.findings.join('\n')).toContain('re-ran without the batch hint');
     });
 
-    it('D6: any other hinted verdict stands with no re-run', async () => {
+    it('any other hinted verdict stands with no re-run', async () => {
         const batchLevel = T - 500;
         const inflated = buildRound({
             batchLevel,
@@ -2986,7 +2986,7 @@ describe('locator hints', () => {
         // The final pass reaches the early copy, and the kernel applies the
         // FIRST copy, so that is the one checked. It lies below the session's
         // first deposit, so the kernel applied it as a session-missing reject:
-        // the session-before-transcript check (D10) fails it.
+        // the session-before-transcript check fails it.
         expect(result.report.scan).toMatchObject({ fromLevel: batchLevel, toLevel: T });
         expect(result.report.references.find((r) => r.summary.startsWith('RoundTranscript'))?.level).toBe(earlyCopy);
         expect(statusOf(seen[0], SESSION_BEFORE_TRANSCRIPT_CHECK_ID)).toBe('pass');
@@ -3006,13 +3006,13 @@ describe('locator hints', () => {
         expect(capped.reason).toContain(`stopped at level ${T}, below the head`);
     });
 
-    it('D3: a found round is never made inconclusive by a scan capped at T below the head', async () => {
+    it('a found round is never made inconclusive by a scan capped at T below the head', async () => {
         const result = await run(round(T - 5), { hints: { transcript: transcriptHint(T) }, deposit: null });
 
         expect(result.report.scan?.toLevel).toBeLessThan(HEAD);
         expect(result.report.verdict).toBe('verified');
     });
-    // ── session-before-transcript (D10) ─────────────────────────────────
+    // ── session-before-transcript ───────────────────────────────────────
 
     const d10 = (report: { checks: { id: string; status: string; detail: string }[] }) =>
         report.checks.find((c) => c.id === SESSION_BEFORE_TRANSCRIPT_CHECK_ID);
@@ -3093,7 +3093,7 @@ describe('locator hints', () => {
         });
 
         expect(d10(result.report)?.status).toBe('unavailable');
-        expect(d10(result.report)?.detail).toContain('indexer and node disagree');
+        expect(d10(result.report)?.detail).toContain('the indexer and the Tezos RPC disagree');
         expect(result.report.verdict).toBe('incomplete');
     });
 
@@ -3116,7 +3116,7 @@ describe('locator hints', () => {
 
         expect(d10(result.report)?.status).toBe('unavailable');
         expect(d10(result.report)?.detail).toContain('not shown to be the session-creating one');
-        expect(d10(result.report)?.detail).toContain('keeps no sessions big_map');
+        expect(d10(result.report)?.detail).toContain('keeps no sessions big map');
         expect(result.report.verdict).toBe('incomplete');
     });
 
@@ -3149,7 +3149,7 @@ describe('locator hints', () => {
         });
 
         expect(d10(result.report)?.status).toBe('fail');
-        expect(findingsOf(result.report)).toContain('The node confirms it as the session-creating deposit');
+        expect(findingsOf(result.report)).toContain('The Tezos RPC confirms it as the session-creating deposit');
         expect(findingsOf(result.report)).toContain('REJECT_SESSION_MISSING');
         expect(result.report.verdict).toBe('failed');
     });
@@ -3160,11 +3160,11 @@ describe('locator hints', () => {
             rotated('production', 'error'),
             `vault ${VAULT_B} could not be looked up`,
         ],
-        ['the older vault is a preview vault', rotated('preview', false), `vault ${VAULT_B} keeps no sessions big_map`],
+        ['the older vault is a preview vault', rotated('preview', false), `vault ${VAULT_B} keeps no sessions big map`],
         [
             'the older vault has no determinable big_map id',
             rotated('unknown-id', false),
-            `vault ${VAULT_B} keeps no sessions big_map`,
+            `vault ${VAULT_B} keeps no sessions big map`,
         ],
     ] as const) {
         it(`D-1(m) twin: ${name}, so the round is incomplete`, async () => {
@@ -3185,7 +3185,7 @@ describe('locator hints', () => {
 
         expect(d10(result.report)?.status).toBe('unavailable');
         expect(d10(result.report)?.detail).toContain('the indexer returned 500');
-        // Every other proof passed: without D10 this round read `verified`.
+        // Every other proof passed: without this check the round read `verified`.
         expect(result.report.checks.filter((c) => c.status !== 'pass').map((c) => c.id)).toEqual(
             expect.arrayContaining([SESSION_BEFORE_TRANSCRIPT_CHECK_ID]),
         );

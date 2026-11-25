@@ -1,6 +1,6 @@
 /**
  * Decoder for the sequencer→rollup external message wire format, mirroring
- * `libs/smart-rollup-messages` (the single source of truth for the schema):
+ * the Rust wire crate (the single source of truth for the schema):
  *
  *     [0x09 0x95 | 64-byte Ed25519 signature | borsh(VersionedEnvelope)]
  *
@@ -17,7 +17,7 @@
  * 0x02. That break was taken only because nothing was deployed on mainnet and
  * shadownet was re-originated in the same change. After origination the only
  * moves are appending a variant or adding a v2 schema, so this decoder tracks
- * `libs/smart-rollup-messages/src/v1.rs`, where the tags are pinned by
+ * the wire crate's v1 schema, where the tags are pinned by
  * `sequencer_message_discriminants_are_frozen`.
  */
 import { BorshError, BorshReader } from './borsh';
@@ -52,9 +52,9 @@ export interface RoundTranscriptMessage {
     /** The sequencer's claim, in the same atomic units as `stake`. The kernel credits its own recomputed payout, never this. */
     claimedPayout: bigint;
     /**
-     * blake2b-256 over the round's archived signed player commands (ADR
-     * 0022 D1). Decoded and displayed here; verifying it against the
-     * signed-command archive is a later verifier PR, not this one.
+     * blake2b-256 over the round's archived signed player commands. Decoded
+     * here; the round verifier's receipts proof checks it against the
+     * player's own signed commands.
      */
     playerCommitment: Uint8Array;
     actions: TranscriptActionWire[];

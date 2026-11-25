@@ -1,6 +1,6 @@
 /**
- * hydra:v1 — integer reimplementation of `libs/games/src/hydra/v1/engine.rs` +
- * `math.rs`, pinned against `libs/games/src/hydra/v1/testdata/vectors.json`.
+ * hydra:v1 — integer reimplementation of the Rust hydra:v1 engine and its
+ * maths, pinned against hydra's `vectors.json`.
  *
  * The player picks a party of 0–8 companions at the bet and then rolls a d20
  * against twelve beasts of rising difficulty class. A roll beats a beast when

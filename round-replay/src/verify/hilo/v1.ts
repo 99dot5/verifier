@@ -1,6 +1,6 @@
 /**
- * hilo:v1 — integer reimplementation of `libs/games/src/hilo/v1/engine.rs`,
- * pinned against `libs/games/src/hilo/v1/testdata/vectors.json`.
+ * hilo:v1 — integer reimplementation of the Rust hilo:v1 engine,
+ * pinned against hilo's `vectors.json`.
  *
  * Each card is one DECISION: the opening card is decision 0 and the k-th guess
  * is decision k, counting only the steps that draw a card. Each draws 8 bytes
@@ -10,21 +10,20 @@
  * BOTH directions.
  *
  * The house edge is charged on every guess, so RTP is
- * 99.5% per guess, so round RTP is `0.995^n` — see
- * `docs/specs/per-decision-house-edge.md`.
+ * 99.5% per guess, so round RTP is `0.995^n`.
  *
  * Two SYSTEM-ONLY transcript steps back the max-win cap
- * (docs/specs/max-win-cap.md): `partial-cashout` (banks part of the position
+ * (the most one round may pay): `partial-cashout` (banks part of the position
  * to the session balance — chain untouched; it consumes an action index but
  * draws no card, so it does NOT advance the decision and moves no later card)
  * and `abandon`, which settles the
  * round at the position's current value — `banked + live`, what a cashout
- * would pay — with outcome `lose`. It used to forfeit the live part; sec-28
- * (security finding sec-28, recorded in `docs/architecture.md`) closed that,
- * because an abandon is the one step the sequencer writes with no player
+ * would pay — with outcome `lose`. It used to forfeit the live part; a
+ * security fix closed that, because an abandon is the one step the sequencer
+ * writes with no player
  * signature behind it, so forfeiting on it made forging one profitable.
  *
- * The payout follows the banked/live fold of `partial_cashout.rs`, NOT
+ * The payout follows the banked/live fold (`partial-cashout.ts`), NOT
  * `floor(stake × cumulative)`: the live part rounds at the asset grain on
  * every winning step, so the two differ on any round of two or more guesses.
  */
@@ -177,8 +176,8 @@ export function replay(
 
     for (const action of actions.slice(1)) {
         if (settled) {
-            // The kernel stops at the first settle and never reads what follows
-            // (libs/smart-rollup/src/games.rs); the verifier's
+            // The kernel stops at the first settle and never reads what follows;
+            // the verifier's
             // actions-after-settle check reports any such entries.
             break;
         }

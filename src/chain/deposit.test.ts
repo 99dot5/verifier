@@ -234,7 +234,7 @@ const REAL_SESSION_HEX = sessionsEntryCapture.sessionIdHex;
 const REAL_SESSION = '01a17098-a9b8-7c69-831c-42ce11cb8b0f';
 /** The level of the `RegisterPoolVault` that registered the vault for the pool. */
 const REAL_VAULT_REGISTERED_AT = 5_625_985;
-/** The vault's other big_map, `paid` (ADR 0027's payout ledger), the third leaf of its storage. */
+/** The vault's other big_map, `paid` (the vault's payout ledger), the third leaf of its storage. */
 const PAID_BIG_MAP_ID = (sessionsEntryCapture.storageAtHead.args[2] as { int: string }).int;
 const firstDepositGroup = firstDepositCapture.operationGroup as unknown as RpcManagerOperationGroup;
 const topUpGroup = topUpCapture.operationGroup as unknown as RpcManagerOperationGroup;
@@ -477,7 +477,7 @@ describe('resolveSessionDeposit', () => {
             firstProven: true,
             otherVaults: { clear: true },
         });
-        expect(located.detail).toContain('The node confirms it');
+        expect(located.detail).toContain('The Tezos RPC confirms it');
         expect(located.otherVaults?.detail).toContain('no other vault of pool standard');
     });
 
@@ -576,7 +576,7 @@ describe('resolveSessionDeposit', () => {
         },
         {
             name: 'the node disagrees with the indexer',
-            reason: 'indexer and node disagree',
+            reason: 'the indexer and the Tezos RPC disagree',
             input: () => ({
                 transcript: transcriptCopy(),
                 lineage: lineageWith([{ vault: REAL_VAULT, level: 1 }]),

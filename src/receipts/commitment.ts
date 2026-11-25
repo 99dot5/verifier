@@ -1,5 +1,5 @@
 /**
- * The player commitment over a round's signed command frames (ADR 0022 D1).
+ * The player commitment over a round's signed command frames.
  *
  * Preimage, byte for byte:
  *
@@ -18,7 +18,7 @@
  * `sequencer_core::commitment::compute` owns the rule; this is the third
  * independent implementation of it (the server's, the play client's, and this
  * one), and all three are pinned to the same bytes by the shared vectors in
- * `libs/proto-definitions/testdata/receipt-vectors.json`.
+ * `receipt-vectors.json`.
  */
 import { blake2b } from '@noble/hashes/blake2.js';
 

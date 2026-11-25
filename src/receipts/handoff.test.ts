@@ -1,13 +1,21 @@
 // @vitest-environment node
 /**
  * The receipts hand-off fragment (`#receipts=<scheme>.<base64url>`), as the
- * games write it (`libs/casino-client/src/receipts/handoff.ts`, whose own tests
+ * games write it (the play client's encoder, whose own tests
  * round-trip through this format). The vectors below are fixed strings — a
  * `gz.` one produced by Node's zlib, not by the game's encoder — so this side
  * pins the format, not one implementation's output.
  */
 import { describe, expect, it } from 'vitest';
-import { readHintHandoff, readReceiptsHandoff, readRoundHandoff } from './handoff';
+import { NETWORKS, parseNetworks } from '../chain/networks';
+import {
+    planFragmentArrival,
+    readHintHandoff,
+    readReceiptsHandoff,
+    readRoundHandoff,
+    readScopeHandoff,
+    resolveScopeHandoff,
+} from './handoff';
 
 const TEXT = '{"schema":"99dot5.receipts.v1","note":"hand-off vector"}';
 const GZ = 'gz.H4sIAAAAAAACE6tWKk7OSM1NVLJSsrRMyS8x1StKTU7NLCgp1iszVNJRyssvSQXKZSTmpejmp6UplKUml-QXKdUCAENy2fA4AAAA';
@@ -77,7 +85,7 @@ describe('readRoundHandoff', () => {
 describe('readHintHandoff', () => {
     const TRANSCRIPT_OP = 'ooxa3P8hPVb3cX7YQ7e4H9SpX2nWm3kD5aQe8vRrZ1t6Ug7Fh2J';
     const BATCH_OP = 'onyxCAJ2FSiVUv8fEzSgfrYQtCbqQd8ZLjnGx1qEKmrBV3cWPdT';
-    // The fragment the sender writes (`libs/casino-client`'s `roundHandoffUrl`).
+    // The fragment the sender writes (the play client's `roundHandoffUrl`).
     const ALL = `#round=${ROUND}&transcriptLevel=1234567&transcriptOp=${TRANSCRIPT_OP}&seedBatchLevel=1234500&seedBatchOp=${BATCH_OP}`;
 
     it('reads no hint, and no finding, from a link that carries none', () => {
@@ -163,5 +171,219 @@ describe('readHintHandoff', () => {
 
         expect(read.hints).toEqual({ seedBatch: { level: 42, operationHash: BATCH_OP } });
         expect(read.findings).toHaveLength(2);
+    });
+});
+
+describe('readScopeHandoff', () => {
+    it('reads nothing from a fragment that names no tenant or pool', () => {
+        expect(readScopeHandoff(`#round=${ROUND}`)).toEqual({ tenantId: null, poolId: null, findings: [] });
+        expect(readScopeHandoff('')).toEqual({ tenantId: null, poolId: null, findings: [] });
+    });
+
+    it('reads the tenant and pool beside the round id, with or without the leading #', () => {
+        const scope = { tenantId: 'stg-99dot5-com-shadownet', poolId: 'standard', findings: [] };
+
+        expect(readScopeHandoff(`#round=${ROUND}&tenant=stg-99dot5-com-shadownet&pool=standard`)).toEqual(scope);
+        expect(readScopeHandoff(`round=${ROUND}&tenant=stg-99dot5-com-shadownet&pool=standard`)).toEqual(scope);
+        expect(readScopeHandoff(`#round=${ROUND}&pool=preview`)).toEqual({
+            tenantId: null,
+            poolId: 'preview',
+            findings: [],
+        });
+    });
+
+    it('drops a value that is not a slug with a finding that never echoes it, and the round stands', () => {
+        const cases = [
+            { key: 'tenant', value: '' },
+            { key: 'tenant', value: 'Stg-99dot5' },
+            { key: 'tenant', value: '<img src=x onerror=alert(1)>' },
+            { key: 'pool', value: 'standard pool' },
+            { key: 'pool', value: 'a'.repeat(33) },
+            { key: 'pool', value: 'stándard' },
+        ];
+
+        for (const { key, value } of cases) {
+            const fragment = `#round=${ROUND}&${key}=${encodeURIComponent(value)}`;
+            const read = readScopeHandoff(fragment);
+
+            expect(read.tenantId, fragment).toBeNull();
+            expect(read.poolId, fragment).toBeNull();
+            expect(read.findings, fragment).toEqual([
+                `the link's ${key} is not a slug (a-z, 0-9 and -, at most 32); it was ignored`,
+            ]);
+            expect(readRoundHandoff(fragment), fragment).toBe(ROUND);
+        }
+    });
+
+    it('keeps the good key when only the other one is malformed', () => {
+        const read = readScopeHandoff(`#round=${ROUND}&tenant=stg-99dot5-com-shadownet&pool=%3Cb%3E`);
+
+        expect(read.tenantId).toBe('stg-99dot5-com-shadownet');
+        expect(read.poolId).toBeNull();
+        expect(read.findings).toHaveLength(1);
+    });
+});
+
+describe('resolveScopeHandoff', () => {
+    const deployment = (tenantId: string, rollupAddress: string, status: 'active' | 'retired' = 'active') => ({
+        status,
+        tenantId,
+        rollupAddress,
+        originationAdministrator: { address: 'KT1HBEQTLqD54X5hFM3HeicbQ5UVF12RwivW', level: 4085587 },
+        evidence: ['sr_originate at level 4085587'],
+    });
+    const ROLLUP_A = 'sr1D3nG1QgW88iS5owT9gneusBU38K5oHGLS';
+    const ROLLUP_B = 'sr1LVZW8AUSQehXjvn3NV6BJJKdA3vheqhZL';
+    const network = (id: string, deployments: unknown[]) => ({
+        id,
+        label: id,
+        chainId: id === 'mainnet' ? 'NetXdQprcVkpaWU' : 'NetXsqzbfFenSTS',
+        tzktApiUrl: `https://api.${id}.example`,
+        rpcUrl: `https://rpc.${id}.example`,
+        deployments,
+    });
+    const networks = (mainnet: unknown[], shadownet: unknown[]) =>
+        parseNetworks({ networks: [network('mainnet', mainnet), network('shadownet', shadownet)] });
+    const scope = (tenantId: string | null, poolId: string | null) => ({ tenantId, poolId, findings: [] });
+
+    it('changes nothing for a link that names neither', () => {
+        expect(resolveScopeHandoff(NETWORKS, scope(null, null), false)).toEqual({
+            deployment: null,
+            poolId: null,
+            findings: [],
+        });
+    });
+
+    it('selects the one live deployment carrying the tenant, on whichever network it lives, and fills the pool', () => {
+        const known = networks(
+            [deployment('main-tenant', ROLLUP_A)],
+            [deployment('stg-tenant', ROLLUP_B), deployment('stg-tenant', ROLLUP_A, 'retired')],
+        );
+        const resolved = resolveScopeHandoff(known, scope('stg-tenant', 'preview'), false);
+
+        expect(resolved.deployment?.network.id).toBe('shadownet');
+        expect(resolved.deployment?.deployment.rollupAddress).toBe(ROLLUP_B);
+        expect(resolved.poolId).toBe('preview');
+        expect(resolved.findings).toEqual([]);
+    });
+
+    it('takes the staging tenant of the compiled-in list to shadownet', () => {
+        const resolved = resolveScopeHandoff(NETWORKS, scope('stg-99dot5-com-shadownet', 'standard'), false);
+
+        expect(resolved.deployment?.network.id).toBe('shadownet');
+        expect(resolved.deployment?.deployment.tenantId).toBe('stg-99dot5-com-shadownet');
+        expect(resolved.poolId).toBe('standard');
+    });
+
+    it('keeps the default, and drops the pool with it, for a tenant no live deployment carries', () => {
+        const known = networks([deployment('main-tenant', ROLLUP_A)], [deployment('old-tenant', ROLLUP_B, 'retired')]);
+
+        for (const tenant of ['unknown-tenant', 'old-tenant']) {
+            const resolved = resolveScopeHandoff(known, scope(tenant, 'standard'), false);
+
+            expect(resolved.deployment, tenant).toBeNull();
+            expect(resolved.poolId, tenant).toBeNull();
+            expect(resolved.findings, tenant).toEqual([
+                `the link's tenant ${tenant} is carried by no live deployment this page knows; ` +
+                    'it was ignored, choose the network and deployment yourself',
+                "the link's pool was ignored with its tenant",
+            ]);
+        }
+    });
+
+    it('keeps the default for a tenant two live deployments carry', () => {
+        const known = networks([deployment('twice', ROLLUP_A)], [deployment('twice', ROLLUP_B)]);
+        const resolved = resolveScopeHandoff(known, scope('twice', null), false);
+
+        expect(resolved.deployment).toBeNull();
+        expect(resolved.findings).toEqual([
+            "the link's tenant twice is carried by 2 live deployments; it was ignored, choose the one this round was played on",
+        ]);
+    });
+
+    it('drops a pool named beside no tenant, since a pool belongs to its tenant', () => {
+        expect(resolveScopeHandoff(NETWORKS, scope(null, 'preview'), false)).toEqual({
+            deployment: null,
+            poolId: null,
+            findings: ["the link's pool was ignored: the link names no tenant"],
+        });
+    });
+
+    it('lets loaded receipts win over the link’s tenant and pool', () => {
+        expect(resolveScopeHandoff(NETWORKS, scope('stg-99dot5-com-shadownet', 'standard'), true)).toEqual({
+            deployment: null,
+            poolId: null,
+            findings: ["the link's tenant and pool were ignored: the loaded receipts name their own"],
+        });
+    });
+
+    it('carries the parser’s findings first, and drops the pool with a malformed tenant', () => {
+        const parsed = readScopeHandoff(`#round=${ROUND}&tenant=BAD&pool=standard`);
+
+        expect(resolveScopeHandoff(NETWORKS, parsed, false)).toEqual({
+            deployment: null,
+            poolId: null,
+            findings: [
+                "the link's tenant is not a slug (a-z, 0-9 and -, at most 32); it was ignored",
+                "the link's pool was ignored: the link names no tenant",
+            ],
+        });
+    });
+});
+
+describe('planFragmentArrival', () => {
+    const OTHER = '01920000-0000-7000-8000-0000000000bb';
+
+    it('ignores a fragment that carries neither receipts nor a round', () => {
+        for (const hash of ['', '#', '#tenant=stg-99dot5-com-shadownet', '#section-2']) {
+            expect(planFragmentArrival(hash, ROUND), hash).toEqual({
+                carries: 'nothing',
+                reset: false,
+                clearReceipts: false,
+                note: null,
+            });
+        }
+    });
+
+    it('replaces whatever receipts are loaded with new ones, whichever round they name', () => {
+        for (const loaded of [null, ROUND, OTHER]) {
+            expect(planFragmentArrival(`#receipts=${JSON_FORM}`, loaded)).toEqual({
+                carries: 'receipts',
+                reset: true,
+                clearReceipts: true,
+                note: null,
+            });
+        }
+    });
+
+    it('moves to a linked round, keeping receipts for that same round', () => {
+        for (const loaded of [null, ROUND]) {
+            expect(planFragmentArrival(`#round=${ROUND.replaceAll('-', '').toUpperCase()}`, loaded)).toEqual({
+                carries: 'round',
+                reset: true,
+                clearReceipts: false,
+                note: null,
+            });
+        }
+    });
+
+    it('clears receipts for another round, saying why, so they are not checked in the linked round’s place', () => {
+        expect(planFragmentArrival(`#round=${ROUND}&tenant=stg-99dot5-com-shadownet`, OTHER)).toEqual({
+            carries: 'round',
+            reset: true,
+            clearReceipts: true,
+            note:
+                `the receipts loaded for round ${OTHER} were cleared: the link names round ${ROUND}, ` +
+                'and those receipts would have been checked in its place',
+        });
+    });
+
+    it('changes nothing for a malformed round id', () => {
+        expect(planFragmentArrival('#round=<script>', OTHER)).toEqual({
+            carries: 'round',
+            reset: false,
+            clearReceipts: false,
+            note: null,
+        });
     });
 });

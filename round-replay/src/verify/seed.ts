@@ -1,8 +1,8 @@
 /**
  * Provably-fair seed derivation, byte-for-byte mirroring
- * `libs/game-engine-core/src/rng/v1.rs`, selected per game version as the
+ * the Rust engine core's v1 RNG, selected per game version as the
  * engines select it — and the seed-commitment hashes
- * mirroring `services/sequencer/src/seed_provisioner/seeds.rs`.
+ * mirroring the sequencer's seed provisioner.
  *
  * The derivation input is EXACTLY `(game_type, server_seed, client_seed,
  * decision, chunk)` — there is no operator-controlled nonce anywhere in it.
@@ -158,7 +158,7 @@ export function seedRule(derivation: Derivation): SeedRule {
 
 /**
  * The seed derivation each game version names: a mirror of every engine's
- * `SEED_DERIVATION` const (`libs/games/src/<game>/v1/engine.rs`), pinned
+ * `SEED_DERIVATION` const, pinned
  * against each game's `vectors.json` `algorithm.derivation`. A game version
  * names its rule once and never changes it; a new rule ships with new game
  * versions.
@@ -267,8 +267,8 @@ export function rawU64(seed: Uint8Array): bigint {
 /**
  * The on-chain seed commitment: `blake2b-256` of the ASCII bytes of the
  * 64-char lowercase hex `server_seed` STRING (not of the 32 raw bytes it
- * spells). Mirrors `seed_provisioner/seeds.rs::hash_seed` and the kernel's
- * settle-time check (`libs/smart-rollup/src/rounds.rs`).
+ * spells). Mirrors the seed provisioner's `hash_seed` and the rollup kernel's
+ * settle-time check.
  */
 export function serverSeedCommitment(serverSeed: string): Uint8Array {
     return blake2b(encoder.encode(serverSeed), { dkLen: 32 });

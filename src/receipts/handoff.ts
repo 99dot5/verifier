@@ -1,6 +1,5 @@
 /**
- * Receipts handed over in the URL fragment by a game's "Verify this round"
- * (ADR 0026 §2.3).
+ * Receipts handed over in the URL fragment by a game's "Verify this round".
  *
  * The game opens this page at `…/verify/#receipts=<scheme>.<base64url>` with
  * the round's `ReceiptsExportV1` inside, so the reader lands with the round
@@ -12,7 +11,7 @@
  * - `gz`   — gzip of the export's JSON text;
  * - `json` — the UTF-8 JSON text itself (a browser without `CompressionStream`).
  *
- * The encoder is `libs/casino-client/src/receipts/handoff.ts`. This module only
+ * The encoder is the play client's. This module only
  * turns the fragment back into the text the file picker would have produced;
  * whether that text is a valid export is `importReceipts`'s question, asked
  * exactly as it is for a file, so a hand-off is no more trusted than a file.
@@ -22,8 +21,12 @@
  * they name their own round. Beside the round id the link may carry the
  * round's L1 locators (`transcriptLevel`, `transcriptOp`, `seedBatchLevel`,
  * `seedBatchOp`, {@link readHintHandoff}): hints this page confirms against
- * L1, never evidence.
+ * L1, never evidence. It may also name the round's tenant and pool (`tenant`,
+ * `pool`, {@link readScopeHandoff}), which pick the network and deployment a
+ * receipts document would otherwise have named; loaded receipts name their
+ * own and win.
  */
+import { deploymentsForTenant, type DeploymentMatch, type NetworkConfig } from '../chain/networks';
 
 /** The fragment parameter the game writes. */
 export const RECEIPTS_FRAGMENT_KEY = 'receipts';
@@ -41,6 +44,15 @@ export const TRANSCRIPT_LEVEL_FRAGMENT_KEY = 'transcriptLevel';
 export const TRANSCRIPT_OP_FRAGMENT_KEY = 'transcriptOp';
 export const SEED_BATCH_LEVEL_FRAGMENT_KEY = 'seedBatchLevel';
 export const SEED_BATCH_OP_FRAGMENT_KEY = 'seedBatchOp';
+
+/** The fragment parameters naming the round's tenant and pool beside a bare round id; each is optional. */
+export const TENANT_FRAGMENT_KEY = 'tenant';
+export const POOL_FRAGMENT_KEY = 'pool';
+
+/** A tenant or pool slug: 1 to 32 of `a-z`, `0-9` and `-`, as the tenant registry accepts them. */
+export function isScopeSlug(value: unknown): value is string {
+    return typeof value === 'string' && /^[a-z0-9-]{1,32}$/.test(value);
+}
 
 /**
  * Where the round's transcript and its seed batch sit on L1, as the sender
@@ -263,4 +275,174 @@ export function readHintHandoff(hash: string): HintHandoff {
     }
 
     return { hints: hints.transcript || hints.seedBatch ? hints : null, findings };
+}
+
+/** The tenant and pool a fragment named, and what was wrong with any it dropped. */
+export interface ScopeHandoff {
+    /** `null` when the fragment names no tenant, or a malformed one. */
+    tenantId: string | null;
+    /** `null` when the fragment names no pool, or a malformed one. */
+    poolId: string | null;
+    /** Reader-facing notes, one per dropped key. Findings, never failures. */
+    findings: string[];
+}
+
+/**
+ * The tenant and pool named beside a bare round id
+ * (`#round=<uuid>&tenant=<slug>&pool=<slug>`).
+ *
+ * Never throws: like a hint, a malformed slug is dropped with a finding while
+ * `round` stands, and the page keeps its own default. Whether a well-formed
+ * tenant names a deployment this page knows is the caller's question. A value
+ * is never echoed into a finding — it may be anything a link can carry.
+ */
+export function readScopeHandoff(hash: string): ScopeHandoff {
+    const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+    const findings: string[] = [];
+
+    const read = (key: string): string | null => {
+        const text = params.get(key);
+
+        if (text === null) {
+            return null;
+        }
+
+        if (!isScopeSlug(text)) {
+            findings.push(`the link's ${key} is not a slug (a-z, 0-9 and -, at most 32); it was ignored`);
+
+            return null;
+        }
+
+        return text;
+    };
+
+    return { tenantId: read(TENANT_FRAGMENT_KEY), poolId: read(POOL_FRAGMENT_KEY), findings };
+}
+
+/** What a link's tenant and pool do to the form. */
+export interface ScopeAdoption {
+    /** The one deployment to select, or `null` to keep the page's own. */
+    deployment: DeploymentMatch | null;
+    /** The pool to fill in, or `null` to leave the field alone. */
+    poolId: string | null;
+    /** Reader-facing notes, one per dropped key: the parser's, then this step's. */
+    findings: string[];
+}
+
+/**
+ * Where a link's tenant and pool ({@link readScopeHandoff}) take the form.
+ *
+ * Loaded receipts name their own tenant and pool and win, as they win over
+ * the link's round id. Otherwise the tenant selects its network and
+ * deployment only when exactly one deployment that is not retired carries it:
+ * with none or several, the page keeps its default and says so, because
+ * verifying against the wrong lineage would fail an honest round's
+ * signatures. A pool belongs to its tenant, so it applies only beside a
+ * tenant that selected its deployment: beside none, or one that was dropped,
+ * it is dropped too.
+ */
+export function resolveScopeHandoff(
+    networks: NetworkConfig[],
+    scope: ScopeHandoff,
+    receiptsLoaded: boolean,
+): ScopeAdoption {
+    const findings = [...scope.findings];
+    const none: ScopeAdoption = { deployment: null, poolId: null, findings };
+
+    if (scope.tenantId === null && scope.poolId === null) {
+        return none;
+    }
+
+    if (receiptsLoaded) {
+        findings.push("the link's tenant and pool were ignored: the loaded receipts name their own");
+
+        return none;
+    }
+
+    if (scope.tenantId === null) {
+        findings.push("the link's pool was ignored: the link names no tenant");
+
+        return none;
+    }
+
+    const live = deploymentsForTenant(networks, scope.tenantId).filter(
+        ({ deployment }) => deployment.status !== 'retired',
+    );
+
+    if (live.length !== 1) {
+        findings.push(
+            live.length === 0
+                ? `the link's tenant ${scope.tenantId} is carried by no live deployment this page knows; ` +
+                      'it was ignored, choose the network and deployment yourself'
+                : `the link's tenant ${scope.tenantId} is carried by ${live.length} live deployments; ` +
+                      'it was ignored, choose the one this round was played on',
+        );
+
+        if (scope.poolId !== null) {
+            findings.push("the link's pool was ignored with its tenant");
+        }
+
+        return none;
+    }
+
+    return { deployment: live[0], poolId: scope.poolId, findings };
+}
+
+/** What a fragment arriving into the page does to what the page already holds. */
+export interface FragmentArrival {
+    /** What the fragment carries; `nothing` (an empty or foreign fragment) is ignored. */
+    carries: 'receipts' | 'round' | 'nothing';
+    /**
+     * Whether the page moves to another round: the previous report, scan
+     * status, round fields and link hints are cleared, and a run still going
+     * stops writing to the page. False for a link this page refuses.
+     */
+    reset: boolean;
+    /** Whether the receipts box (and its scope and provenance line) is emptied first. */
+    clearReceipts: boolean;
+    /** Why the receipts were cleared, for the reader; `null` when they were not. */
+    note: string | null;
+}
+
+/**
+ * Plan a fragment's arrival, at load or by `hashchange` into a page already in
+ * use. `loadedRoundId` is the round the receipts box's document names
+ * (hyphenated lowercase), or `null` when the box holds no readable document.
+ *
+ * New receipts replace the box exactly as at load. A round link keeps a
+ * document for the SAME round and clears one for any other, which would
+ * otherwise win over the link and be verified in its place. A malformed round
+ * id changes nothing but the message saying so.
+ */
+export function planFragmentArrival(hash: string, loadedRoundId: string | null): FragmentArrival {
+    const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+
+    if (params.has(RECEIPTS_FRAGMENT_KEY)) {
+        return { carries: 'receipts', reset: true, clearReceipts: true, note: null };
+    }
+
+    if (!params.has(ROUND_FRAGMENT_KEY)) {
+        return { carries: 'nothing', reset: false, clearReceipts: false, note: null };
+    }
+
+    let roundId: string | null;
+
+    try {
+        roundId = readRoundHandoff(hash);
+    } catch {
+        return { carries: 'round', reset: false, clearReceipts: false, note: null };
+    }
+
+    if (loadedRoundId === null || roundId === loadedRoundId) {
+        return { carries: 'round', reset: true, clearReceipts: false, note: null };
+    }
+
+    return {
+        carries: 'round',
+        reset: true,
+        clearReceipts: true,
+        note:
+            `the receipts loaded for round ${loadedRoundId} were cleared: the link names round ${roundId}, ` +
+            'and those receipts would have been checked in its place',
+    };
 }

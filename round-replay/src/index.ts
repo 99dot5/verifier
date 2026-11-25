@@ -20,6 +20,7 @@ export { BorshError, BorshReader } from './wire/borsh';
 export {
     decodeEnvelopePayload,
     decodeExternalMessage,
+    EXTERNAL_MESSAGE_PREFIX,
     type DecodedEnvelope,
     type RoundTranscriptMessage,
     type SequencerMessage,

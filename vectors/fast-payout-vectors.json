@@ -1,5 +1,5 @@
 {
-  "generated_by": "local-env/admin-ops/gen_fast_payout_vectors.py",
+  "generated_by": "an independent pytezos reference generator",
   "domains": {
     "fast_payout": "fast-payout:v1",
     "rotate_payout_signers": "fast-payout-rotate:v1"

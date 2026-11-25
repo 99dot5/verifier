@@ -5,18 +5,33 @@
  * to the rollup node's batcher, which injects `smart_rollup_add_messages`
  * operations. Those operations — and therefore every message the schema
  * carries today: `SeedBatch` (0x00), `RoundTranscript` (0x01) and
- * `EndSession` (0x02) — are ordinary manager operations in ordinary blocks,
- * readable from any archive node and locatable through any indexer.
+ * `EndSession` (0x02) — are ordinary manager operations in ordinary blocks.
  *
- * Split of responsibilities:
- *   - TzKT (indexer) LOCATES candidate operations fast — raw block scanning
- *     is far too slow in a browser. It returns levels/hashes, not payloads.
- *   - The node RPC (archive) supplies the actual message bytes for those
- *     levels, which also serves as an independent cross-check on the indexer.
+ * Who decides what, stated exactly:
+ *
+ *   - The INDEXER CHOOSES THE LEVELS. The scan reads the levels where the
+ *     indexer's applied external inbox rows hold a message starting with this
+ *     rollup's external-message prefix, plus the window's two ends, a few
+ *     random levels and a tail of at most ten levels above the indexer's head.
+ *     (Before, it read every level where the indexer listed any
+ *     `smart_rollup_add_messages` operation, which incidentally re-read nearly
+ *     every busy level.) An indexer that omits a level, or alters a frame's
+ *     first bytes, hides that frame, unless a random level, an end or a level
+ *     already read catches it. There is no completeness proof yet; a proof
+ *     against the rollup's inbox commitment could provide one.
+ *   - The NODE SUPPLIES THE EVIDENCE. Every judged message is read from the
+ *     reader's node, and only messages the node reports as `applied` count —
+ *     the rollup never sees the others. Indexer bytes are decoded only to
+ *     choose levels and never reach the verdict.
+ *   - At every level the node is read, the indexer's prefixed count is
+ *     compared with the node's applied prefixed count. A level the indexer
+ *     called frame-free but the node holds frames at is a contradiction and
+ *     yields no report; any other mismatch is reported as a finding.
  *
  * Both endpoints are user-configurable; neither belongs to 99dot5.
  */
-import { type DecodedEnvelope, decodeExternalMessage, hexToBytes } from '@99dot5/round-replay';
+import { type DecodedEnvelope, decodeExternalMessage, EXTERNAL_MESSAGE_PREFIX, hexToBytes } from '@99dot5/round-replay';
+import { type FetchLike, isAbort } from './node-queue';
 
 export interface InboxMessage {
     level: number;
@@ -25,111 +40,197 @@ export interface InboxMessage {
     messageIndex: number;
     rawHex: string;
     envelope: DecodedEnvelope;
+    /** The `tz…` account that posted the operation, as the node reports it. */
+    source?: string;
 }
 
-export interface ScanProgress {
-    phase: 'locating' | 'fetching';
-    done: number;
-    total: number;
+/** Whether a message's first bytes are this rollup's external-message prefix. */
+export function hasExternalPrefix(bytes: ArrayLike<number>): boolean {
+    return (
+        bytes.length >= EXTERNAL_MESSAGE_PREFIX.length &&
+        EXTERNAL_MESSAGE_PREFIX.every((byte, index) => bytes[index] === byte)
+    );
 }
 
-interface TzktSrAddMessagesOp {
-    level: number;
-    hash: string;
+/** One block's inbox as the node serves it: the applied messages that decode, and how many applied ones carry the prefix. */
+export interface BlockInbox {
+    messages: InboxMessage[];
+    /** Applied messages starting with the prefix, decodable or not: what the indexer's count is compared with. */
+    appliedPrefixedCount: number;
 }
+
+/** What the node keeps: blocks from `caboose`, operation metadata from `savepoint`. */
+export interface NodeHistory {
+    caboose: number;
+    savepoint: number;
+}
+
+export type UnreadableReason = 'not-served' | 'metadata-missing' | 'status-missing' | 'http-error' | 'network-error';
 
 /**
- * Locate `smart_rollup_add_messages` operation levels via TzKT within an
- * inclusive level range. Pages through results; sr_add_messages traffic is
- * sparse enough that 1000-per-page is generous.
+ * A level the node cannot serve with operation results. Never read as empty:
+ * whatever it holds is unknown, so a scan over it yields no report.
  */
-export async function locateInboxLevels(
-    tzktApiUrl: string,
-    fromLevel: number,
-    toLevel: number,
-    signal?: AbortSignal,
-): Promise<number[]> {
-    const levels = new Set<number>();
-    let lastId = 0;
-
-    for (;;) {
-        const url =
-            `${tzktApiUrl.replace(/\/$/, '')}/v1/operations/sr_add_messages` +
-            `?level.ge=${fromLevel}&level.le=${toLevel}&limit=1000&select=id,level,hash` +
-            (lastId ? `&id.gt=${lastId}` : '');
-        const response = await fetch(url, { signal });
-
-        if (!response.ok) {
-            throw new Error(`TzKT ${response.status} for ${url}`);
-        }
-
-        const page = (await response.json()) as (TzktSrAddMessagesOp & { id: number })[];
-
-        for (const op of page) {
-            levels.add(op.level);
-            lastId = Math.max(lastId, op.id);
-        }
-
-        if (page.length < 1000) {
-            break;
-        }
+export class LevelUnreadable extends Error {
+    constructor(
+        readonly level: number,
+        readonly reason: UnreadableReason,
+        readonly detail: string,
+        readonly historyLimit: NodeHistory | null = null,
+    ) {
+        super(LevelUnreadable.describe(level, reason, detail, historyLimit));
+        this.name = 'LevelUnreadable';
     }
 
-    return [...levels].sort((a, b) => a - b);
-}
-
-/** Current head level via TzKT (used to default the scan range). */
-export async function headLevel(tzktApiUrl: string, signal?: AbortSignal): Promise<number> {
-    const response = await fetch(`${tzktApiUrl.replace(/\/$/, '')}/v1/head`, { signal });
-
-    if (!response.ok) {
-        throw new Error(`TzKT ${response.status} for /v1/head`);
+    /** The same level, with the node's history limit named in the message. */
+    withHistory(historyLimit: NodeHistory | null): LevelUnreadable {
+        return new LevelUnreadable(this.level, this.reason, this.detail, historyLimit);
     }
 
-    return ((await response.json()) as { level: number }).level;
+    private static describe(
+        level: number,
+        reason: UnreadableReason,
+        detail: string,
+        history: NodeHistory | null,
+    ): string {
+        const kept =
+            history === null
+                ? ''
+                : ` (it keeps blocks from level ${history.caboose} and operation metadata from level ${history.savepoint})`;
+
+        switch (reason) {
+            case 'not-served':
+                return `the Tezos RPC does not serve level ${level}${kept}; an archive node serves it`;
+            case 'metadata-missing':
+            case 'status-missing':
+                return (
+                    `the Tezos RPC serves level ${level} without the operation results that say which messages were ` +
+                    `applied (${detail})${kept}; an archive node serves them`
+                );
+            case 'http-error':
+            case 'network-error':
+                return `the Tezos RPC could not be read at level ${level}: ${detail}`;
+        }
+    }
 }
 
-interface RpcOperationContent {
+interface RpcAddMessagesContent {
     kind: string;
+    source?: string;
     message?: string[];
+    metadata?: unknown;
 }
 
 interface RpcOperationGroup {
     hash: string;
-    contents: RpcOperationContent[];
+    contents: RpcAddMessagesContent[];
+}
+
+export interface NodeReadOptions {
+    signal?: AbortSignal;
+    fetchImpl?: FetchLike;
 }
 
 /**
- * Fetch every sequencer inbox frame in one block from the node RPC (archive
- * data — pruned nodes drop old operations). Validation pass 3 holds manager
- * operations, which is where `smart_rollup_add_messages` lives.
+ * One block's inbox from the node RPC, APPLIED messages only. Validation pass
+ * 3 holds manager operations, which is where `smart_rollup_add_messages`
+ * lives. An add_messages content whose result the node does not state (no
+ * metadata, metadata the node withheld, no status) makes the whole level
+ * unreadable, as does a block the node does not serve; other kinds of
+ * operation are ignored. No query parameter is added to the request.
  */
-export async function fetchBlockInboxMessages(
+export async function readBlockInbox(
     rpcUrl: string,
     level: number,
-    signal?: AbortSignal,
-): Promise<InboxMessage[]> {
+    options: NodeReadOptions = {},
+): Promise<BlockInbox> {
     const url = `${rpcUrl.replace(/\/$/, '')}/chains/main/blocks/${level}/operations/3`;
-    const response = await fetch(url, { signal });
+    let response: Response;
 
-    if (!response.ok) {
-        throw new Error(`RPC ${response.status} for ${url} (archive node required for old levels)`);
+    try {
+        response = await (options.fetchImpl ?? fetch)(url, { signal: options.signal });
+    } catch (error) {
+        if (isAbort(error) || options.signal?.aborted) {
+            throw error;
+        }
+
+        throw new LevelUnreadable(level, 'network-error', error instanceof Error ? error.message : String(error));
     }
 
-    const groups = (await response.json()) as RpcOperationGroup[];
+    if (response.status === 404) {
+        throw new LevelUnreadable(level, 'not-served', 'HTTP 404');
+    }
+
+    if (!response.ok) {
+        throw new LevelUnreadable(level, 'http-error', `HTTP ${response.status}`);
+    }
+
+    let groups: RpcOperationGroup[];
+
+    try {
+        groups = (await response.json()) as RpcOperationGroup[];
+    } catch (error) {
+        if (isAbort(error) || options.signal?.aborted) {
+            throw error;
+        }
+
+        throw new LevelUnreadable(level, 'http-error', 'the response is not JSON');
+    }
+
+    if (!Array.isArray(groups)) {
+        throw new LevelUnreadable(level, 'http-error', 'the response is not a list of operations');
+    }
+
     const messages: InboxMessage[] = [];
+    let appliedPrefixedCount = 0;
 
     for (const group of groups) {
-        for (const content of group.contents) {
-            if (content.kind !== 'smart_rollup_add_messages' || !content.message) {
+        for (const content of group.contents ?? []) {
+            if (content.kind !== 'smart_rollup_add_messages') {
                 continue;
             }
 
-            for (const [messageIndex, rawHex] of content.message.entries()) {
+            const metadata = content.metadata;
+
+            if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
+                throw new LevelUnreadable(
+                    level,
+                    'metadata-missing',
+                    metadata === undefined
+                        ? `operation ${group.hash} has no metadata`
+                        : `operation ${group.hash} has metadata ${JSON.stringify(metadata)}`,
+                );
+            }
+
+            const status = (metadata as { operation_result?: { status?: unknown } }).operation_result?.status;
+
+            if (typeof status !== 'string') {
+                throw new LevelUnreadable(level, 'status-missing', `operation ${group.hash} states no result status`);
+            }
+
+            if (status !== 'applied') {
+                // Failed, skipped and backtracked operations never reach the
+                // rollup's inbox, so their messages are not evidence of anything.
+                continue;
+            }
+
+            for (const [messageIndex, rawHex] of (content.message ?? []).entries()) {
+                let bytes: Uint8Array;
+
+                try {
+                    bytes = hexToBytes(rawHex);
+                } catch {
+                    continue;
+                }
+
+                if (hasExternalPrefix(bytes)) {
+                    appliedPrefixedCount += 1;
+                }
+
                 let envelope: DecodedEnvelope | null;
 
                 try {
-                    envelope = decodeExternalMessage(hexToBytes(rawHex));
+                    envelope = decodeExternalMessage(bytes);
                 } catch {
                     // Malformed sequencer-prefixed frame, or another rollup's
                     // traffic that happens to share the prefix — skip. The
@@ -138,13 +239,80 @@ export async function fetchBlockInboxMessages(
                 }
 
                 if (envelope) {
-                    messages.push({ level, operationHash: group.hash, messageIndex, rawHex, envelope });
+                    messages.push({
+                        level,
+                        operationHash: group.hash,
+                        messageIndex,
+                        rawHex,
+                        envelope,
+                        ...(content.source === undefined ? {} : { source: content.source }),
+                    });
                 }
             }
         }
     }
 
-    return messages;
+    return { messages, appliedPrefixedCount };
+}
+
+/** A block's header fields the scan reads. */
+export interface BlockHeader {
+    level: number;
+}
+
+/** The node's header for `block` (a level or `head`). */
+export async function blockHeader(
+    rpcUrl: string,
+    block: number | 'head',
+    options: NodeReadOptions = {},
+): Promise<BlockHeader> {
+    const url = `${rpcUrl.replace(/\/$/, '')}/chains/main/blocks/${block}/header`;
+    const response = await (options.fetchImpl ?? fetch)(url, { signal: options.signal });
+
+    if (!response.ok) {
+        throw new Error(`RPC ${response.status} for ${url}`);
+    }
+
+    const header = (await response.json()) as { level?: unknown };
+
+    if (typeof header.level !== 'number' || !Number.isSafeInteger(header.level)) {
+        throw new Error(`RPC ${url} returned no level`);
+    }
+
+    return { level: header.level };
+}
+
+/**
+ * How far back the node keeps blocks and operation metadata, read from
+ * `/chains/main/levels/caboose` and `/savepoint`. Best-effort: null when either
+ * cannot be read, and the message about an unreadable level then omits it.
+ */
+export async function nodeHistory(rpcUrl: string, options: NodeReadOptions = {}): Promise<NodeHistory | null> {
+    const levelAt = async (name: 'caboose' | 'savepoint'): Promise<number | null> => {
+        try {
+            const response = await (options.fetchImpl ?? fetch)(
+                `${rpcUrl.replace(/\/$/, '')}/chains/main/levels/${name}`,
+                { signal: options.signal },
+            );
+
+            if (!response.ok) {
+                return null;
+            }
+
+            const body = (await response.json()) as { level?: unknown };
+
+            return typeof body.level === 'number' && Number.isSafeInteger(body.level) ? body.level : null;
+        } catch (error) {
+            if (isAbort(error) || options.signal?.aborted) {
+                throw error;
+            }
+
+            return null;
+        }
+    };
+    const [caboose, savepoint] = await Promise.all([levelAt('caboose'), levelAt('savepoint')]);
+
+    return caboose === null || savepoint === null ? null : { caboose, savepoint };
 }
 
 /** One `lazy_storage_diff` entry of an operation receipt, as the node renders it. */
@@ -177,7 +345,7 @@ export interface RpcManagerOperationGroup {
 
 /**
  * Every manager operation group in one block, receipts included, as the node
- * returns them. The sibling of {@link fetchBlockInboxMessages} for the
+ * returns them. The sibling of {@link readBlockInbox} for the
  * deposit proof, which reads a vault call's receipt rather than inbox bytes.
  */
 export async function fetchBlockOperations(
@@ -193,32 +361,4 @@ export async function fetchBlockOperations(
     }
 
     return (await response.json()) as RpcManagerOperationGroup[];
-}
-
-/**
- * Scan a level range: locate via TzKT, fetch bytes via RPC. Reports progress
- * and respects aborts — a browser scanning tens of levels must stay honest
- * about what it is doing.
- */
-export async function scanRange(
-    tzktApiUrl: string,
-    rpcUrl: string,
-    fromLevel: number,
-    toLevel: number,
-    onProgress: (progress: ScanProgress) => void,
-    signal?: AbortSignal,
-): Promise<InboxMessage[]> {
-    onProgress({ phase: 'locating', done: 0, total: 1 });
-
-    const levels = await locateInboxLevels(tzktApiUrl, fromLevel, toLevel, signal);
-    const messages: InboxMessage[] = [];
-
-    for (const [index, level] of levels.entries()) {
-        onProgress({ phase: 'fetching', done: index, total: levels.length });
-        messages.push(...(await fetchBlockInboxMessages(rpcUrl, level, signal)));
-    }
-
-    onProgress({ phase: 'fetching', done: levels.length, total: levels.length });
-
-    return messages;
 }

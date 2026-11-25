@@ -4,8 +4,8 @@ This document specifies everything needed to decode and verify 99dot5's
 sequencer messages from the public Tezos L1 inbox, independently of any
 99dot5 code — plus, at the end, the two off-chain formats the third proof
 needs: the **signed server frame** a player's client receives over the
-WebSocket, and the **receipts export** that packages them. The canonical Rust definition is `libs/smart-rollup-messages`
-in the 99dot5 monorepo; the layouts below are frozen on mainnet (schema
+WebSocket, and the **receipts export** that packages them. The canonical Rust definition is 99dot5's wire crate;
+the layouts below are frozen on mainnet (schema
 changes require a new envelope version, never an in-place edit).
 
 **A whole round is one message.** `RoundTranscript` carries the round from
@@ -85,7 +85,7 @@ payload, so a frame under the right slug but signed for another rollup never
 authenticates, never stands in as this round's evidence, and never counts as
 proof of its suppression. Decode the domain with the prefixes `[87, 82, 0]`
 (`NetX…`, 4 bytes) and `[6, 124, 117]` (`sr1…`, 20 bytes); the layout is
-owned by `libs/smart-rollup-messages/src/signing.rs`, and
+owned by the Rust wire crate's signing module, and
 `wire-vectors.json -> signing_domain` plus each vector's `signing_digest_hex`
 pin it across languages. Nothing was added to the envelope for this — the
 domain costs zero wire bytes and left the V1 layout untouched.
@@ -109,7 +109,7 @@ domain costs zero wire bytes and left the V1 layout untouched.
     server_seed:          [u8; 32]   -- THE REVEAL, raw bytes
     server_seed_index:    u64        -- which committed seed this round claims
     claimed_payout:       u128       -- the sequencer's claim; advisory, never authoritative
-    player_commitment:    [u8; 32]   -- blake2b-256 over the round's archived signed player commands (ADR 0022 D1)
+    player_commitment:    [u8; 32]   -- blake2b-256 over the round's archived signed player commands
     actions:              Vec<TranscriptAction>
 }
 
@@ -130,12 +130,12 @@ id, the game type and the seed index before allocating for the body.
 `actions` for the same reason — it is fixed-width, so it stays in the header.
 
 `player_commitment` is blake2b-256 over the round's archived signed player
-commands (ADR 0022 D1, `docs/adr/0022-signed-play-receipts.md`) — the
+commands — the
 complete inbound wire frame for every player command that became a step in
-this round, folded in step order. This document only decodes and displays it;
-independently recomputing it from the player's own signed commands and
-comparing it against this field is a follow-up to this verifier, not
-something the checks here do yet.
+this round, folded in step order. This section only decodes it; recomputing
+it from the player's own signed commands and comparing it against this field
+is the verifier's receipts proof (`src/receipts/recompute.ts`), over the
+formats at the end of this document.
 
 Both amounts are bare `u128` in atomic units of the session's asset — mutez, at
 6 decimal places, for TEZ — read with the `u128()` Borsh reader into a `bigint`.
@@ -246,7 +246,7 @@ transcript encodes to 4020 bytes — 4086 as the frame we sign and POST, 4087 as
 the inbox message the kernel reads.
 
 (`player_commitment` moved the header from 250 to 282 bytes, which moved the
-derived cap from 179 to 178 — and, in `libs/sequencer-core`, the sequencer's
+derived cap from 179 to 178 — and the sequencer's
 earlier trip point from 177 to 176. The 21-byte worst-action figure and the
 2-action reserve are unaffected: both are per-action, not header, costs.)
 
@@ -326,11 +326,12 @@ guessed rule.
 The settlement rule at the trust boundary: the rollup replays the transcript
 and credits the engine's settle `payout` as is: the engine computes it in the
 stake's atomic units, so nothing is truncated after it. For the compounding
-games (hilo, mines, hydra) that is the banked/live fold of `libs/games/src/partial_cashout.rs`:
+games (hilo, mines, hydra) that is the engines' banked/live partial-cashout fold:
 the live position starts at the stake, each winning step rounds it half-up at
 the asset grain (`live' = half_up(live × step_ppm / 1_000_000)`), each
 `partial-cashout` moves its amount from live to banked, a lost decision zeroes
-live, and a cashout — or, since sec-28, an `abandon` — pays `banked + live`.
+live, and a cashout — or an `abandon`, which no player signs and so must not
+forfeit — pays `banked + live`.
 For the single-decision games (crash, plinko) there is nothing to fold and it
 collapses to `payout = floor(stake × cumulative_ppm / 1_000_000)`, the floor
 the engine itself applies in `single_multiplier_payout`. Note that
@@ -365,7 +366,7 @@ meant to check — so the label is load-bearing, not decoration.
 
 ---
 
-# The signed server frame (ADR 0022)
+# The signed server frame
 
 Every frame the sequencer sends over the player WebSocket carrying a
 `ServerEnvelope` is signed at send:
@@ -374,7 +375,7 @@ Every frame the sequencer sends over the player WebSocket carrying a
 [ 0x06 | 64-byte Ed25519 signature | protobuf(casino.v1.ServerEnvelope) ]
 ```
 
-`0x06` is the tag server envelopes have always used — ADR 0022 changed the
+`0x06` is the tag server envelopes have always used — signing changed the
 body, not the value, and minted no second tag. `Welcome` (`0x02`) and
 `HandshakeRejected` (`0x03`) stay unsigned: they are pre-session, carry no
 sequence and have nothing to replay.

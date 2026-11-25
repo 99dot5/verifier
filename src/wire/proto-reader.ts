@@ -16,7 +16,7 @@
  * so nothing here ever re-encodes anything, and a field this reader ignores
  * is still inside the bytes that were hashed and signed.
  *
- * Field numbers come from `libs/proto-definitions/casino/v1/*.proto`; each is
+ * Field numbers come from the `casino.v1` protobuf schema; each is
  * named at its use site so a drift shows up as an obviously wrong number
  * rather than an anonymous constant.
  */
@@ -167,7 +167,7 @@ const UUID_LOW = 2;
 /**
  * Render a proto `UUID{high, low}` in the canonical hyphenated form.
  *
- * Reproduces `libs/proto-ts`'s `uuidToHex`, which is what the play client and
+ * Reproduces the generated protobuf package's `uuidToHex`, which is what the play client and
  * therefore the export use as a record key. Reproduced rather than imported:
  * the exported verifier must not reach into `@99dot5/*`, and the rule is four
  * lines.
@@ -379,7 +379,7 @@ export interface DecodedServerEnvelope {
     roundStartedStake: DecodedMoney | null;
     /**
      * `RoundStartedEvent.server_seed_commitment` (4) — the SERVER-SIGNED commitment
-     * of the seed this round is settled against (ADR 0025), null on every
+     * of the seed this round is settled against, null on every
      * other payload and on an opener that states none. A present commitment
      * with index zero is distinct from an absent message.
      */
@@ -760,7 +760,7 @@ export interface DecodedClientEnvelope {
     placeBetClientSeed: Uint8Array | null;
     /**
      * `PlaceBetCommand.server_seed_hash` (3) — the seed commitment the PLAYER
-     * echoed from the server's promise, under their own signature (ADR 0025);
+     * echoed from the server's promise, under their own signature;
      * null on every other arm and on a `PlaceBet` that echoed none.
      *
      * The pre-bet proof's whole input. A client can only echo a hash it was
@@ -776,7 +776,7 @@ export interface DecodedClientEnvelope {
      * The one number in this file read for a money comparison. It is admitted
      * on the same ground as `client_seed`: a player attributing their OWN
      * signed amount is reading a field they themselves signed, not an
-     * inference the sequencer is forbidden to make (D9).
+     * inference the sequencer is forbidden to make.
      */
     placeBetAmount: DecodedMoney | null;
     /**
@@ -789,7 +789,7 @@ export interface DecodedClientEnvelope {
      * echo the client's own round id back with any reason code the server
      * likes, so the verifier trusts the echo only when it equals the id the
      * player themselves signed — attribution BY SIGNATURE, never by inferring
-     * a step from a body (which stays forbidden, D9).
+     * a step from a body (which stays forbidden).
      */
     commandRoundId: string | null;
     /**

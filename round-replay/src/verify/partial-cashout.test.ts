@@ -127,7 +127,7 @@ describe('hilo replay with a partial cashout', () => {
         expect(bankStep.title).toContain('30 banked');
     });
 
-    it('abandonment settles at the current position — banked plus live (sec-28)', () => {
+    it('abandonment settles at the current position — banked plus live', () => {
         // 12.5 banked out of a 100 stake leaves 87.5 live; the abandon pays
         // both, exactly what a cashout here would, so a forged one gains
         // nothing. The ending is `abandoned` — no decision of the player's ended it.

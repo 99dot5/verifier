@@ -2,9 +2,9 @@
  * Locating the session's deposit on L1.
  *
  * The suppression ladder's lower bound is the level of the session's own
- * deposit operation (§8.3(d)): no round can SETTLE before the deposit; a copy
- * posted earlier is applied as a session-missing reject (rollup `rounds.rs`,
- * step 8). A scan starting after it cannot honestly claim "the transcript is
+ * deposit operation: no round can SETTLE before the deposit; a copy
+ * posted earlier is applied as a session-missing reject by the rollup
+ * kernel. A scan starting after it cannot honestly claim "the transcript is
  * nowhere in range".
  *
  * THE VERIFIER FINDS THE DEPOSIT ITSELF. The export carries an optional
@@ -357,13 +357,15 @@ export async function resolveSessionDeposit(input: SessionDepositInput): Promise
                     namesSession(content.parameters.value, needle),
             );
     } catch (error) {
-        return failed(`the node could not read block ${level} to confirm the indexer's deposit: ${errorText(error)}`);
+        return failed(
+            `the Tezos RPC could not read the block at level ${level} to confirm the indexer's deposit: ${errorText(error)}`,
+        );
     }
 
     if (!call) {
         return failed(
-            `indexer and node disagree: the indexer reports a deposit naming session ${message.sessionId} at level ` +
-                `${level} (op ${located.operationHash}) on ${vault}, but the node's block ${level} holds no applied ` +
+            `the indexer and the Tezos RPC disagree: the indexer reports a deposit naming session ${message.sessionId} at level ` +
+                `${level} (op ${located.operationHash}) on ${vault}, but the block at level ${level} on the Tezos RPC holds no applied ` +
                 'deposit call of that operation to that vault naming the session',
         );
     }
@@ -373,17 +375,17 @@ export async function resolveSessionDeposit(input: SessionDepositInput): Promise
     try {
         sessionsId = sessionsBigMapId(await input.chain.contractStorage(vault));
     } catch (error) {
-        return failed(`the node could not read the storage of vault ${vault}: ${errorText(error)}`);
+        return failed(`the Tezos RPC could not read the storage of vault ${vault}: ${errorText(error)}`);
     }
 
     const firstProven = sessionsId !== null && writesSessionEntry(call, sessionsId, needle);
     const confirmed =
-        `${located.detail} The node confirms it: block ${level} holds the applied deposit call. ` +
+        `${located.detail} The Tezos RPC confirms it: the block at level ${level} holds the applied deposit call. ` +
         (sessionsId === null
-            ? `Vault ${vault} keeps no sessions big_map (a vault that records no binding, such as the preview vault), so the node cannot show this deposit created the session.`
+            ? `Vault ${vault} keeps no sessions big map (a vault that records no binding, such as the preview vault), so the Tezos RPC cannot show this deposit created the session.`
             : firstProven
-              ? `Its receipt writes the vault's sessions big_map ${sessionsId} at this session's key, which the vault does only on a session's first deposit.`
-              : `Its receipt does not write the vault's sessions big_map ${sessionsId} at this session's key, so it is not shown to be the session-creating deposit (a top-up, or a call routed through a contract).`);
+              ? `Its receipt writes this session's key in the vault's sessions big map (id ${sessionsId}), which the vault does only on a session's first deposit.`
+              : `Its receipt does not write this session's key in the vault's sessions big map (id ${sessionsId}), so it is not shown to be the session-creating deposit (a top-up, or a call routed through a contract).`);
     const otherVaults =
         firstProven && level > transcriptLevel
             ? await checkOtherVaults(
@@ -443,10 +445,10 @@ async function checkOtherVaults(
 
             if (id === null) {
                 problems.push(
-                    `vault ${other} keeps no sessions big_map (a preview or non-production vault), so it cannot be ruled out`,
+                    `vault ${other} keeps no sessions big map (a preview or non-production vault), so it cannot be ruled out`,
                 );
             } else if (await node.bigMapHas(id, expr)) {
-                problems.push(`vault ${other} holds a sessions entry for this session (big_map ${id}, key ${expr})`);
+                problems.push(`vault ${other} holds a sessions entry for this session (big map id ${id}, key ${expr})`);
             }
         } catch (error) {
             problems.push(`vault ${other} could not be looked up: ${errorText(error)}`);

@@ -24,7 +24,7 @@
  *
  * **Absence is never a mismatch.** A leg the export does not carry yields
  * `unavailable`, which degrades the verdict to `incomplete` rather than
- * accusing anyone — the rule ADR 0022 already applies to an unreconstructible
+ * accusing anyone — the rule the receipts proof already applies to an unreconstructible
  * round, and the opposite of the `STEP_ORIGIN_UNSPECIFIED` trap, where
  * treating a producer's silence as an assertion would let the tool accuse an
  * honest server.

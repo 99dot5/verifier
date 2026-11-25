@@ -7,8 +7,7 @@
  * node whose ACL usually blocks it. What IS public, permanent and
  * permissionless to read is the administrator contract's operation history:
  * every key a tenant ever signed with reached the rollup as an internal
- * transaction carrying `[0x01 | subtag | Michelson PACK]` (ADR 0007 §6.2,
- * ADR 0022 D7).
+ * transaction carrying `[0x01 | subtag | Michelson PACK]`.
  *
  * Two things make that history a chain rather than a list:
  *

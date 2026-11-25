@@ -217,7 +217,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
     const storages = new Map<string, VaultStorage | null>();
 
     for (const { vault, level } of location.levels) {
-        progress(`reading block ${level} from the node…`);
+        progress(`reading the block at level ${level} from the Tezos RPC…`);
 
         let groups: RpcManagerOperationGroup[];
 
@@ -225,7 +225,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
             groups = await input.chain.blockOperations(level);
         } catch (error) {
             return unavailable(
-                `the node could not read block ${level}, which the indexer names for a payout event: ${errorText(error)}`,
+                `the Tezos RPC could not read the block at level ${level}, which the indexer names for a payout event: ${errorText(error)}`,
             );
         }
 
@@ -235,7 +235,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
         for (const item of items) {
             if (item.kind === 'undecodable') {
                 eventProblems.push(
-                    `block ${level} holds an applied ${item.tag} event of ${item.vault} (op ${item.operationHash}) that does not decode: ${item.reason}`,
+                    `the block at level ${level} holds an applied ${item.tag} event of ${item.vault} (op ${item.operationHash}) that does not decode: ${item.reason}`,
                 );
                 continue;
             }
@@ -250,8 +250,8 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
 
         if (found === 0) {
             findings.push(
-                `indexer and node disagree: the indexer names level ${level} for a payout event of ${vault} naming this ` +
-                    'session, but the node’s block holds no applied payout event of that vault naming it; the level is ignored',
+                `the indexer and the Tezos RPC disagree: the indexer names level ${level} for a payout event of ${vault} naming this ` +
+                    'session, but that block on the Tezos RPC holds no applied payout event of that vault naming it; the level is ignored',
             );
         }
 
@@ -293,7 +293,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
             : check(
                   PAYOUT_EVENTS_CHECK_ID,
                   'pass',
-                  `${events.length} payout event(s) read from the node’s receipts: ` +
+                  `${events.length} payout event(s) read from the block receipts on the Tezos RPC: ` +
                       events
                           .map(
                               (e) => `${e.event.path} ${mutez(e.event.amount)} at level ${e.level} on ${e.event.vault}`,
@@ -365,7 +365,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
 
             if (event.chainId === null) {
                 findings.push(
-                    `${where}: the node stated no chain id on the operation group; the selected network’s (${chainId}) was used`,
+                    `${where}: the Tezos RPC stated no chain id on the operation group; the selected network’s (${chainId}) was used`,
                 );
             }
 
@@ -549,7 +549,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
                             PAYOUT_KERNEL_CHECK_ID,
                             'unavailable',
                             `your rollup node has finalised level ${finalized}, below the payout’s level ${first.level}; its record is read only at ` +
-                                'a finalised block, so try again once the node has caught up',
+                                'a finalised block, so try again once your rollup node has caught up',
                         ),
                     );
                 } else {
@@ -561,7 +561,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
                         hyphenated,
                         first.event.amount,
                     );
-                    const where = `the fast payout at level ${first.level} paid ${mutez(first.event.amount)}; the kernel’s record for session ${hyphenated} under ${storage.tenantId}/${storage.poolId}, read at your node’s finalised level ${finalized},`;
+                    const where = `the fast payout at level ${first.level} paid ${mutez(first.event.amount)}; the kernel’s record for session ${hyphenated} under ${storage.tenantId}/${storage.poolId}, read at your rollup node’s finalised level ${finalized},`;
 
                     checks.push(kernelCheck(finding, where, first.event.amount));
 
@@ -573,7 +573,7 @@ export async function verifySessionPayout(input: SessionPayoutInput): Promise<Se
                         if (kernelFigure !== null && kernelFigure.amount !== finding.kernelAmount) {
                             findings.push(
                                 `${kernelFigure.source} carries ${mutez(kernelFigure.amount)} but your rollup node’s record says ${mutez(finding.kernelAmount)}: ` +
-                                    'the two kernel figures disagree, which no honest node and vault can produce; check the node',
+                                    'the two kernel figures disagree, which no honest rollup node and vault can produce; check your rollup node',
                             );
                         }
 

@@ -49,7 +49,7 @@
  *   the reconstruction binds it to, OR a signed `CommandRejected` naming the
  *   round and trusted under `rejections.ts`'s rule. Neither, with the round
  *   settled on `expire` or on a system `abandon`, is the suppressed-cashout
- *   SHAPE. (Since sec-28 the kernel settles an abandon at the cashout the
+ *   SHAPE. (The kernel now settles an abandon at the cashout the
  *   state admits, so the forgery no longer PAYS — but the dropped command is
  *   still the player's evidence, and this rule still reports it.)
  *
@@ -165,7 +165,7 @@ export interface ProjectionInput {
      *
      * Null is the whole check's `unavailable`: without the server's own signed
      * indices there is no way to say WHICH action a command projects to, and
-     * inferring one from the command body is the D9 inference the archive
+     * inferring one from the command body is the very inference the archive
      * exists to have removed.
      */
     binding: ProjectionBinding[] | null;
@@ -621,7 +621,7 @@ function suppressionRows(
         const settledOn =
             systemSettle.actionType === 'expire'
                 ? "settled on an expire (the deadline sweep's terminal loss)"
-                : "settled on a system abandon (the sweep's settle for a round it found open — since sec-28 the kernel pays it what a cashout would have, so the money is yours either way, but the command you sent went unanswered)";
+                : "settled on a system abandon (the sweep's settle for a round it found open — the kernel pays it what a cashout would have, so the money is yours either way, but the command you sent went unanswered)";
 
         findings.push(`${evidence}, and the round ${settledOn}. ${deliveryEvidence(input, command)}`);
     }
@@ -673,7 +673,7 @@ function deliveryEvidence(input: ProjectionInput, command: ImportedCommand): str
 /**
  * The projection table, one arm at a time.
  *
- * The payloads are exactly what `libs/games/src/<game>/v1/adapter.rs`'s
+ * The payloads are exactly what each game engine's
  * `encode_action_borsh` writes, which is what rides in the transcript's
  * `TranscriptAction::payload`. Borsh is little-endian and unprefixed, so a
  * `u32` is four bytes, an `Option` is a `0x00`/`0x01` tag then the value, and a
@@ -760,15 +760,16 @@ export function projectionRuleFor(body: Exclude<DecodedCommandBody, { case: 'unr
             };
     }
 
-    // Unreachable while the table covers every arm the reader can produce,
-    // which `projection.test.ts` enumerates from the .proto files and asserts.
+    // Unreachable while the table covers every arm the reader can produce:
+    // the 99dot5 source tree checks that against every command arm of the
+    // protobuf schema, and `projection.test.ts` pins each rule.
     return { ok: false, reason: 'no projection rule for this command' };
 }
 
 /**
  * The ppm → tick policy, reproduced from
- * `libs/client-commands/src/crash/v1.rs` and bound to it by
- * the SHARED vectors in `libs/games/src/crash/v1/testdata/vectors.json`.
+ * the sequencer's crash command decoder and bound to it by
+ * the SHARED vectors in crash's `vectors.json`.
  *
  * It is a POLICY, not curve maths: reject at or below `m(0)` (a target that
  * would collapse to tick 0, a degenerate immediate push), reject above the

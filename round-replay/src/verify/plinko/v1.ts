@@ -1,6 +1,6 @@
 /**
- * plinko:v1 — integer reimplementation of `libs/games/src/plinko/v1/engine.rs`,
- * pinned against `libs/games/src/plinko/v1/testdata/vectors.json`.
+ * plinko:v1 — integer reimplementation of the Rust plinko:v1 engine,
+ * pinned against plinko's `vectors.json`.
  *
  * The outcome is sealed by the seed at `place-bet` (decision 0, which draws 2
  * bytes): `rows` uniform bits from those bytes choose left/right at each peg, the bin is the
@@ -19,13 +19,13 @@ export type Risk = 'low' | 'medium' | 'high';
 export const SUPPORTED_ROWS = [8, 10, 12, 14, 16] as const;
 export const SUPPORTED_RISKS: Risk[] = ['low', 'medium', 'high'];
 
-/** Borsh enum tags for `Config.risk` (declaration order in engine.rs). */
+/** Borsh enum tags for `Config.risk` (declaration order in the Rust engine). */
 export const RISK_BORSH_TAG: Record<Risk, number> = { low: 0, medium: 1, high: 2 };
 
 /**
  * The frozen multiplier tables, stated as their symmetric half from edge to
  * centre in hundredths of 1× — the exact `M_<rows>_<risk>` constants in
- * `engine.rs` (full table = mirror expansion × 10_000). Every table's exact
+ * the Rust engine (full table = mirror expansion × 10_000). Every table's exact
  * binomial-weighted RTP lands in [995_000, 995_500] ppm; see `exactRtp`.
  */
 const HALF_TABLES: Record<string, number[]> = {
@@ -186,8 +186,8 @@ export function replay(
 
     for (const action of actions.slice(1)) {
         if (settled) {
-            // The kernel stops at the first settle and never reads what follows
-            // (libs/smart-rollup/src/games.rs); the verifier's
+            // The kernel stops at the first settle and never reads what follows;
+            // the verifier's
             // actions-after-settle check reports any such entries.
             break;
         }
@@ -210,7 +210,7 @@ export function replay(
                 break;
             case 'abandon':
                 // The kernel substitutes the cashout the state admits for a
-                // system abandon (sec-28). Plinko's outcome is sealed at
+                // system abandon. Plinko's outcome is sealed at
                 // place-bet and its cashout is payload-free, so an abandon pays
                 // exactly what the player's — or the deadline sweep's — cashout
                 // pays. The old lose/0 override let an operator read the sealed

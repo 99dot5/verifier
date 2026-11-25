@@ -62,7 +62,7 @@
  *      inside the player-signed command body for the same request id. That is
  *      attribution by signature — the same class of evidence as reading
  *      `client_seed` out of a signed `PlaceBet` — and it is not the inference
- *      D9 forbids, which is deriving a command's STEP INDEX from its body.
+ *      the archive forbids, which is deriving a command's STEP INDEX from its body.
  *      Indices still come only from the server's signed frames. When the body
  *      is missing, undecodable, or names another round, the answer is
  *      `unavailable`: never a downgrade the server got to select.
@@ -114,7 +114,7 @@ import { decodeClientEnvelope } from '../wire/proto-reader';
 import { CLIENT_FRAME_TAG, splitSignedFrame } from '../wire/signature';
 import { crash } from '@99dot5/round-replay';
 
-/** Stable id, pushed even when the status is `unavailable` (§P3.1's rule). */
+/** Stable id, pushed even when the status is `unavailable`, so a check that could not run still shows in the report. */
 export const REJECTION_CHECK_ID = 'rejection-liveness';
 
 /**
@@ -188,10 +188,10 @@ const LIVENESS_REASONS: ReadonlySet<number> = new Set([REASON_ROUND_CLOSED, REAS
  * `SEED_COMMITMENT_STALE` joins it on the same two grounds: the sequencer
  * emits it from the PlaceBet gate alone, before any seed is claimed, so it can
  * never answer a `CashOut`; and what it asserts — that the `server_seed_hash`
- * the player echoed is not the promise the session currently holds (ADR 0025)
+ * the player echoed is not the promise the session currently holds
  * — the player can check against the promise frame their own receipts hold.
  *
- * `CYCLE_TOO_SHORT` (#1378) joins on the first ground: the sequencer emits it
+ * `CYCLE_TOO_SHORT` joins on the first ground: the sequencer emits it
  * from the PlaceBet gate alone, in a `regulated` pool, before any seed is
  * claimed, so it can never answer a `CashOut`. What it asserts — that the
  * session's previous round of the game started inside the minimum cycle the
@@ -240,7 +240,7 @@ export type RefusalClass = 'liveness' | 'mode' | 'command-validity' | 'uninforma
  * The single classification, exported because `verify/projection.ts`'s
  * suppression rule asks the same question of the same frames — "what did this
  * refusal actually claim?" — and a second copy is a second place for the
- * vocabulary to drift out of step with `casino/v1/enums.proto`.
+ * vocabulary to drift out of step with the protobuf refusal enum.
  */
 export function classifyRefusalReason(code: number): RefusalClass {
     if (LIVENESS_REASONS.has(code)) {

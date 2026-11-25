@@ -21,12 +21,14 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Two jobs, as GitHub's own Pages template has them. A run uploads the site
+# once, in build; deploy only reads it. "Re-run failed jobs" after a failed
+# deploy then re-runs deploy alone against that one artifact. With both in one
+# job a re-run uploads a second "github-pages" artifact into the same run and
+# deploy-pages refuses the ambiguous name, so no re-run could ever recover.
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -53,6 +55,13 @@ jobs:
         with:
           path: dist
 
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

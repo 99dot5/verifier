@@ -110,7 +110,7 @@ export interface VerifierKey {
 /**
  * The tenant's signing keys, or the reason there are none.
  *
- * A key set is HISTORICAL (ADR 0022 D7): every key any administrator in the
+ * A key set is HISTORICAL: every key any administrator in the
  * lineage ever registered for the tenant, because a receipt signed under a key
  * that was valid at delivery stays valid evidence. Deriving it needs the
  * network, so the failure mode is explicit — a lineage that could not be
@@ -159,8 +159,9 @@ export interface MessageRef {
 /**
  * What the scan looked at, and the L1 facts that make "no transcript on chain"
  * decidable. Without these the tool cannot tell a suppressed round from one it
- * simply did not look far enough to find, and §8.3 exists because guessing
- * between the two manufactures an accusation out of ordinary latency.
+ * simply did not look far enough to find, and the suppression ladder exists
+ * because guessing between the two manufactures an accusation out of ordinary
+ * latency.
  */
 export interface ScanContext {
     fromLevel: number;
@@ -170,7 +171,7 @@ export interface ScanContext {
     /**
      * The session's own deposit operation — the bracket's LOWER bound: no
      * round can SETTLE before the deposit; a copy posted earlier is applied as
-     * a session-missing reject (rollup `rounds.rs`, step 8). `confirmed` is false when the level could not
+     * a session-missing reject by the rollup kernel. `confirmed` is false when the level could not
      * be checked against L1: an unconfirmed hint is not a bound. The UI shell
      * derives the level from L1 itself, so it only ever passes `true`; the flag
      * is for a caller that has a level from somewhere else.
@@ -185,7 +186,7 @@ export type ReceiptsInput =
     | { status: 'ok'; receipts: ImportedReceipts };
 
 /**
- * Seven verdicts, and they are NOT interchangeable (§8.3(f)): each says
+ * Seven verdicts, and they are NOT interchangeable: each says
  * something different about why the tool is or is not alleging anything, and
  * collapsing any two would either hide a real finding or manufacture one.
  *
@@ -210,7 +211,8 @@ export type ReceiptsInput =
  *   `failed`       a proof ran and did not hold.
  *
  * `verified` also needs `session-before-transcript`, which needs the
- * session's deposit from an indexer and the node. A passing D10 lifts no cap:
+ * session's deposit from an indexer and the node. A passing
+ * session-before-transcript check lifts no cap:
  * a receipts document the server built can reconstruct and still be capped at
  * `attested`. And, accepted: an indexer or node outage turns a round with
  * complete receipts that used to read `verified` into `incomplete`, until a
@@ -265,7 +267,7 @@ export interface VerifyInput {
     tenantId: string;
     /**
      * The rollup and chain the round was played on — the SIGNING DOMAIN every
-     * sequencer message on this instance was signed for (#952). The injector
+     * sequencer message on this instance was signed for. The injector
      * hashes `chain_id ‖ rollup_address` ahead of the envelope and the kernel
      * hashes its own identity in when it verifies, so a frame signed for
      * another deployment under the same slug fails the signature check here
@@ -303,7 +305,7 @@ export interface VerifyInput {
      * played under the seed the player chose.
      */
     clientSeedText?: string;
-    /** The player's exported receipts (§12.3), if they supplied any. */
+    /** The player's exported receipts, if they supplied any. */
     receipts?: ReceiptsInput;
     /** What the caller scanned; required for the suppression ladder to resolve. */
     scan?: ScanContext | null;
@@ -347,7 +349,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
     // landed ~1000 levels ahead of the tenant's own). Only when NO candidate
     // authenticates does the earliest unauthenticated one stand in, so the
     // signature check still reports the failure instead of hiding the round.
-    // Authentication is against THIS instance's signing domain (#952): a
+    // Authentication is against THIS instance's signing domain: a
     // frame another deployment signed under the same slug and key fails it,
     // which is what makes "another deployment's" the same case as "a
     // forgery" here. With no domain known, nothing authenticates and the
@@ -383,7 +385,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
 
     if (!transcriptMessage || transcriptMessage.envelope.message.kind !== 'round-transcript') {
         // NOT a `fail`. A missing transcript is an absence, and an absence is
-        // what the §8.3 ladder exists to classify — calling it a failed check
+        // what the suppression ladder exists to classify — calling it a failed check
         // here would let "I did not look far enough" read as "the operator did
         // something wrong".
         checks.push({
@@ -421,7 +423,8 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         id: 'round-transcript',
         title: 'RoundTranscript found in inbox',
         status: 'pass',
-        // The commitment is shown, not checked: verifying it is a later PR.
+        // The commitment is shown, not checked, here: the receipts proof below
+        // compares it with the one the player's own receipts reproduce.
         detail:
             `level ${transcriptMessage.level}, op ${transcriptMessage.operationHash} — the whole round in one signed message, ` +
             `player commitment ${bytesToHex(transcript.playerCommitment)}`,
@@ -446,7 +449,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
     // ANY key in the tenant's lineage is admissible, and the report names the
     // one that matched. The kernel's grace window governs which key may sign
     // a NEW message; this is a check on historical evidence, where a key that
-    // was valid at delivery stays valid forever (ADR 0022 D7). Matching is
+    // was valid at delivery stays valid forever. Matching is
     // per-message, not per-round, because a rotation can legitimately land
     // between a seed batch and the transcript that spends one of its seeds.
     const toCheck = [transcriptMessage, ...(batch ? [batch] : [])];
@@ -645,7 +648,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
                 id: 'replay-payout',
                 title: 'Recomputed payout equals the claimed payout',
                 status: payoutMatches ? 'pass' : 'fail',
-                detail: `banked ${replayResult.bankedUnits} + live ${liveUnits} = ${computedPayout} mutez (${tez(computedPayout)} TEZ) vs claimed ${transcript.claimedPayout} (${tez(transcript.claimedPayout)} TEZ), from stake ${transcript.stake} at cumulative ${replayResult.cumulativePpm} ppm. The kernel's rule (libs/smart-rollup/src/games.rs, libs/games/src/partial_cashout.rs): the live position folds per winning step at the asset grain (half-up at ${TRANSCRIPT_DECIMALS} dp), each partial-cashout moves value from live to banked, and the sum is truncated to atomic units; for crash and plinko this collapses to floor(stake × cumulative / 1e6). Derivation inputs are exactly (game_type, server_seed, client_seed, decision, chunk) — there is no operator-controlled nonce, and the decision counts the round's drawing steps, so a system step the sequencer inserts cannot move a later draw.`,
+                detail: `banked ${replayResult.bankedUnits} + live ${liveUnits} = ${computedPayout} mutez (${tez(computedPayout)} TEZ) vs claimed ${transcript.claimedPayout} (${tez(transcript.claimedPayout)} TEZ), from stake ${transcript.stake} at cumulative ${replayResult.cumulativePpm} ppm. The rollup kernel's payout rule: the live position folds per winning step at the asset grain (half-up at ${TRANSCRIPT_DECIMALS} dp), each partial-cashout moves value from live to banked, and the sum is truncated to atomic units; for crash and plinko this collapses to floor(stake × cumulative / 1e6). Derivation inputs are exactly (game_type, server_seed, client_seed, decision, chunk) — there is no operator-controlled nonce, and the decision counts the round's drawing steps, so a system step the sequencer inserts cannot move a later draw.`,
             });
             checks.push({
                 id: 'replay-outcome',
@@ -708,7 +711,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         detail: stakeVerdict.detail,
     });
 
-    // The seed-commitment proofs (ADR 0025). The chain's commitment half above
+    // The seed-commitment proofs. The chain's commitment half above
     // proves the revealed seed was committed EARLY; these two prove it was the
     // seed the server named before the round opened (opener binding) and
     // before it saw the player's bet at all (the player-signed echo). Pushed
@@ -740,7 +743,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
         detail: preBetSeed.detail,
     });
 
-    // The session existed when the kernel applied this copy (D10). Judged on
+    // The session existed when the kernel applied this copy. Judged on
     // the copy chosen above, and only when it is authenticated: a forged or
     // foreign frame under the tenant's slug can never make a round `failed`.
     const sessionCheck = evaluateSessionBeforeTranscript(
@@ -777,7 +780,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             'commitment-vs-chain',
             'commitment-vs-receipt',
             'receipt-vs-chain',
-            // The fourth proof JOINS the list (§P3.1). Leaving it out would let
+            // The fourth proof JOINS the list. Leaving it out would let
             // an `unavailable` projection still report `verified` — a check
             // whose skip is invisible in the verdict. The consequence is
             // stated rather than worked around: a round whose export carries
@@ -799,9 +802,9 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             // decodable command bodies, and a peer-tab round — which has
             // neither — is already `attested` rather than `verified`.
             STAKE_CHECK_ID,
-            // The seed-commitment proofs JOIN the list (ADR 0025). Without the
+            // The seed-commitment proofs JOIN the list. Without the
             // player-signed echo nothing shows the server chose the seed
-            // before it saw the client seed — which is the whole of #1234 —
+            // before it saw the client seed — the whole point of the promise —
             // and without the opener binding a post-bet seed swap replays
             // clean. A round whose bet echoed no promise (the client held
             // none when it bet) degrades to `incomplete`, stated rather than
@@ -809,7 +812,7 @@ export function verifyRound(input: VerifyInput): VerificationReport {
             // bets, so an honest round from it carries the echo.
             OPENER_SEED_CHECK_ID,
             PRE_BET_SEED_CHECK_ID,
-            // The session-before-transcript check JOINS the list (D10). A
+            // The session-before-transcript check JOINS the list. A
             // `verified` that never checked the session existed when the
             // kernel applied this copy is exactly the hole it closes: a copy
             // posted before the session's first deposit is applied as a
@@ -1158,9 +1161,9 @@ const SESSION_BEFORE_TRANSCRIPT_TITLE = 'The session existed on chain when the t
 
 /**
  * The `session-before-transcript` check. The kernel creates a session only at
- * its first credited deposit (rollup `sessions.rs`, `credit_deposit`), applies
+ * its first credited deposit (the kernel's `credit_deposit`), applies
  * a transcript whose session does not exist yet as a `REJECT_SESSION_MISSING`
- * reject that burns the seed and records a zero payout (`rounds.rs`, step 8,
+ * reject that burns the seed and records a zero payout (the kernel's
  * `burn_and_record`), and ignores every later copy of that round id, because
  * dedup is on the settlement path's existence. So a copy posted before the
  * session existed settles the round for good, as a loss with no payout.
@@ -1254,7 +1257,7 @@ export function evaluateSessionBeforeTranscript(
     return withFinding(
         'fail',
         `The earliest authenticated copy of this transcript (level ${T}) predates the earliest deposit the ` +
-            `indexer reports (level ${D}). The node confirms it as the session-creating deposit: it wrote the ` +
+            `indexer reports (level ${D}). The Tezos RPC confirms it as the session-creating deposit: it wrote the ` +
             `vault's sessions entry, and no other vault of this pool holds one (${deposit.otherVaults.detail}). ` +
             'The rollup kernel had no session for it and applied it as a REJECT_SESSION_MISSING reject: it burned ' +
             'the seed, paid nothing, and every later copy of the round was ignored.',
@@ -1299,7 +1302,7 @@ function describeKey(key: VerifierKey): string {
 interface ReceiptState {
     /**
      * `absent`      — nothing to reconstruct from.
-     * `unavailable` — receipts present, reconstruction declined (§5.3 step 4).
+     * `unavailable` — receipts present, reconstruction declined (`RecomputeUnavailableReason`).
      * `ok`          — a commitment was reproduced.
      */
     reconstruction: 'absent' | 'unavailable' | 'ok';
@@ -1446,7 +1449,7 @@ function runReceiptProofs(
 
     findings.push(...labelFindings(decoded.frames, document.roundIdHex));
 
-    // Attribution is RECONSTRUCTED, never trusted (§8.3(e)): the round a frame
+    // Attribution is RECONSTRUCTED, never trusted: the round a frame
     // belongs to is what the SIGNED bytes say, and the export's label is only
     // cross-checked. Without this an exporter could relabel its way to a
     // suppression verdict.
@@ -1786,7 +1789,7 @@ function pushFrameAuthenticityCheck(
         title,
         status: ok ? 'pass' : 'fail',
         detail: ok
-            ? `${frames.length} server frame(s) verify as ed25519(blake2b-256("99dot5:server-frame:v1" ‖ body)) under ${[...matched].join(', ')}, and ${document.commands.length} command frame(s) verify under the session key ${document.sessionPublicKey}. NOTE: the session key is EXPORT-SUPPLIED — this says your commands are internally consistent with the key your client used, not that L1 bound that key to the session (the vault's sessions big_map is where that binding lives, and this build does not read it).`
+            ? `${frames.length} server frame(s) verify as ed25519(blake2b-256("99dot5:server-frame:v1" ‖ body)) under ${[...matched].join(', ')}, and ${document.commands.length} command frame(s) verify under the session key ${document.sessionPublicKey}. NOTE: the session key is EXPORT-SUPPLIED — this says your commands are internally consistent with the key your client used, not that L1 bound that key to the session (the vault's sessions big map is where that binding lives, and this build does not read it).`
             : [
                   badFrames.length > 0
                       ? `${badFrames.length}/${frames.length} server frame(s) verify under NO key this tenant registered: ${badFrames.join(', ')}`
@@ -1803,7 +1806,7 @@ function pushFrameAuthenticityCheck(
     return ok;
 }
 
-// ── The suppression ladder (§8.3) ───────────────────────────────────────
+// ── The suppression ladder ──────────────────────────────────────────────
 
 /**
  * Classify a round that is not on chain. FOUR non-accusatory outcomes stand
@@ -1823,9 +1826,10 @@ function pushFrameAuthenticityCheck(
  * — but the receipts cannot order a SIBLING TRANSCRIPT against this round. A
  * session that played round 1 (published) and then round 2 (still sitting in
  * the outbox) would otherwise read as suppression of round 2 out of nothing
- * but ordinary latency, which is the exact false accusation §8.3(R2) forbids.
+ * but ordinary latency, which is exactly the false accusation this ladder
+ * exists to prevent.
  * An `EndSession` of the same session carries the ordering in itself:
- * `run_end_session` (`services/sequencer/src/command_handlers.rs`) refuses
+ * the sequencer's `run_end_session` refuses
  * while any round of the session is in progress, and the janitor's end path
  * settles every in-progress round first and bails before the session-terminal
  * write if even one settle failed. So the `EndSession` row is written after
@@ -1856,7 +1860,7 @@ function resolveMissingTranscript(
     // verification never existed. Its own reconstruction declines (there are
     // no frames for the named round), so nothing below would contradict it —
     // the label is the only thing that says which round this is about, and
-    // §8.3(e) is explicit that the label is never the attribution.
+    // a label is never the attribution: the signed bytes are.
     if (!receipts.namesRoundUnderVerification) {
         findings.push(
             'The signed RoundEnded in these receipts does not name the round under verification, so they ' +
@@ -1892,7 +1896,7 @@ function resolveMissingTranscript(
         return 'inconclusive';
     }
 
-    // §8.3(a): the injector's `claim_unsent` orders BY id — the fix for a
+    // The injector's `claim_unsent` orders BY id — the fix for a
     // production wedge, and load-bearing here. A later outbox row of the same
     // session reaching L1 proves the injector drained past this round's row
     // and did not publish it. ONLY an `EndSession` qualifies (see the header):
@@ -2005,7 +2009,7 @@ export function describeBracket(scan: ScanContext | null): { status: 'ok' | 'nar
     if (!scan.deposit) {
         return {
             status: 'narrow',
-            reason: 'the session’s deposit level is unknown, so the range has no L1-anchored lower bound (§8.3(d) — the bound is never client-supplied)',
+            reason: 'the session’s deposit level is unknown, so the range has no L1-anchored lower bound (the bound is never client-supplied)',
         };
     }
 
@@ -2019,7 +2023,7 @@ export function describeBracket(scan: ScanContext | null): { status: 'ok' | 'nar
     if (scan.fromLevel > scan.deposit.level) {
         return {
             status: 'narrow',
-            reason: `the scan started at level ${scan.fromLevel}, after the session's deposit at ${scan.deposit.level} — no round of this session can SETTLE before the deposit (a copy posted earlier is applied as a session-missing reject, rollup rounds.rs step 8), so the range must start at or before it`,
+            reason: `the scan started at level ${scan.fromLevel}, after the session's deposit at ${scan.deposit.level} — no round of this session can SETTLE before the deposit (a copy posted earlier is applied as a session-missing reject by the rollup kernel), so the range must start at or before it`,
         };
     }
 

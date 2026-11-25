@@ -1,6 +1,6 @@
 /**
- * crash:v1 — integer reimplementation of `libs/games/src/crash/v1/math.rs` and
- * `engine.rs`, pinned against `libs/games/src/crash/v1/testdata/vectors.json`.
+ * crash:v1 — integer reimplementation of the Rust crash:v1 engine and its
+ * curve maths, pinned against crash's `vectors.json`.
  *
  * A multiplier rises from 1.00× and the round busts at a seed-determined
  * `crash_tick`. Everything a player can win on is fixed by the seed of
@@ -56,7 +56,7 @@ const TWO_POW_64 = 1n << 64n;
 /**
  * `round_half_up(2^(r/100) · 10^6)` for `r = 0..=99` — the fractional half of
  * the curve, copied verbatim from `FRACTIONAL_POW2_PPM` in
- * `libs/games/src/crash/v1/math.rs` and asserted equal to `vectors.json`'s
+ * the Rust engine's curve maths and asserted equal to `vectors.json`'s
  * `fractional_pow2_ppm` by the test rather than trusted. These 100 constants
  * ARE the canonical curve.
  */
@@ -335,7 +335,7 @@ function roundDetails(round: CrashRound): [string, string][] {
  * of `cashout` (the player-claimed tick), `expire` (the crashed or
  * never-collected round) or `abandon` (termination from outside the round).
  * The kernel's `AbandonPolicy::SettleAsCashout` replays a crash abandon as the
- * cashout the state admits (sec-28): an AUTO round settles at its
+ * cashout the state admits, so a forged abandon gains nothing: an AUTO round settles at its
  * pre-committed target tick, exactly as `cashout(target)` would; a MANUAL
  * round has no claim to substitute and forfeits — the same loss as the
  * sweep's `expire`. This reproduces both.
@@ -381,8 +381,8 @@ export function replay(
 
     for (const action of actions.slice(1)) {
         if (settled) {
-            // The kernel stops at the first settle and never reads what follows
-            // (libs/smart-rollup/src/games.rs); the verifier's
+            // The kernel stops at the first settle and never reads what follows;
+            // the verifier's
             // actions-after-settle check reports any such entries.
             break;
         }
@@ -390,7 +390,7 @@ export function replay(
         switch (action.actionType) {
             case 'cashout': {
                 const tick = decodeCashoutTick(action.payload);
-                // The comparison is on the UNCLAMPED tick (engine.rs settle_at_tick):
+                // The comparison is on the UNCLAMPED tick (the engine's settle_at_tick):
                 // a tick at or past the crash loses, however far past it is. The
                 // MAX_ROUND_TICK_CAP clamp inside multiplierPpm is therefore
                 // unreachable on a winning cashout — a win implies tick < crash_tick ≤ 996.

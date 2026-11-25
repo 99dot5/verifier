@@ -8,7 +8,7 @@
  * is testing the format and not a paraphrase of it.
  *
  * Field numbers are named here, at the call sites, against
- * `libs/proto-definitions/casino/v1/{envelopes,events,commands}.proto`.
+ * the `casino.v1` protobuf schema's envelopes, events and commands.
  */
 import * as ed from '@noble/ed25519';
 import { blake2b } from '@noble/hashes/blake2.js';
@@ -188,7 +188,7 @@ export type ServerPayloadSpec =
           stake?: MoneySpec;
           /**
            * `RoundStartedEvent.server_seed_commitment` (4) — the seed THIS
-           * round is settled against (ADR 0025). Omitted writes no message.
+           * round is settled against. Omitted writes no message.
            */
           serverSeedCommitment?: SeedCommitmentSpec;
           /** `RoundStartedEvent.next_server_seed_commitment` (5). */
@@ -377,7 +377,7 @@ export interface CommandFrameSpec {
     clientSeed?: string;
     /**
      * `PlaceBetCommand.server_seed_hash` (3) — the seed commitment the player
-     * echoed from the server's promise (ADR 0025); only meaningful for
+     * echoed from the server's promise; only meaningful for
      * `placeBet`. Omitted writes no field: a client that held no promise.
      */
     serverSeedHash?: Uint8Array;

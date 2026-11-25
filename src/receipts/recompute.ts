@@ -1,7 +1,7 @@
 /**
  * Reconstructing a round's player commitment from an imported export.
  *
- * A PORT of `libs/casino-client/src/receipts/recompute.ts`, not an import: the
+ * A PORT of the play client's reconstruction, not an import: the
  * published verifier imports exactly one workspace package,
  * `@99dot5/round-replay`, which the export ships as source, and it reaches
  * into no other `@99dot5/*` package. So the algorithm is reproduced here and
@@ -35,7 +35,7 @@ import { splitSignedFrame, SERVER_FRAME_TAG } from '../wire/signature';
 
 /**
  * Why a round's commitment could not be reconstructed. Each arm names one
- * §5.3 step-4 condition; none of them is an accusation — they all describe a
+ * condition under which reconstruction declines; none of them is an accusation — they all describe a
  * gap in the evidence the export carries.
  */
 export type RecomputeUnavailableReason =
@@ -62,7 +62,7 @@ export type RecomputeUnavailableReason =
      * round the sequencer inserts a SYSTEM `partial-cashout` step ahead of the
      * triggering action and emits its `RoundUpdated` in the same outbox batch,
      * so both frames carry the triggering command's `related_request_id`.
-     * `RoundUpdatedEvent.origin` (ADR 0022 §9) now tells them apart, so a
+     * `RoundUpdatedEvent.origin` now tells them apart, so a
      * de-lever round reconstructs normally. What still degrades here is an
      * `unspecified` origin — a server predating the field — because an
      * unmarked second index is indistinguishable from a genuine conflict.
@@ -83,7 +83,7 @@ export type RecomputeUnavailableReason =
 export type RecomputeResult =
     | {
           status: 'ok';
-          /** blake2b-256 over the ordered command frames, D1's preimage. */
+          /** blake2b-256 over the ordered command frames, the commitment's preimage. */
           commitment: Uint8Array;
           /** The commands that went into the preimage, in server-index order. */
           orderedRequestIds: string[];
@@ -167,7 +167,7 @@ export function decodeReceiptFrames(
  * Where the exporter's labels disagree with the bytes.
  *
  * Not a failure — a relabelled export is still verified from its frames — but
- * a REPORTABLE FINDING (design §8.3(e)): an exporter that relabels frames is
+ * a REPORTABLE FINDING: an exporter that relabels frames is
  * the shape an attempt to game a suppression verdict takes, and silence about
  * it would hide exactly what a reader wants to see.
  */
@@ -263,7 +263,7 @@ export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult
 
     // ---- step 2: keep only positively acknowledged commands ------------
     //
-    // A positive signal only. `CommandRejected` is ephemeral (§3.1), so a
+    // A positive signal only. `CommandRejected` is ephemeral, so a
     // dropped connection loses it, and inferring acceptance from a missing
     // rejection would silently promote a refused command into the preimage.
     const accepted = new Set<string>();
@@ -285,7 +285,7 @@ export function recomputeRoundCommitment(input: RecomputeInput): RecomputeResult
     // ---- step 3: order by the server's index ---------------------------
     const indices = new Map<string, number>();
     /**
-     * Positions the server filled with a step of its own (ADR 0022 D9): they
+     * Positions the server filled with a step of its own: they
      * occupy an index in the round's action vector but have no archive row
      * behind them, so they contribute to contiguity and not to the preimage.
      */

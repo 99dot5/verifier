@@ -83,10 +83,19 @@ a {
     margin: 1.25rem 0;
 }
 
+/* One field per row on a phone, two from a tablet up (48rem, an iPad held
+   upright). Never three: the values are long hashes and addresses, and a third
+   of the page is too narrow to read one. */
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 0.75rem 1rem;
+}
+
+@media (min-width: 48rem) {
+    .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 label {
@@ -135,6 +144,9 @@ textarea {
 .note {
     color: var(--muted);
     font-size: 0.85rem;
+    /* A note can quote a URL or a hash with no space in it; on a phone it
+       must break inside the value rather than widen the page. */
+    overflow-wrap: anywhere;
 }
 
 .actions {
@@ -143,6 +155,73 @@ textarea {
     gap: 0.75rem;
     margin-top: 0.75rem;
     flex-wrap: wrap;
+}
+
+/* The whole row of a collapsible section toggles it, so it takes the hand. */
+summary {
+    cursor: pointer;
+}
+
+/* Where the round's messages come from: two radio buttons drawn as one
+   segmented control. The inputs stay in the page (and in the tab order) but
+   out of sight; the label shows the choice and the keyboard focus. */
+.source {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 1.5rem 0 0.75rem;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+.source legend {
+    padding: 0;
+    margin-bottom: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+.source label {
+    position: relative;
+    flex-direction: row;
+    align-items: center;
+    padding: 0.45rem 1rem;
+    border: 1px solid var(--line);
+    background: #0b0e12;
+    color: var(--muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.source label + label {
+    margin-left: -1px;
+}
+
+.source label:first-of-type {
+    border-radius: 6px 0 0 6px;
+}
+
+.source label:last-of-type {
+    border-radius: 0 6px 6px 0;
+}
+
+.source input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.source label:has(input:checked) {
+    z-index: 1;
+    border-color: var(--accent);
+    background: #232c36;
+    color: var(--text);
+}
+
+.source label:has(input:focus-visible) {
+    z-index: 2;
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 button {
@@ -167,9 +246,20 @@ button:disabled {
     cursor: wait;
 }
 
-#progress {
+#progress,
+#payout-progress {
     color: var(--muted);
     font-size: 0.85rem;
+}
+
+#payout-report {
+    margin-top: 0.75rem;
+}
+
+/* Focused only so a screen reader announces a new report; no ring. */
+#report-panel:focus,
+#payout-report:focus {
+    outline: none;
 }
 
 .verdict {
@@ -295,7 +385,6 @@ button:disabled {
 }
 
 #working summary {
-    cursor: pointer;
     font-size: 0.9rem;
 }
 
@@ -323,6 +412,50 @@ button:disabled {
     font-size: 0.85rem;
     color: var(--muted);
     overflow-wrap: anywhere;
+}
+
+/* A value in the report the reader copies with a click (identifiers.ts finds
+   them). It stays inline so a long hash wraps with the sentence around it. */
+code.copy {
+    cursor: pointer;
+    /* The sentence's own colour: the box, the cursor and the hover border mark
+       it as copyable without making it louder than the text around it. */
+    color: inherit;
+    /* Move a value to the next line whole, and break inside it only when it
+       is wider than a line (a hash on a phone): a level split as 158 / 15367
+       reads as two numbers. */
+    word-break: normal;
+    overflow-wrap: anywhere;
+    transition:
+        border-color 0.15s,
+        color 0.15s;
+}
+
+code.copy:hover {
+    border-color: var(--muted);
+}
+
+code.copy:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+code.copy.copied {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* Read by screen readers, never shown: announces a copy. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
 }
 
 footer {
